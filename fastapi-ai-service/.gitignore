@@ -1,0 +1,47 @@
+# --- Python runtime artifacts ---
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+
+# --- Virtual environment ---
+.venv/
+venv/
+env/
+
+# --- Environment / secrets (§19.2, §26.3 — never commit real secrets) ---
+.env
+.env.*
+!.env.example
+
+# --- Package / build ---
+build/
+dist/
+*.egg-info/
+*.egg
+
+# --- Test & coverage (§27 Testing) ---
+.pytest_cache/
+.coverage
+.coverage.*
+htmlcov/
+coverage.xml
+
+# --- Lint / type-check caches ---
+.ruff_cache/
+.mypy_cache/
+
+# --- Local vector store / cache data (never committed — regenerated) ---
+.chroma/
+.cache/
+
+# --- IDE / OS ---
+.idea/
+.vscode/
+.DS_Store
+Thumbs.db
+
+# --- Logs (Task 5 LOG_SINK=file handler; *.log alone misses rotated
+# backups like seis-ai-service.log.1, so the whole directory is ignored) ---
+*.log
+logs/

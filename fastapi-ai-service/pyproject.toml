@@ -1,0 +1,75 @@
+[project]
+name = "seis-ai-service"
+version = "0.1.0"
+description = "SEIS AI Service - FastAPI microservice owning repository processing, evolution analysis, RAG, repository chat, semantic search, and AI evaluation (docs/week1-ai-system-design.md)."
+requires-python = ">=3.13"
+
+# ---------------------------------------------------------------------------
+# Ruff: single tool for linting + import sorting + formatting.
+# Chosen over flake8 + isort + black (three separate tools/configs) because
+# it enforces the same rules an order of magnitude faster, which matters for
+# a pre-commit hook and CI running on every push (§27 Testing / Maintainability).
+# ---------------------------------------------------------------------------
+[tool.ruff]
+line-length = 100
+target-version = "py313"
+src = ["app", "tests", "scripts"]
+
+[tool.ruff.lint]
+select = [
+    "E",   # pycodestyle errors
+    "F",   # pyflakes
+    "I",   # import sorting (replaces isort)
+    "UP",  # pyupgrade — enforce modern Python 3.13 syntax
+    "B",   # bugbear — common bug patterns
+    "SIM", # simplification suggestions
+    "N",   # PEP 8 naming
+]
+ignore = []
+
+[tool.ruff.lint.isort]
+known-first-party = ["app"]
+
+[tool.ruff.format]
+quote-style = "double"
+
+# ---------------------------------------------------------------------------
+# Mypy: strict type checking on app/, relaxed on tests/.
+# Strict mode is non-negotiable for app/ because the Core Pipeline layer
+# (§3.1) is framework-agnostic domain logic reused across the request path,
+# background workers, and evaluation scripts — a type error there is a
+# silent correctness bug in three call sites at once, not one.
+# ---------------------------------------------------------------------------
+[tool.mypy]
+python_version = "3.13"
+strict = true
+plugins = ["pydantic.mypy"]
+warn_unused_ignores = true
+warn_redundant_casts = true
+
+[[tool.mypy.overrides]]
+module = "tests.*"
+disallow_untyped_defs = false
+disallow_untyped_decorators = false
+
+# ---------------------------------------------------------------------------
+# Pytest: mirrors the tests/{unit,integration,e2e} split from §4 / §27.
+# asyncio_mode = "auto" avoids @pytest.mark.asyncio boilerplate on every
+# async test — appropriate here since the whole service is async-first (§3.2).
+# ---------------------------------------------------------------------------
+[tool.pytest.ini_options]
+minversion = "8.0"
+addopts = "-ra -q --strict-markers"
+testpaths = ["tests"]
+asyncio_mode = "auto"
+
+[tool.coverage.run]
+source = ["app"]
+omit = ["*/__init__.py"]
+
+[tool.coverage.report]
+exclude_lines = [
+    "pragma: no cover",
+    "raise NotImplementedError",
+    "if TYPE_CHECKING:",
+]

@@ -1,0 +1,12 @@
+# ChromaDB and its dependency chain, isolated into its own file for one
+# reason: chroma-hnswlib (a chromadb dependency) ships prebuilt wheels for
+# Linux/macOS but not for Windows on Python 3.12/3.13 — installing it
+# natively on Windows requires MS C++ Build Tools. Rather than force every
+# contributor onto that toolchain, ChromaDB is installed only inside the
+# Linux container (Task 14 Dockerfile / docker-compose.yml), where prebuilt
+# manylinux wheels exist and installation is a plain, fast `pip install`.
+#
+# Do NOT `pip install -r` this file into the native Windows .venv.
+# It is consumed exclusively by the container build.
+
+chromadb==0.6.2
