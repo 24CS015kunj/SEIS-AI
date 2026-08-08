@@ -7,7 +7,7 @@ Injection).
 """
 
 from functools import lru_cache
-from typing import Any, cast
+from typing import cast
 
 import structlog
 from celery import Celery  # type: ignore[import-untyped]
@@ -18,6 +18,7 @@ from app.api.v1.health_routes import register_readiness_check
 from app.config.settings import Settings, get_settings
 from app.domain.exceptions import SEISAuthorizationError
 from app.infra.cache.cache_client import RedisClient
+from app.infra.llm.gemini_client import GeminiGateway
 from app.infra.queue.task_queue import celery_app
 from app.infra.vectorstore.chroma_client import ChromaClient
 from app.services.evaluation_service import EvaluationService
@@ -231,14 +232,15 @@ def get_task_queue() -> Celery:
     return celery_app
 
 
-def get_gemini_client_placeholder() -> Any:
-    """Production-safe placeholder provider for future Gemini LLM gateway client (Task 12).
+@lru_cache(maxsize=1)
+def get_gemini_gateway() -> GeminiGateway:
+    """FastAPI dependency provider for the process-wide Gemini gateway (Task 12).
 
-    Production-Safe Strategy:
-    Raises explicit NotImplementedError rather than returning None. Returning None
-    risks silent 'AttributeError: NoneType has no attribute ...' bugs at runtime.
-    Explicit exception raising guarantees early failure if invoked before Task 12.
+    Same ``lru_cache`` process-lifetime singleton pattern as
+    :func:`get_chroma_client`/:func:`get_cache_client` -- one
+    ``GeminiGateway`` per process, constructed lazily (the underlying
+    ``genai.Client`` is built on first real call inside
+    ``GeminiGateway``, not here, so a missing ``GEMINI_API_KEY`` never
+    prevents the process from starting).
     """
-    raise NotImplementedError(
-        "GeminiGateway placeholder: Infrastructure adapter will be implemented in Task 12."
-    )
+    return GeminiGateway(settings=get_settings())

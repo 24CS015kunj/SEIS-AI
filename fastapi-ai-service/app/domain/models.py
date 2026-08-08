@@ -29,6 +29,60 @@ from app.domain.enums import (
 )
 
 
+class ManifestFile(BaseModel):
+    """One file entry within a :class:`RepositoryManifest` (§6.1 Trigger
+    Contract) -- Express's ``fileManifest`` array, already normalized
+    into the shape this layer consumes. ``content`` is inlined bytes
+    rather than a ``contentUrl``: FastAPI never talks to GitHub
+    directly (§Project Rules #1.4), and fetching a URL is an I/O
+    concern that belongs to an infra adapter, not this Domain-layer
+    model. ``content`` is ``None`` for entries Express did not inline
+    (oversized/binary originals) -- the Document Processor (Task 13)
+    skips those rather than guessing at their content.
+    """
+
+    model_config = ConfigDict(frozen=True)
+
+    path: str
+    content: bytes | None = None
+    language: str | None = None
+    size_bytes: int = Field(ge=0)
+
+
+class RepositoryManifest(BaseModel):
+    """Express's per-repository ingestion payload (§6.1 Trigger
+    Contract) -- the entry point to the Repository Processing Engine
+    (§6.2). Named in Task 7's original scope but not actually defined
+    until Task 13 needed it as the input to ``DocumentProcessor``.
+    """
+
+    model_config = ConfigDict(frozen=True)
+
+    repository_id: str
+    workspace_id: str  # workspace-level isolation, defense-in-depth (§26.7)
+    commit_sha: str
+    files: list[ManifestFile]
+
+
+class Document(BaseModel):
+    """A normalized, classified repository file ready for chunking
+    (§5.3, §21.5) -- the ``DocumentProcessor``'s output and the
+    ``ASTChunker``'s (Task 14) input. Carries ``repository_id`` and
+    ``commit_sha`` forward from the manifest so the ``MetadataGenerator``
+    (Task 17) can read them straight off the document without needing a
+    separate manifest reference, matching the §21.6 metadata contract.
+    """
+
+    model_config = ConfigDict(frozen=True)
+
+    repository_id: str
+    commit_sha: str
+    file_path: str
+    content: str
+    language: str
+    document_type: DocumentType
+
+
 class ChunkMetadata(BaseModel):
     """Canonical chunk metadata schema (§21.6) -- the contract every
     module producing or consuming a :class:`Chunk` must respect.
