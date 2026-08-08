@@ -17,7 +17,6 @@ import time
 import uuid
 from collections.abc import AsyncIterator, Awaitable, Callable
 from contextlib import asynccontextmanager
-from contextvars import ContextVar
 from typing import Any
 
 import structlog
@@ -27,10 +26,21 @@ from fastapi.responses import JSONResponse
 from starlette.exceptions import HTTPException as StarletteHTTPException
 from starlette.middleware.base import BaseHTTPMiddleware, RequestResponseEndpoint
 
+# Side-effect import (Task 9): app.api.deps registers the ChromaDB
+# readiness check into app.api.v1.health_routes's registry at module
+# load time. Nothing below references `_deps` directly -- this import
+# exists solely to guarantee that registration has happened before the
+# first `/health/ready` request, without this file importing anything
+# ChromaDB-specific itself (the registry pattern below is what future
+# Tasks 10-12 extend the same way).
+from app.api import deps as _deps  # noqa: F401
 from app.api.v1 import api_router
 from app.api.v1.health_routes import router as health_router
 from app.config.logging_config import configure_logging
 from app.config.settings import get_settings
+from app.domain.enums import ErrorCategory
+from app.domain.exceptions import SEISError
+from app.domain.models import ErrorDetail, ErrorResponse
 
 # API path versioning is a routing/architecture decision (§3.1), not a
 # runtime config knob -- unlike everything in Settings, it is not meant
@@ -45,10 +55,7 @@ logger = structlog.get_logger("seis.app")
 # -----------------------------------------------------------------------
 # Correlation ID / Request ID propagation (§15 Logging Strategy, §21.8).
 #
-# Two distinct IDs, both stored in ContextVars rather than only on
-# `request.state` so that framework-agnostic Core Pipeline code (§3.1) --
-# which by design never receives a Request object -- can still read them:
-#
+# Two distinct IDs:
 #   correlation_id -- spans a whole logical operation. Reused from an
 #     inbound `X-Correlation-Id` header when Express already generated
 #     one (§11.1), so one operation traces across both services.
@@ -57,40 +64,44 @@ logger = structlog.get_logger("seis.app")
 #     caller and reliably distinguishes retries of the same
 #     correlation_id from each other in the logs.
 #
-# Also bound into structlog's contextvars (`bind_contextvars`) so every
-# `structlog.get_logger()` call anywhere in the app -- not just this
-# middleware -- automatically includes both fields without threading a
-# Request object through service/core-layer code.
+# Both live exclusively in structlog's own contextvars store
+# (`structlog.contextvars`) rather than in a second, hand-rolled
+# ContextVar -- one source of truth instead of two parallel mechanisms
+# that have to be kept in sync. `get_correlation_id`/`get_request_id`
+# read back from that same store for the (non-logging) call sites below
+# that need the plain string value, e.g. to put in a JSON error body.
 # -----------------------------------------------------------------------
-_correlation_id_ctx: ContextVar[str] = ContextVar("correlation_id", default="-")
-_request_id_ctx: ContextVar[str] = ContextVar("request_id", default="-")
-
-
 def get_correlation_id() -> str:
     """Returns the correlation ID bound to the current execution context."""
-    return _correlation_id_ctx.get()
+    return str(structlog.contextvars.get_contextvars().get("correlation_id", "-"))
 
 
 def get_request_id() -> str:
     """Returns the request ID bound to the current execution context."""
-    return _request_id_ctx.get()
+    return str(structlog.contextvars.get_contextvars().get("request_id", "-"))
 
 
 class ObservabilityMiddleware(BaseHTTPMiddleware):
     """Assigns/propagates correlation + request IDs and logs request timing.
 
-    Structured (JSON in non-development environments, per Task 5) logging
-    replaces the plain-stdlib calls used through Task 4. Externally
-    observable behavior grows by exactly one additive response header
-    (``X-Request-Id``, alongside the existing ``X-Correlation-Id``) --
-    status codes and every existing header are unchanged.
+    Deliberately does NOT clear the bound context in a `finally` block.
+    Starlette gives each incoming request its own asyncio Task, so there
+    is no cross-request leakage risk to guard against -- and clearing
+    early was an earlier, incorrect design (found and fixed via a
+    pre-push review): it ran *before* the success-path log line below,
+    and *before* Starlette's `ServerErrorMiddleware` -- which sits
+    OUTSIDE this middleware and is what actually invokes the bare-
+    ``Exception`` handler on an unhandled error -- ever got a chance to
+    read it. Both the "request.completed" log line and every 500
+    response's `correlationId` field were silently wrong as a result.
     """
 
     async def dispatch(self, request: Request, call_next: RequestResponseEndpoint) -> Response:
         correlation_id = request.headers.get("x-correlation-id") or str(uuid.uuid4())
         request_id = str(uuid.uuid4())
-        correlation_token = _correlation_id_ctx.set(correlation_id)
-        request_token = _request_id_ctx.set(request_id)
+        # Defensive only (guards against any future change to task/context
+        # reuse) -- not what makes this safe; per-request Task isolation is.
+        structlog.contextvars.clear_contextvars()
         structlog.contextvars.bind_contextvars(correlation_id=correlation_id, request_id=request_id)
 
         start = time.perf_counter()
@@ -99,17 +110,18 @@ class ObservabilityMiddleware(BaseHTTPMiddleware):
             response = await call_next(request)
         except Exception:
             duration_ms = round((time.perf_counter() - start) * 1000, 2)
-            logger.exception(
+            # WARNING, not `.exception()`: whichever handler ultimately
+            # handles this (seis_error_handler / unhandled_exception_handler,
+            # both below) logs the full exception + traceback exactly once.
+            # Logging it here too would duplicate every failure in the logs
+            # under two different event names.
+            logger.warning(
                 "request.failed",
                 method=request.method,
                 path=request.url.path,
                 duration_ms=duration_ms,
             )
             raise
-        finally:
-            _correlation_id_ctx.reset(correlation_token)
-            _request_id_ctx.reset(request_token)
-            structlog.contextvars.clear_contextvars()
 
         duration_ms = round((time.perf_counter() - start) * 1000, 2)
         logger.info(
@@ -171,45 +183,92 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
 # -----------------------------------------------------------------------
 # Exception handling (§14 Error Handling Strategy).
 #
-# Foundational, transport-level handlers only. Task 6 adds handlers for
-# the domain exception hierarchy (Business/Validation/Repository/
-# Embedding/VectorDB/LLM) on top of this without replacing it -- these
-# three remain the last line of defense for anything domain handlers
-# don't catch.
+# Four handlers, each registered for exactly one exception family:
+#   - RequestValidationError    FastAPI/Pydantic request-shape errors
+#   - StarletteHTTPException    explicit `raise HTTPException(...)` calls
+#   - SEISError                 the domain exception hierarchy (Task 6,
+#                                app.domain.exceptions) -- registering the
+#                                *base* class is sufficient; Starlette
+#                                resolves every subclass (BusinessError,
+#                                RepositoryError, EmbeddingError, ...) to
+#                                this same handler via MRO lookup, so no
+#                                "global exception middleware" class is
+#                                needed on top of this -- FastAPI's
+#                                exception-handler registry already *is*
+#                                that global mechanism.
+#   - Exception (bare)          anything nobody anticipated -- the last
+#                                line of defense, registered on Starlette's
+#                                outermost ServerErrorMiddleware layer.
+#
+# Every handler builds its response via `_build_error_response` rather
+# than relying on ObservabilityMiddleware to attach the correlation/
+# request-ID headers afterward: the bare-`Exception` handler above runs
+# on ServerErrorMiddleware, which sits OUTSIDE ObservabilityMiddleware,
+# so a response built there never flows back through the middleware's
+# post-`call_next` code at all (`call_next` raised, it didn't return) --
+# there is no "afterward" for that path to attach a header in. Found via
+# a pre-push review that hit exactly this case.
 # -----------------------------------------------------------------------
-def _error_envelope(code: str, message: str, correlation_id: str) -> dict[str, Any]:
-    return {"error": {"code": code, "message": message, "correlationId": correlation_id}}
+def _build_error_response(
+    status_code: int, code: str, message: str, *, details: dict[str, Any] | None = None
+) -> JSONResponse:
+    correlation_id = get_correlation_id()
+    envelope = ErrorResponse(
+        error=ErrorDetail(
+            code=code, message=message, correlation_id=correlation_id, details=details
+        )
+    )
+    response = JSONResponse(
+        status_code=status_code,
+        content=envelope.model_dump(mode="json", by_alias=True, exclude_none=True),
+    )
+    response.headers["X-Correlation-Id"] = correlation_id
+    response.headers["X-Request-Id"] = get_request_id()
+    return response
 
 
 async def validation_exception_handler(
     request: Request, exc: RequestValidationError
 ) -> JSONResponse:
-    correlation_id = get_correlation_id()
     logger.warning("request.validation_error", errors=exc.errors())
-    return JSONResponse(
-        status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
-        content=_error_envelope("VALIDATION_ERROR", "Request validation failed.", correlation_id),
+    return _build_error_response(
+        status.HTTP_422_UNPROCESSABLE_ENTITY, "VALIDATION_ERROR", "Request validation failed."
     )
 
 
 async def http_exception_handler(request: Request, exc: StarletteHTTPException) -> JSONResponse:
-    correlation_id = get_correlation_id()
-    return JSONResponse(
-        status_code=exc.status_code,
-        content=_error_envelope(f"HTTP_{exc.status_code}", str(exc.detail), correlation_id),
+    return _build_error_response(exc.status_code, f"HTTP_{exc.status_code}", str(exc.detail))
+
+
+async def seis_error_handler(request: Request, exc: SEISError) -> JSONResponse:
+    # Client-caused categories (a bad request, an unsupported repository)
+    # are noise, not incidents -- WARNING. Everything else is our system
+    # failing to do its job -- ERROR (§15.3 level guidance).
+    log = (
+        logger.warning
+        if exc.category in (ErrorCategory.DOMAIN, ErrorCategory.VALIDATION)
+        else logger.error
+    )
+    log(
+        "request.domain_error",
+        error_code=exc.code,
+        category=exc.category.value,
+        retryable=exc.retryable,
+        details=exc.details,
+    )
+    return _build_error_response(
+        exc.http_status, exc.code, exc.message, details=exc.details or None
     )
 
 
 async def unhandled_exception_handler(request: Request, exc: Exception) -> JSONResponse:
     # Never leak stack traces or exception internals to the caller (§26
     # Security) -- full detail goes server-side only, via logger.exception.
-    correlation_id = get_correlation_id()
     logger.exception("request.unhandled_error", path=request.url.path)
-    return JSONResponse(
-        status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-        content=_error_envelope(
-            "INTERNAL_SERVER_ERROR", "An unexpected error occurred.", correlation_id
-        ),
+    return _build_error_response(
+        status.HTTP_500_INTERNAL_SERVER_ERROR,
+        "INTERNAL_SERVER_ERROR",
+        "An unexpected error occurred.",
     )
 
 
@@ -238,6 +297,7 @@ def create_app() -> FastAPI:
 
     app.add_exception_handler(RequestValidationError, validation_exception_handler)  # type: ignore[arg-type]
     app.add_exception_handler(StarletteHTTPException, http_exception_handler)  # type: ignore[arg-type]
+    app.add_exception_handler(SEISError, seis_error_handler)  # type: ignore[arg-type]
     app.add_exception_handler(Exception, unhandled_exception_handler)
 
     return app
