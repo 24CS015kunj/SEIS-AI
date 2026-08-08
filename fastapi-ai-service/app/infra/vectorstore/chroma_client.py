@@ -407,6 +407,32 @@ class ChromaClient:
 
         await self._execute("delete_chunks", repository_id, _op)
 
+    async def delete_chunks_by_metadata(
+        self, repository_id: str, metadata_filter: dict[str, str]
+    ) -> None:
+        """Deletes every chunk matching a metadata filter (e.g. every
+        chunk for one ``file_path``) without needing their ids in
+        advance.
+
+        Added for Task 18 (Incremental Repository Synchronizer): a
+        modified/deleted file's *old* chunk ids aren't known ahead of
+        time (they're derived in part from ``commit_sha``, which
+        changes on every push), so ``delete_chunks``' explicit-id-list
+        signature can't express "delete this file's chunks." Chroma's
+        native ``collection.delete(where=...)`` already supports
+        filter-based deletion directly -- this method is a thin,
+        one-call wrapper using the same ``_build_where`` helper
+        ``query_similarity`` already relies on, not a new capability
+        invented outside what the SDK provides.
+        """
+
+        def _op() -> None:
+            client = self._get_client()
+            collection = self._get_collection(client, repository_id)
+            collection.delete(where=self._build_where(metadata_filter))
+
+        await self._execute("delete_chunks_by_metadata", repository_id, _op)
+
     async def delete_collection(self, repository_id: str) -> None:
         """Drops a repository's entire collection (full reindex / repo delete, §22)."""
 

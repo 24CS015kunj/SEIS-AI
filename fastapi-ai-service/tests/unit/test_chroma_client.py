@@ -33,13 +33,19 @@ from app.infra.vectorstore.chroma_client import ChromaClient
 # ---------------------------------------------------------------------------
 # Fakes standing in for the chromadb SDK surface this adapter touches.
 # ---------------------------------------------------------------------------
+def _matches_where(metadata: dict[str, Any], where: dict[str, Any]) -> bool:
+    if "$and" in where:
+        return all(_matches_where(metadata, clause) for clause in where["$and"])
+    return all(metadata.get(key) == value for key, value in where.items())
+
+
 class FakeCollection:
     def __init__(self, name: str) -> None:
         self.name = name
         self.upsert_calls: list[dict[str, Any]] = []
         self.query_calls: list[dict[str, Any]] = []
         self.get_calls: list[dict[str, Any]] = []
-        self.delete_calls: list[list[str]] = []
+        self.delete_calls: list[dict[str, Any]] = []
         self.next_query_result: dict[str, Any] | None = None
         self.upsert_fail_times = 0
         self._store: dict[str, tuple[str, dict[str, Any]]] = {}
@@ -83,9 +89,17 @@ class FakeCollection:
                 metas.append(meta)
         return {"ids": found_ids, "documents": docs, "metadatas": metas}
 
-    def delete(self, ids: list[str]) -> None:
-        self.delete_calls.append(ids)
-        for chunk_id in ids:
+    def delete(self, ids: list[str] | None = None, where: dict[str, Any] | None = None) -> None:
+        self.delete_calls.append({"ids": ids, "where": where})
+        if ids is not None:
+            for chunk_id in ids:
+                self._store.pop(chunk_id, None)
+            return
+        if where is None:
+            return
+        for chunk_id in [
+            cid for cid, (_, meta) in self._store.items() if _matches_where(meta, where)
+        ]:
             self._store.pop(chunk_id, None)
 
 
@@ -319,6 +333,54 @@ async def test_delete_chunks_removes_only_targeted_ids(
     await client.delete_chunks("repo-x", ["drop"])
 
     remaining = await client.get_chunks("repo-x", ["keep", "drop"])
+    assert [c.chunk_id for c in remaining] == ["keep"]
+
+
+async def test_delete_chunks_by_metadata_removes_only_matching_file_path(
+    fake_chromadb: dict[str, FakeChromaSDKClient],
+) -> None:
+    """Task 18's synchronizer needs this: delete every chunk for one
+    file_path without knowing their (commit-sha-derived) ids ahead of
+    time."""
+    client = ChromaClient(settings=Settings())
+    keep = _make_chunk("keep")
+    drop_a = Chunk(
+        chunk_id="drop-a",
+        content="def bar(): ...",
+        metadata=ChunkMetadata(
+            repository_id="repo-x",
+            file_path="src/bar.py",
+            language="python",
+            commit_sha="abc123",
+            chunk_type=ChunkType.CODE_FUNCTION,
+            document_type=DocumentType.SOURCE_CODE,
+            start_line=1,
+            end_line=2,
+        ),
+    )
+    drop_b = Chunk(
+        chunk_id="drop-b",
+        content="def bar2(): ...",
+        metadata=ChunkMetadata(
+            repository_id="repo-x",
+            file_path="src/bar.py",
+            language="python",
+            commit_sha="abc123",
+            chunk_type=ChunkType.CODE_FUNCTION,
+            document_type=DocumentType.SOURCE_CODE,
+            start_line=4,
+            end_line=5,
+        ),
+    )
+    await client.upsert_chunks(
+        "repo-x",
+        [keep, drop_a, drop_b],
+        [_make_embedding("keep"), _make_embedding("drop-a"), _make_embedding("drop-b")],
+    )
+
+    await client.delete_chunks_by_metadata("repo-x", {"file_path": "src/bar.py"})
+
+    remaining = await client.get_chunks("repo-x", ["keep", "drop-a", "drop-b"])
     assert [c.chunk_id for c in remaining] == ["keep"]
 
 

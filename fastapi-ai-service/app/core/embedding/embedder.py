@@ -41,8 +41,12 @@ T = TypeVar("T")
 # a Sentence Transformers model name for the *optional local fallback*
 # ADR-003 mentions, not something valid to pass to the Gemini API. This
 # constant is the one genuinely usable per ADR-003's decision and Task
-# 15's own Review Checklist ("Model set to text-embedding-004").
-_EMBEDDING_MODEL_NAME = "text-embedding-004"
+# 15's own Review Checklist ("Model set to text-embedding-004"). Public
+# (no leading underscore) so Task 18's IncrementalSynchronizer -- the
+# only other module that needs to know the embedding model version, for
+# EmbeddingCache hash keys and Embedding.model_version -- has one
+# source of truth instead of a second hardcoded literal.
+EMBEDDING_MODEL_NAME = "text-embedding-004"
 _EMBEDDING_DIMENSIONS = 768
 _DEFAULT_BATCH_SIZE = 32
 
@@ -70,7 +74,7 @@ class GeminiEmbedder:
             if not api_key:
                 raise EmbeddingError(
                     "GEMINI_API_KEY is not configured -- cannot call the Gemini Embeddings API.",
-                    details={"model": _EMBEDDING_MODEL_NAME},
+                    details={"model": EMBEDDING_MODEL_NAME},
                 )
             self._client = genai.Client(api_key=api_key)
         return self._client
@@ -95,7 +99,7 @@ class GeminiEmbedder:
 
         async def _call() -> genai_types.EmbedContentResponse:
             return await client.aio.models.embed_content(
-                model=_EMBEDDING_MODEL_NAME, contents=texts, config=config
+                model=EMBEDDING_MODEL_NAME, contents=texts, config=config
             )
 
         start = time.monotonic()

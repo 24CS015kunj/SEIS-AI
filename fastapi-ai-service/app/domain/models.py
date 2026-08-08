@@ -64,6 +64,29 @@ class RepositoryManifest(BaseModel):
     files: list[ManifestFile]
 
 
+class DiffManifest(BaseModel):
+    """A single commit's file-level diff (§18 Architecture Reasoning) --
+    the input to the Incremental Repository Synchronizer (Task 18),
+    letting a push update only the affected files' vectors instead of
+    rebuilding a repository's entire collection. ``repository_id`` is
+    deliberately not a field here: Task 18's own
+    ``process_diff(repository_id: str, diff_manifest: DiffManifest)``
+    signature already takes it as a separate argument, so it isn't
+    duplicated onto this model. ``workspace_id`` is included because
+    reprocessing ``added_files``/``modified_files`` reuses
+    ``DocumentProcessor.process_manifest``, which requires a
+    :class:`RepositoryManifest` -- and that model requires it.
+    """
+
+    model_config = ConfigDict(frozen=True)
+
+    workspace_id: str
+    commit_sha: str
+    added_files: list[ManifestFile] = Field(default_factory=list)
+    modified_files: list[ManifestFile] = Field(default_factory=list)
+    deleted_files: list[str] = Field(default_factory=list)
+
+
 class Document(BaseModel):
     """A normalized, classified repository file ready for chunking
     (§5.3, §21.5) -- the ``DocumentProcessor``'s output and the
