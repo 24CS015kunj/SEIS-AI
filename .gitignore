@@ -1,0 +1,35 @@
+# =============================================================================
+# SEIS — repository-root .gitignore
+# =============================================================================
+# fastapi-ai-service/ has its own .gitignore for that subproject's runtime
+# artifacts (venv, __pycache__, .env, test/lint caches, logs). This file
+# covers the repository root: AI coding-assistant configuration/session
+# directories (local working state, never meant to be versioned) and this
+# repo's internal working documentation, plus generic OS/IDE noise.
+# =============================================================================
+
+# --- AI coding assistant config / session directories (local only) ---
+.agents/
+.claude/
+.cursor/
+.windsurf/
+.continue/
+.aider*
+
+# --- Internal working documentation (not part of the shipped codebase) ---
+docs/
+
+# --- Python tooling caches (when a tool is run from the repo root) ---
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.ruff_cache/
+.mypy_cache/
+.coverage
+htmlcov/
+
+# --- OS / IDE ---
+.DS_Store
+Thumbs.db
+.idea/
+.vscode/
