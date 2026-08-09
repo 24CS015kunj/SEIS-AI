@@ -32,7 +32,6 @@ The current architecture separates the **Express business/integration layer** fr
 - [Development Roadmap](#development-roadmap)
 - [Project Boundaries](#project-boundaries)
 - [Contributing](#contributing)
-- [License](#license)
 
 ---
 
@@ -1004,18 +1003,6 @@ When adding a new AI capability:
 10. Update documentation when architecture or API contracts change.
 
 Avoid introducing a new framework or dependency unless it solves a demonstrated problem.
-
----
-
-# License
-
-Add the project's chosen license here.
-
-Example:
-
-```text
-MIT License
-```
 
 ---
 
