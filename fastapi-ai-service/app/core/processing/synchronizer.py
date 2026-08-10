@@ -49,7 +49,7 @@ from __future__ import annotations
 
 import structlog
 
-from app.core.embedding.embedder import EMBEDDING_MODEL_NAME, GeminiEmbedder
+from app.core.embedding.embedder import EMBEDDING_MODEL_NAME, NemotronEmbedder
 from app.core.embedding.embedding_cache import EmbeddingCache, compute_chunk_hash
 from app.core.processing.chunker import ASTChunker
 from app.core.processing.document_processor import DocumentProcessor
@@ -70,7 +70,7 @@ class IncrementalSynchronizer:
         document_processor: DocumentProcessor,
         chunker: ASTChunker,
         metadata_generator: MetadataGenerator,
-        embedder: GeminiEmbedder,
+        embedder: NemotronEmbedder,
         embedding_cache: EmbeddingCache,
     ) -> None:
         self._chroma = chroma_client

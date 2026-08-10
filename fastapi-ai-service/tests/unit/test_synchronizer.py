@@ -2,7 +2,7 @@
 
 Uses real `DocumentProcessor`/`ASTChunker`/`MetadataGenerator`
 instances (pure, in-process logic, no I/O) composed with real
-`ChromaClient`/`GeminiEmbedder`/`EmbeddingCache` instances whose public
+`ChromaClient`/`NemotronEmbedder`/`EmbeddingCache` instances whose public
 methods are monkeypatched -- the same pattern already used in
 tests/unit/test_embedding_cache.py, avoiding duck-typed fakes that
 would fail the constructor's real type hints.
@@ -15,7 +15,7 @@ from typing import Any
 import pytest
 
 from app.config.settings import Settings
-from app.core.embedding.embedder import GeminiEmbedder
+from app.core.embedding.embedder import NemotronEmbedder
 from app.core.embedding.embedding_cache import EmbeddingCache, compute_chunk_hash
 from app.core.processing.chunker import ASTChunker
 from app.core.processing.document_processor import DocumentProcessor
@@ -36,7 +36,7 @@ class Harness:
         self.cache_write_calls: list[dict[str, list[float]]] = []
 
         self.chroma = ChromaClient(settings=Settings())
-        self.embedder = GeminiEmbedder(settings=Settings())
+        self.embedder = NemotronEmbedder(settings=Settings())
         self.cache = EmbeddingCache(
             redis_client=RedisClient(settings=Settings()), settings=Settings()
         )

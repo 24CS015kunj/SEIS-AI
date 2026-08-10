@@ -249,6 +249,31 @@ class Citation(BaseModel):
     chunk_id: str
 
 
+class ContextBlock(BaseModel):
+    """Packed retrieval context ready for prompt assembly (§5.6/§5.7,
+    Task 21) -- the ``ContextBuilder``'s output and the Grounded Prompt
+    Builder's (Task 22) input.
+
+    Named in Task 21's own signature (``build_context(...) ->
+    ContextBlock``) but never actually defined until this task needed
+    it -- the same "genuine gap, not invented" pattern already applied
+    to :class:`RepositoryManifest`/:class:`Document` (Task 13) and
+    :class:`DiffManifest` (Task 18). ``citation_map`` reuses the
+    frozen Task 7 :class:`Citation` model (``file_path``, ``start_line``,
+    ``end_line``, ``chunk_id``) rather than inventing a duplicate
+    "CitationMapEntry" shape -- a numeric citation tag (``[1]``, ``[2]``)
+    is exactly a citation missing only the answer text it will
+    eventually attach to, which :class:`Citation` already carries.
+    """
+
+    model_config = ConfigDict(frozen=True)
+
+    text: str
+    citation_map: dict[int, Citation]
+    token_count: int = Field(ge=0)
+    truncated: bool
+
+
 class ChatResponse(BaseModel):
     """Repository Chat output (§5.11, §11.2, §23.3)."""
 
