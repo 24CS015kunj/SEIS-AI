@@ -1,0 +1,25 @@
+# Production runtime dependencies for the SEIS AI Service.
+#
+# Scope is deliberately limited to what Week 2 (AI Service Foundation)
+# needs: the FastAPI runtime, typed config, structured logging, resilience
+# helpers, and a connection-only client for Gemini (§10, §11 — no
+# embedding-model or LLM-generation libraries yet; those land with the
+# Repository Processing Engine and RAG pipeline in Weeks 3-4, §25).
+#
+# ChromaDB is intentionally NOT listed here — see requirements-vectorstore.txt
+# and the "Local Environment vs. Container Environment" note in the Task 2
+# writeup for why it is installed only inside the Linux container (Task 14),
+# not in the native Windows venv.
+#
+# Pinned to exact versions verified against Python 3.13.4 in this
+# environment. Bump deliberately, one dependency at a time, re-running the
+# test suite (§27 Testing) after each bump.
+
+fastapi==0.115.6
+uvicorn[standard]==0.34.0
+pydantic==2.10.4
+pydantic-settings==2.7.1
+httpx==0.28.1
+structlog==24.4.0
+tenacity==9.0.0
+google-genai==0.3.0
