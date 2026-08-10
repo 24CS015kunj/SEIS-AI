@@ -1,0 +1,175 @@
+@import "tailwindcss";
+
+@theme {
+  --font-sans: 'Inter', -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+}
+
+@layer base {
+  html {
+    scroll-behavior: smooth;
+  }
+  body {
+    font-family: var(--font-sans);
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+  }
+}
+
+@layer components {
+  /* Typography Scale */
+  .headline-xl {
+    font-size: 3rem;
+    line-height: 1.1;
+    font-weight: 800;
+    color: #0f172a;
+    letter-spacing: -0.025em;
+  }
+  @media (min-width: 768px) {
+    .headline-xl {
+      font-size: 3.75rem;
+    }
+  }
+
+  .headline-lg {
+    font-size: 2.25rem;
+    line-height: 1.15;
+    font-weight: 800;
+    color: #0f172a;
+    letter-spacing: -0.025em;
+  }
+  @media (min-width: 768px) {
+    .headline-lg {
+      font-size: 3rem;
+    }
+  }
+
+  .body-lg {
+    font-size: 1.25rem;
+    line-height: 1.625;
+    color: #475569;
+  }
+
+  .body-base {
+    font-size: 1rem;
+    line-height: 1.625;
+    color: #475569;
+  }
+
+  .body-sm {
+    font-size: 0.875rem;
+    line-height: 1.625;
+    color: #64748b;
+  }
+
+  .eyebrow {
+    font-size: 13px;
+    font-weight: 700;
+    color: #2563eb;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+    margin-bottom: 1rem;
+  }
+
+  /* Layout Spacing */
+  .section-padding {
+    padding-top: 6rem;
+    padding-bottom: 6rem;
+  }
+  @media (min-width: 768px) {
+    .section-padding {
+      padding-top: 8rem;
+      padding-bottom: 8rem;
+    }
+  }
+
+  .section-padding-sm {
+    padding-top: 4rem;
+    padding-bottom: 4rem;
+  }
+  @media (min-width: 768px) {
+    .section-padding-sm {
+      padding-top: 6rem;
+      padding-bottom: 6rem;
+    }
+  }
+
+  .section-header-centered {
+    text-align: center;
+    max-width: 800px;
+    margin-left: auto;
+    margin-right: auto;
+    margin-bottom: 4rem;
+  }
+  @media (min-width: 768px) {
+    .section-header-centered {
+      margin-bottom: 6rem;
+    }
+  }
+
+  .section-header-layout {
+    max-width: 800px;
+    margin-bottom: 4rem;
+  }
+  @media (min-width: 768px) {
+    .section-header-layout {
+      margin-bottom: 6rem;
+    }
+  }
+
+  /* Interactive Components */
+  .btn-primary {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 0.5rem;
+    height: 48px;
+    padding: 0 1.5rem;
+    background-color: #4f46e5;
+    color: #ffffff;
+    font-size: 1rem;
+    font-weight: 600;
+    border-radius: 0.5rem;
+    border: none;
+    cursor: pointer;
+    transition: background-color 0.2s;
+  }
+  .btn-primary:hover {
+    background-color: #4338ca;
+  }
+
+  .btn-secondary {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 0.5rem;
+    height: 48px;
+    padding: 0 1.5rem;
+    background-color: #ffffff;
+    color: #0f172a;
+    font-size: 1rem;
+    font-weight: 600;
+    border-radius: 0.5rem;
+    border: 1.5px solid #e2e8f0;
+    cursor: pointer;
+    transition: background-color 0.2s;
+  }
+  .btn-secondary:hover {
+    background-color: #f8fafc;
+  }
+
+  /* Utility Animations */
+  .app-window {
+    border-radius: 0.75rem;
+    overflow: hidden;
+    border: 1px solid #e2e8f0;
+    box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.25);
+  }
+
+  .app-titlebar {
+    height: 2.5rem;
+    padding: 0 1rem;
+    border-bottom: 1px solid #e2e8f0;
+    display: flex;
+    align-items: center;
+  }
+}
