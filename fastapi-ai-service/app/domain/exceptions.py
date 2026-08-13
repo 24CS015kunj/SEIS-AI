@@ -32,6 +32,9 @@ __all__ = [
     "CacheError",
     "LLMError",
     "LLMRateLimitError",
+    "RerankError",
+    "QueueError",
+    "RepositoryNotFoundError",
 ]
 
 
@@ -170,3 +173,54 @@ class LLMRateLimitError(LLMError):
     category: ClassVar[ErrorCategory] = ErrorCategory.RATE_LIMIT
     http_status: ClassVar[int] = 429
     retryable: ClassVar[bool] = True
+
+
+class RerankError(SEISError):
+    """RAG Optimization Engine failure (Task 24) -- NVIDIA hosted
+    reranking API call failed, timed out, or returned a malformed
+    response. Not present in the original Task 6 taxonomy (no reranker
+    existed yet); added here following the same pattern
+    :class:`CacheError` used to extend the hierarchy for Task 10's new
+    infrastructure dependency rather than inventing a parallel one.
+    Retryable by default: most failures here are transient
+    infrastructure issues, same reasoning as :class:`EmbeddingError`.
+    """
+
+    code: ClassVar[str] = "RERANK_ERROR"
+    category: ClassVar[ErrorCategory] = ErrorCategory.TRANSIENT
+    http_status: ClassVar[int] = 502
+    retryable: ClassVar[bool] = True
+
+
+class QueueError(SEISError):
+    """Celery task queue adapter failure (Task 30) -- broker unreachable
+    or ``send_task`` dispatch failed. Not present in the original Task 6
+    taxonomy (Task 30 is the first module that actually enqueues a task
+    rather than just configuring the Celery app object, Task 11); added
+    here following the same pattern :class:`CacheError`/:class:`RerankError`
+    used to extend the hierarchy for a new infrastructure dependency
+    rather than inventing a parallel one. Retryable by default: same
+    reasoning as :class:`CacheError` -- most failures here are transient
+    broker connectivity issues, not malformed job payloads.
+    """
+
+    code: ClassVar[str] = "QUEUE_ERROR"
+    category: ClassVar[ErrorCategory] = ErrorCategory.TRANSIENT
+    http_status: ClassVar[int] = 503
+    retryable: ClassVar[bool] = True
+
+
+class RepositoryNotFoundError(SEISError):
+    """No processing status record exists for the requested
+    ``repository_id`` (Task 30) -- either it was never submitted for
+    ingestion, or its status record's TTL (§Common Mistakes: a
+    processing record must not persist forever) has already expired.
+    Not a :class:`RepositoryError` (§14.1 Domain -- malformed
+    manifest/unsupported structure): this is a lookup failure, so it
+    gets its own 404, the first exception in this hierarchy that does.
+    """
+
+    code: ClassVar[str] = "REPOSITORY_NOT_FOUND"
+    category: ClassVar[ErrorCategory] = ErrorCategory.DOMAIN
+    http_status: ClassVar[int] = 404
+    retryable: ClassVar[bool] = False

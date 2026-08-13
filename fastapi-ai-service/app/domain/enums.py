@@ -54,6 +54,12 @@ class ChunkType(str, Enum):
     CONFIG_BLOCK = "config_block"
     TEST_CASE = "test_case"
     GENERIC_TEXT = "generic_text"
+    # One rendered "## <Section>" block of a compiled evolution report
+    # (Task 29, §7.5) -- distinct from every source-code chunk type so
+    # evolution content can be filtered out of/into a search separately
+    # (Best Practices: "use distinct chunk type metadata for filtered
+    # search capability").
+    EVOLUTION_SECTION = "evolution_section"
 
 
 class DocumentType(str, Enum):
@@ -71,6 +77,10 @@ class DocumentType(str, Enum):
     CHANGELOG = "changelog"
     GENERATED_LOCKFILE = "generated_lockfile"
     BINARY_ASSET = "binary_asset"
+    # A compiled Software Evolution report chunk (Task 29, §7.5) --
+    # synthetic content this service generates itself, not a file that
+    # ever existed in the repository's own tree.
+    EVOLUTION_REPORT = "evolution_report"
 
 
 class ConversationRole(str, Enum):
@@ -90,6 +100,43 @@ class TaskType(str, Enum):
     CODE_EXPLANATION = "code_explanation"
     ARCHITECTURE_SUMMARY = "architecture_summary"
     DOCUMENTATION_SUMMARY = "documentation_summary"
+
+
+class CommitCategory(str, Enum):
+    """Conventional Commits type classification (Task 25, §7.1). ``OTHER``
+    covers any message that either has no recognizable conventional-commit
+    prefix or uses one this enum doesn't enumerate -- never a hard failure.
+    """
+
+    FEAT = "feat"
+    FIX = "fix"
+    REFACTOR = "refactor"
+    CHORE = "chore"
+    DOCS = "docs"
+    STYLE = "style"
+    TEST = "test"
+    PERF = "perf"
+    BUILD = "build"
+    CI = "ci"
+    REVERT = "revert"
+    OTHER = "other"
+
+
+class InsightCategory(str, Enum):
+    """Engineering insight classification (Task 28, §7.4)."""
+
+    HIGH_RISK_MODULE = "high_risk_module"
+    BUS_FACTOR_WARNING = "bus_factor_warning"
+    REFACTORING_RECOMMENDED = "refactoring_recommended"
+
+
+class InsightSeverity(str, Enum):
+    """Impact severity rating for an :class:`~app.domain.models.EngineeringInsight`
+    (Task 28, §7.4)."""
+
+    CRITICAL = "critical"
+    MAJOR = "major"
+    MINOR = "minor"
 
 
 class ErrorCategory(str, Enum):

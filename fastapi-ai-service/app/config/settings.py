@@ -98,6 +98,17 @@ class Settings(BaseSettings):
     embedding_batch_size: int = Field(default=32, gt=0)
     embedding_cache_ttl_seconds: int = Field(default=604_800, ge=0)
 
+    # --- Reranking — NVIDIA hosted cross-encoder (Task 24). A different
+    # host from the embeddings base URL above: verified live that this
+    # model's hosted reranking endpoint is served from `ai.api.nvidia.com`
+    # under a per-model path, not `integrate.api.nvidia.com/v1/ranking`
+    # (which 404s for this model) — see app/core/retrieval/rag_optimizer.py's
+    # module docstring for the full verification trail. Reuses
+    # `nvidia_api_key`/`nvidia_embedding_timeout_ms` rather than adding
+    # near-duplicate secret/timeout fields for what is still just one more
+    # hosted NVIDIA HTTP call.
+    nvidia_reranking_base_url: str = "https://ai.api.nvidia.com"
+
     # --- Vector Store (§19 — connection only, no indexing this task) ---
     chroma_host: str = "localhost"
     chroma_port: int = Field(default=8001, ge=1, le=65535)

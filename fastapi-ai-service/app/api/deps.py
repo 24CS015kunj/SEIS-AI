@@ -16,6 +16,12 @@ from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 
 from app.api.v1.health_routes import register_readiness_check
 from app.config.settings import Settings, get_settings
+from app.core.embedding.embedder import NemotronEmbedder
+from app.core.evolution.churn_calculator import ChurnCalculator
+from app.core.evolution.commit_analyzer import CommitAnalyzer
+from app.core.evolution.evolution_indexer import EvolutionIndexer
+from app.core.intelligence.insights_generator import InsightsGenerator
+from app.core.intelligence.trend_detector import TrendDetector
 from app.domain.exceptions import SEISAuthorizationError
 from app.infra.cache.cache_client import RedisClient
 from app.infra.llm.gemini_client import GeminiGateway
@@ -106,20 +112,6 @@ async def verify_service_token(
 # ---------------------------------------------------------------------------
 # Service Layer Dependency Providers (Level 3 Clean Architecture)
 # ---------------------------------------------------------------------------
-def get_repository_processing_service(
-    settings: Settings = Depends(get_settings_dep),
-) -> RepositoryProcessingService:
-    """Dependency provider for RepositoryProcessingService.
-
-    Constructor Design Evolution:
-    Service constructors are minimal during Task 8 (accepting Settings) and designed
-    to evolve via constructor dependency injection as infrastructure adapters
-    (ChromaClient, QueueClient, Logger) become available in Tasks 9-12 without
-    requiring route signature changes.
-    """
-    return RepositoryProcessingService(settings=settings)
-
-
 def get_semantic_search_service(
     settings: Settings = Depends(get_settings_dep),
 ) -> SemanticSearchService:
@@ -142,18 +134,6 @@ def get_repository_chat_service(
     constructor injection in Tasks 9-12 without modifying API route signatures.
     """
     return RepositoryChatService(settings=settings)
-
-
-def get_evolution_analysis_service(
-    settings: Settings = Depends(get_settings_dep),
-) -> EvolutionAnalysisService:
-    """Dependency provider for EvolutionAnalysisService.
-
-    Constructor Design Evolution:
-    Will evolve to accept ChromaClient and Logger via constructor injection
-    in Tasks 9-12 without modifying API route signatures.
-    """
-    return EvolutionAnalysisService(settings=settings)
 
 
 def get_evaluation_service(
@@ -244,3 +224,68 @@ def get_gemini_gateway() -> GeminiGateway:
     prevents the process from starting).
     """
     return GeminiGateway(settings=get_settings())
+
+
+@lru_cache(maxsize=1)
+def get_embedder() -> NemotronEmbedder:
+    """FastAPI dependency provider for the process-wide embedding client
+    (ADR-007). Same ``lru_cache`` process-lifetime singleton pattern as
+    :func:`get_gemini_gateway` -- constructed lazily, so a missing
+    ``NVIDIA_API_KEY`` never prevents the process from starting. First
+    needed by a route/service provider in Task 31 (``EvolutionIndexer``
+    requires it); no provider existed for it before this task since
+    nothing above the Core layer called into embedding directly.
+    """
+    return NemotronEmbedder(settings=get_settings())
+
+
+# ---------------------------------------------------------------------------
+# Service Layer Dependency Providers requiring infra clients (Task 30+)
+# ---------------------------------------------------------------------------
+# Placed after the Infrastructure Client Providers above (rather than
+# alongside the other, still-settings-only Service Layer providers
+# further up this file) because its Depends() defaults reference
+# get_cache_client/get_task_queue -- default argument values are
+# evaluated at `def` time, so those names must already be bound.
+def get_repository_processing_service(
+    settings: Settings = Depends(get_settings_dep),
+    cache_client: RedisClient = Depends(get_cache_client),
+    task_queue: Celery = Depends(get_task_queue),
+) -> RepositoryProcessingService:
+    """Dependency provider for RepositoryProcessingService (Task 30).
+
+    The first Service Layer provider to wire real infrastructure
+    adapters (Redis locking/status, Celery job dispatch) rather than
+    just Settings -- every other provider above still awaits its own
+    task before evolving the same way.
+    """
+    return RepositoryProcessingService(
+        cache_client=cache_client, task_queue=task_queue, settings=settings
+    )
+
+
+def get_evolution_analysis_service(
+    settings: Settings = Depends(get_settings_dep),
+    cache_client: RedisClient = Depends(get_cache_client),
+    chroma_client: ChromaClient = Depends(get_chroma_client),
+    embedder: NemotronEmbedder = Depends(get_embedder),
+) -> EvolutionAnalysisService:
+    """Dependency provider for EvolutionAnalysisService (Task 31).
+
+    The Core Intelligence engines (``CommitAnalyzer``, ``ChurnCalculator``,
+    ``TrendDetector``, ``InsightsGenerator``) are stateless (no
+    constructor dependencies) and built fresh here rather than cached as
+    process-wide singletons -- unlike the infra clients above, there is
+    no connection/resource to reuse, so a new instance per request is
+    both correct and cheap.
+    """
+    evolution_indexer = EvolutionIndexer(chroma_client=chroma_client, embedder=embedder)
+    return EvolutionAnalysisService(
+        commit_analyzer=CommitAnalyzer(),
+        churn_calculator=ChurnCalculator(),
+        trend_detector=TrendDetector(),
+        insights_generator=InsightsGenerator(),
+        evolution_indexer=evolution_indexer,
+        cache_client=cache_client,
+        settings=settings,
+    )

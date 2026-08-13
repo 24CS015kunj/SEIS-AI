@@ -22,8 +22,11 @@ from pydantic import BaseModel, ConfigDict, Field
 
 from app.domain.enums import (
     ChunkType,
+    CommitCategory,
     ConversationRole,
     DocumentType,
+    InsightCategory,
+    InsightSeverity,
     ProcessingStage,
     ProcessingStatus,
 )
@@ -274,6 +277,26 @@ class ContextBlock(BaseModel):
     truncated: bool
 
 
+class GroundedPrompt(BaseModel):
+    """A fully assembled, injection-defended prompt payload (§5.8, Task
+    22) -- the Grounded Prompt Builder's output and
+    ``GeminiGateway.generate_text``'s (Task 12) input. Its two fields
+    map directly onto that frozen signature's ``system_instruction``
+    and ``prompt`` parameters, so a caller (Task 32's Repository Chat
+    Service) can pass them straight through without reshaping.
+
+    Named in Task 22's own signature (``build_chat_prompt(...) ->
+    GroundedPrompt``) but never actually defined until this task needed
+    it -- the same "genuine gap, not invented" pattern already applied
+    to :class:`ContextBlock` (Task 21) and its predecessors.
+    """
+
+    model_config = ConfigDict(frozen=True)
+
+    system_instruction: str
+    user_prompt: str
+
+
 class ChatResponse(BaseModel):
     """Repository Chat output (§5.11, §11.2, §23.3)."""
 
@@ -281,6 +304,207 @@ class ChatResponse(BaseModel):
     answer: str
     citations: list[Citation] = Field(default_factory=list)
     token_usage: TokenUsage | None = None
+
+
+class CommitInfo(BaseModel):
+    """One commit from Express's repository history payload (Task 25,
+    §7.1) -- the ``CommitAnalyzer``'s input. Deliberately narrow: only
+    what commit-history mining actually needs, not a full copy of every
+    field a Git provider's API might return.
+
+    ``author_email``/``committed_at`` are optional (Common Mistakes:
+    "failing to handle missing author email or timestamp fields") --
+    Express's upstream source may not always have them (e.g. a squashed
+    or bot-authored commit). :class:`CommitAnalyzer` degrades gracefully
+    rather than raising when either is absent.
+    """
+
+    model_config = ConfigDict(frozen=True)
+
+    commit_sha: str
+    message: str
+    files_changed: list[str] = Field(default_factory=list)
+    author_name: str | None = None
+    author_email: str | None = None
+    committed_at: datetime | None = None
+
+
+class FileChangeWindowCounts(BaseModel):
+    """A file's commit-frequency counts across the three fixed lookback
+    windows Task 25's own spec names (§7.1 subtask 3) -- 30/90/180 days
+    from :class:`CommitAnalysisResult`'s ``reference_time``.
+    """
+
+    model_config = ConfigDict(frozen=True)
+
+    last_30_days: int = Field(ge=0)
+    last_90_days: int = Field(ge=0)
+    last_180_days: int = Field(ge=0)
+
+
+class AuthorContribution(BaseModel):
+    """One contributor's commit count within an analyzed commit set
+    (Task 25, §7.1 Responsibilities: "aggregate author contribution
+    metrics"). ``author`` is whichever identifier a given commit
+    actually carried -- email preferred, else name, else a fixed
+    "unknown" placeholder -- never a crash on missing identity data.
+    """
+
+    model_config = ConfigDict(frozen=True)
+
+    author: str
+    commit_count: int = Field(ge=0)
+
+
+class CommitAnalysisResult(BaseModel):
+    """Structured commit-history summary (Task 25, §7.1) -- named in
+    ``CommitAnalyzer.analyze_commits``'s own signature but never
+    actually defined until this task needed it, the same "genuine gap,
+    not invented" pattern already applied to :class:`ContextBlock`
+    (Task 21) and its predecessors. Consumed directly by
+    :class:`ChurnCalculator` (Task 26) as ``calculate_hotspots``'s
+    first argument.
+    """
+
+    model_config = ConfigDict(frozen=True)
+
+    total_commits: int = Field(ge=0)
+    file_modification_counts: dict[str, int]
+    file_modification_windows: dict[str, FileChangeWindowCounts]
+    author_contributions: list[AuthorContribution]
+    commit_type_counts: dict[CommitCategory, int]
+    # What "now" was when the 30/90/180-day windows above were computed
+    # -- carried on the result so a report generated from it can state
+    # its own as-of date, and so window counts are reproducible/testable
+    # rather than silently depending on wall-clock time at read time.
+    reference_time: datetime
+
+
+class HotspotMetrics(BaseModel):
+    """A file's churn-based risk ranking (Task 26, §7.2) -- named in
+    ``ChurnCalculator.calculate_hotspots``'s own signature but never
+    actually defined until this task needed it, the same "genuine gap,
+    not invented" pattern already applied to :class:`CommitAnalysisResult`
+    (Task 25) and its predecessors. ``hotspot_score`` is normalized to
+    ``[0.0, 100.0]`` (Best Practices) as a percentage of the highest raw
+    score in the ranked set -- ``commit_count``/``line_count`` are kept
+    alongside it so a caller/report can show the underlying numbers
+    rather than only the normalized score.
+    """
+
+    model_config = ConfigDict(frozen=True)
+
+    file_path: str
+    commit_count: int = Field(ge=0)
+    line_count: int = Field(ge=0)
+    hotspot_score: float = Field(ge=0.0, le=100.0)
+
+
+class ModuleTrend(BaseModel):
+    """Aggregated churn for one top-level module directory (Task 27,
+    §7.3) -- e.g. ``app/core`` or ``app/infra``, not a deep subpath.
+    """
+
+    model_config = ConfigDict(frozen=True)
+
+    module: str
+    file_count: int = Field(ge=0)
+    commit_count: int = Field(ge=0)
+    # Fraction (not percentage) of the analyzed hotspots' total commit
+    # count this module accounts for -- subtask 4's ">50%" threshold is
+    # `churn_share > 0.5`.
+    churn_share: float = Field(ge=0.0, le=1.0)
+    is_high_churn: bool
+
+
+class StructuralTrends(BaseModel):
+    """Structural module trend metrics (Task 27, §7.3) -- named in
+    ``TrendDetector.detect_trends``'s own signature but never actually
+    defined until this task needed it, the same "genuine gap, not
+    invented" pattern already applied to :class:`HotspotMetrics` (Task
+    26) and its predecessors. Consumed by :class:`InsightsGenerator`
+    (Task 28) as ``generate_insights``'s second argument.
+    """
+
+    model_config = ConfigDict(frozen=True)
+
+    # Sorted descending by churn_share -- the highest-churn module first.
+    module_trends: list[ModuleTrend]
+    # Convenience accessor: module names with churn_share > 0.5, in the
+    # same relative order as module_trends. Derivable from module_trends
+    # itself (``m.module for m in module_trends if m.is_high_churn``),
+    # kept as its own field because subtask 4 names "identify modules
+    # experiencing >50% of overall churn" as a distinct deliverable from
+    # subtask 3's grouping, not merely a filter a caller must apply.
+    high_churn_modules: list[str]
+
+
+class EngineeringInsight(BaseModel):
+    """One actionable engineering recommendation (Task 28, §7.4) --
+    named in ``InsightsGenerator.generate_insights``'s own signature but
+    never actually defined until this task needed it, the same "genuine
+    gap, not invented" pattern already applied to :class:`StructuralTrends`
+    (Task 27) and its predecessors. ``recommendation`` is always
+    non-empty, concrete remediation text (Best Practices: "include
+    concise remediation recommendations alongside every warning";
+    Common Mistakes: "generating vague, unactionable warnings") --
+    never only a bare metric restated as a sentence.
+    """
+
+    model_config = ConfigDict(frozen=True)
+
+    category: InsightCategory
+    severity: InsightSeverity
+    # The file path or module name this insight concerns -- whichever
+    # the category operates on (a file for HIGH_RISK_MODULE/
+    # REFACTORING_RECOMMENDED, a module directory for BUS_FACTOR_WARNING).
+    subject: str
+    summary: str
+    recommendation: str
+
+
+class EvolutionReport(BaseModel):
+    """A compiled, indexed Software Evolution report (Task 29, §7.5) --
+    named in ``EvolutionIndexer.compile_and_index_report``'s own
+    signature but never actually defined until this task needed it, the
+    same "genuine gap, not invented" pattern already applied to
+    :class:`EngineeringInsight` (Task 28) and its predecessors.
+    """
+
+    model_config = ConfigDict(frozen=True)
+
+    repository_id: str
+    markdown: str
+    generated_at: datetime
+    # How many section chunks were actually upserted into ChromaDB --
+    # a caller-visible confirmation that indexing genuinely happened
+    # (Common Mistakes: "failing to index evolution reports, making
+    # history inaccessible to chat"), not merely that the markdown was
+    # compiled in memory.
+    indexed_chunk_count: int = Field(ge=0)
+
+
+class JobSubmissionResult(BaseModel):
+    """Confirmation payload for a newly enqueued ingestion job (Task 30,
+    §6.1/§22) -- named in ``RepositoryProcessingService.submit_ingestion_job``'s
+    own signature but never actually defined until this task needed it,
+    the same "genuine gap, not invented" pattern already applied to
+    :class:`EvolutionReport` (Task 29) and its predecessors.
+
+    ``job_id`` is the Celery task id returned by ``send_task`` (the
+    ``AsyncResult.id`` of the dispatched, not-yet-executed job) -- a
+    caller can use it to correlate with worker logs once Task 40 exists,
+    but this service never polls it back; processing status is tracked
+    independently via :class:`ProcessingStatusRecord` in Redis, not via
+    Celery's own result backend.
+    """
+
+    model_config = ConfigDict(frozen=True)
+
+    repository_id: str
+    job_id: str
+    status: ProcessingStatus
+    submitted_at: datetime
 
 
 class ErrorDetail(BaseModel):
