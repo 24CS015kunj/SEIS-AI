@@ -16,7 +16,6 @@ const pipeline = [
 
 export default function HowItWorksSection() {
   const [activeId, setActiveId] = useState(null);
-  const [activeArrowIdx, setActiveArrowIdx] = useState(null);
 
   return (
     <section id="how-it-works" className="section-padding bg-transparent">
@@ -28,7 +27,7 @@ export default function HowItWorksSection() {
             <h2 className="headline-lg">
               The <span className="text-transparent bg-clip-text bg-gradient-to-r from-blue-600 to-indigo-600">Intelligence</span> Pipeline
             </h2>
-            <p className="text-sm text-slate-500 mt-2">Click on any step or arrow below to see what happens under the hood.</p>
+            <p className="text-sm text-slate-500 mt-2">Click on any step below to see what happens under the hood.</p>
           </div>
         </FadeIn>
 
@@ -42,10 +41,7 @@ export default function HowItWorksSection() {
                 <FadeIn direction="scale" delay={idx * 100}>
                   <div className="relative flex flex-col items-center gap-3.5">
                     <button
-                      onClick={() => {
-                        setActiveId(isActive ? null : item.id);
-                        setActiveArrowIdx(null); // close arrows when opening icon
-                      }}
+                      onClick={() => setActiveId(isActive ? null : item.id)}
                       className={`w-16 h-16 rounded-2xl flex items-center justify-center shadow-sm cursor-pointer transition-all duration-300 border-2 ${
                         isActive ? 'scale-110 border-indigo-500 shadow-indigo-200' : 'hover:scale-105 border-transparent hover:shadow-md'
                       }`}
@@ -69,12 +65,6 @@ export default function HowItWorksSection() {
                     </div>
                   </div>
                 </FadeIn>
-
-                {idx < pipeline.length - 1 && (
-                  <FadeIn delay={idx * 100 + 50} direction="scale">
-                    <div className="text-slate-400 pb-7 px-2 font-bold text-lg">→</div>
-                  </FadeIn>
-                )}
               </React.Fragment>
             );
           })}

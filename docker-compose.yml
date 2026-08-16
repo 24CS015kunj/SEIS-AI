@@ -32,7 +32,12 @@ services:
     restart: unless-stopped
 
   chromadb:
-    image: chromadb/chroma:latest
+    # Pinned to match ADR-004/06_DEPLOYMENT_GUIDE.md exactly. `:latest`
+    # previously resolved to server v1.0.0, incompatible with the pinned
+    # `chromadb==0.6.2` Python client (requirements-vectorstore.txt) --
+    # confirmed via a real `KeyError: '_type'` on collection creation in
+    # the prior infrastructure audit. 0.6.3 matches the client.
+    image: chromadb/chroma:0.6.3
     container_name: fastapi-chromadb
     ports:
       - "8001:8000"

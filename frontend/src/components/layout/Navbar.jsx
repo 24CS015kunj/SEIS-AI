@@ -23,6 +23,9 @@ export default function Navbar({ onOpenAuth, onOpenDocs }) {
     if (link.href === '#') {
       e.preventDefault();
     }
+    if (link.name === 'Documentation') {
+      onOpenDocs();
+    }
     setMenuOpen(false);
   };
 
@@ -55,7 +58,7 @@ export default function Navbar({ onOpenAuth, onOpenDocs }) {
         </a>
 
         {/* Desktop Nav */}
-        <nav className="hidden md:flex items-center gap-8">
+        <nav className="hidden lg:flex items-center gap-8">
           {navLinks.map((link) => (
             <a
               key={link.name}
@@ -71,7 +74,7 @@ export default function Navbar({ onOpenAuth, onOpenDocs }) {
         </nav>
 
         {/* Right Actions */}
-        <div className="hidden md:flex items-center gap-4">
+        <div className="hidden lg:flex items-center gap-4">
           <button
             onClick={() => onOpenAuth('github')}
             style={{
@@ -94,14 +97,14 @@ export default function Navbar({ onOpenAuth, onOpenDocs }) {
             onMouseLeave={(e) => e.currentTarget.style.background = '#0F172A'}
           >
             <GithubIcon className="w-4 h-4" />
-            Continue with GitHub
+            Start Free Trial
           </button>
         </div>
 
         {/* Mobile Toggle */}
         <button
           onClick={() => setMenuOpen(!menuOpen)}
-          className="md:hidden p-2 rounded-md text-[#64748B] hover:text-[#0F172A] hover:bg-slate-100 transition-colors"
+          className="lg:hidden p-2 rounded-md text-[#64748B] hover:text-[#0F172A] hover:bg-slate-100 transition-colors"
           aria-label="Toggle menu"
           style={{ background: 'none', border: 'none', cursor: 'pointer' }}
         >
@@ -111,7 +114,7 @@ export default function Navbar({ onOpenAuth, onOpenDocs }) {
 
       {/* Mobile Drawer */}
       {menuOpen && (
-        <div className="md:hidden absolute top-[72px] left-0 right-0 bg-white border-b border-[#E2E8F0] z-50 shadow-sm">
+        <div className="lg:hidden absolute top-[72px] left-0 right-0 bg-white border-b border-[#E2E8F0] z-50 shadow-sm">
           <div className="px-6 py-5 space-y-1">
             {navLinks.map((link) => (
               <a
@@ -146,7 +149,7 @@ export default function Navbar({ onOpenAuth, onOpenDocs }) {
               }}
             >
               <GithubIcon className="w-5 h-5" />
-              Continue with GitHub
+              Start Free Trial
             </button>
           </div>
         </div>

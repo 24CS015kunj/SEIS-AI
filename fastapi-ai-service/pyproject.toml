@@ -25,7 +25,7 @@ select = [
     "SIM", # simplification suggestions
     "N",   # PEP 8 naming
 ]
-ignore = []
+ignore = ["B008"]  # Allow FastAPI Depends() in argument defaults
 
 [tool.ruff.lint.isort]
 known-first-party = ["app"]

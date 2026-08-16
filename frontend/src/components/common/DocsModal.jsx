@@ -122,6 +122,7 @@ export default function DocsModal({ isOpen, onClose }) {
           </div>
           <button
             onClick={onClose}
+            aria-label="Close"
             style={{
               width: 32,
               height: 32,

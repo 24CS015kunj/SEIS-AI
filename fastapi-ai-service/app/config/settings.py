@@ -62,18 +62,52 @@ class Settings(BaseSettings):
     # Secret — service-to-service auth token Express must present (§26.1-§26.2).
     internal_api_key: SecretStr = SecretStr("")
 
-    # --- Model / Gemini (§19.3) ---
+    # --- Model / Gemini (§19.3) — answer-generation LLM only. Unchanged by
+    # the embedding-provider migration below (explicitly out of scope). ---
     gemini_api_key: SecretStr = SecretStr("")
     gemini_model_name: str = "gemini-2.5-flash"
     gemini_temperature: float = Field(default=0.2, ge=0.0, le=2.0)
     gemini_max_output_tokens: int = Field(default=2048, gt=0)
     gemini_timeout_ms: int = Field(default=30_000, gt=0)
 
-    # --- Embedding (§19.4) ---
-    embedding_model_name: str = "all-MiniLM-L6-v2"
+    # --- Embedding — NVIDIA Nemotron-3-Embed-1B, hosted API (ADR-007). ---
+    # Secret — never logged, never committed. Empty by default so import/
+    # boot never fails; only an actual embed call raises if this is blank.
+    nvidia_api_key: SecretStr = SecretStr("")
+    # NVIDIA's documented hosted-inference base URL (verified against
+    # https://docs.api.nvidia.com/nim/reference/nvidia-nemotron-3-embed-1b
+    # and https://build.nvidia.com/nvidia/nemotron-3-embed-1b — the
+    # OpenAI-compatible NIM base host every current example/curl snippet
+    # uses). Configurable so a future self-hosted NIM deployment can
+    # override it without a code change; this default is correct for the
+    # hosted API this task requires.
+    nvidia_embedding_base_url: str = "https://integrate.api.nvidia.com/v1"
+    nvidia_embedding_timeout_ms: int = Field(default=30_000, gt=0)
+    # Model id sent as the request's "model" field. The actual value read
+    # by NemotronEmbedder is the module constant of the same name in
+    # app/core/embedding/embedder.py (pinned, not settings-driven — see
+    # that module's docstring); kept here too so `.env`/`.env.example`
+    # accurately document the model in use rather than naming the retired
+    # Gemini model or an unrelated Sentence-Transformers fallback.
+    embedding_model_name: str = "nvidia/nemotron-3-embed-1b"
     embedding_model_version: str = "v1"
+    # Verified from NVIDIA's model card and NeMo Retriever API reference
+    # (both cited above) — Nemotron-3-Embed-1B's native output size.
+    # Never assumed/guessed; used to validate every returned vector.
+    embedding_dimension: int = Field(default=2048, gt=0)
     embedding_batch_size: int = Field(default=32, gt=0)
     embedding_cache_ttl_seconds: int = Field(default=604_800, ge=0)
+
+    # --- Reranking — NVIDIA hosted cross-encoder (Task 24). A different
+    # host from the embeddings base URL above: verified live that this
+    # model's hosted reranking endpoint is served from `ai.api.nvidia.com`
+    # under a per-model path, not `integrate.api.nvidia.com/v1/ranking`
+    # (which 404s for this model) — see app/core/retrieval/rag_optimizer.py's
+    # module docstring for the full verification trail. Reuses
+    # `nvidia_api_key`/`nvidia_embedding_timeout_ms` rather than adding
+    # near-duplicate secret/timeout fields for what is still just one more
+    # hosted NVIDIA HTTP call.
+    nvidia_reranking_base_url: str = "https://ai.api.nvidia.com"
 
     # --- Vector Store (§19 — connection only, no indexing this task) ---
     chroma_host: str = "localhost"
