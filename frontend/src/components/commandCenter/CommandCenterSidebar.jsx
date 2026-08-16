@@ -1,24 +1,31 @@
 import React from 'react';
+import { useLocation, Link } from 'react-router-dom';
 import { LayoutGrid, GitBranch, Boxes, TrendingUp, Sparkles, X } from 'lucide-react';
 import { BrandGlyph } from '../common/BrandMark';
 
+/**
+ * `page` distinguishes the two real destinations this shared shell nav can
+ * point at today; `anchor` items only make sense once on the Command
+ * Center page itself.
+ */
 const NAV_ITEMS = [
-  { id: 'overview', label: 'Dashboard', icon: LayoutGrid, kind: 'active' },
-  { id: 'architecture', label: 'Architecture', icon: Boxes, kind: 'anchor' },
-  { id: 'insights', label: 'Insights', icon: Sparkles, kind: 'anchor' },
+  { id: 'overview', label: 'Dashboard', icon: LayoutGrid, page: '/command-center', anchor: true, primary: true },
+  { id: 'architecture', label: 'Architecture', icon: Boxes, page: '/command-center', anchor: true },
+  { id: 'insights', label: 'Insights', icon: Sparkles, page: '/command-center', anchor: true },
   { label: 'Software Evolution', icon: TrendingUp, kind: 'soon' },
-  { label: 'Source Control', icon: GitBranch, kind: 'soon' },
+  { label: 'Source Control', icon: GitBranch, page: '/source-control', primary: true },
 ];
 
 /**
- * A single nav list, not two competing ones — this directly addresses the
- * Figma audit's "duplicate nav systems" finding. Only Dashboard (this page)
- * and the two in-page anchors (Architecture / Insights) are real
- * destinations; Software Evolution and Source Control have no page yet
- * (Source Control is explicitly out of scope for this task) and are shown
- * as inert, clearly-labeled future destinations rather than dead links.
+ * Shared app-shell navigation used by both Command Center and Source
+ * Control — a single nav list, not two competing ones, which directly
+ * addresses the Figma audit's "duplicate nav systems" finding. Active state
+ * is derived from the current route rather than hardcoded, so the same
+ * component works correctly on either page. Software Evolution has no page
+ * yet and stays inert with a "Soon" tag rather than a dead link.
  */
 export default function CommandCenterSidebar({ repository, mobileOpen, onCloseMobile }) {
+  const location = useLocation();
   return (
     <>
       {mobileOpen && (
@@ -32,7 +39,7 @@ export default function CommandCenterSidebar({ repository, mobileOpen, onCloseMo
         className={`fixed inset-y-0 left-0 z-50 w-[248px] shrink-0 bg-[#0B1220] border-r border-[#1E293B] flex flex-col transition-transform duration-200 lg:static lg:translate-x-0 ${
           mobileOpen ? 'translate-x-0' : '-translate-x-full'
         }`}
-        aria-label="Command Center navigation"
+        aria-label="Application navigation"
       >
         <div className="flex items-center justify-between gap-2 px-4 h-14 border-b border-[#1E293B] shrink-0">
           <div className="flex items-center gap-2 min-w-0">
@@ -63,7 +70,13 @@ export default function CommandCenterSidebar({ repository, mobileOpen, onCloseMo
 
         <nav className="flex-1 py-2 overflow-y-auto">
           {NAV_ITEMS.map((item) => (
-            <NavRow key={item.label} item={item} onNavigate={onCloseMobile} />
+            <NavRow
+              key={item.label}
+              item={item}
+              currentPath={location.pathname}
+              repository={repository}
+              onNavigate={onCloseMobile}
+            />
           ))}
         </nav>
 
@@ -78,7 +91,7 @@ export default function CommandCenterSidebar({ repository, mobileOpen, onCloseMo
   );
 }
 
-function NavRow({ item, onNavigate }) {
+function NavRow({ item, currentPath, repository, onNavigate }) {
   const Icon = item.icon;
 
   if (item.kind === 'soon') {
@@ -93,20 +106,29 @@ function NavRow({ item, onNavigate }) {
     );
   }
 
+  const onCurrentPage = item.page === currentPath;
+  // An anchor only behaves like an in-page anchor while already on its page
+  // (native browser hash-scroll, zero JS); from elsewhere it's a real
+  // cross-page navigation to that page + hash instead.
+  const href = item.anchor && onCurrentPage ? `#${item.id}` : `${item.page}${item.anchor ? `#${item.id}` : ''}`;
+  const isActive = onCurrentPage && item.primary;
+  const Tag = item.anchor && onCurrentPage ? 'a' : Link;
+  const linkProp = Tag === 'a' ? { href } : { to: href, state: { repo: repository } };
+
   return (
-    <a
-      href={`#${item.id}`}
+    <Tag
+      {...linkProp}
       onClick={onNavigate}
-      aria-current={item.kind === 'active' ? 'page' : undefined}
+      aria-current={isActive ? 'page' : undefined}
       className={`flex items-center gap-2.5 px-4 py-2.5 text-[13px] transition-colors ${
-        item.kind === 'active'
+        isActive
           ? 'bg-white/[0.06] text-slate-100 font-semibold'
           : 'text-slate-400 hover:bg-white/[0.04] hover:text-slate-200'
       }`}
     >
-      <Icon size={15} className={item.kind === 'active' ? 'text-blue-400' : 'text-slate-500'} aria-hidden="true" />
+      <Icon size={15} className={isActive ? 'text-blue-400' : 'text-slate-500'} aria-hidden="true" />
       <span className="truncate">{item.label}</span>
-      {item.kind === 'active' && <span className="ml-auto w-1.5 h-1.5 rounded-full bg-blue-500 shrink-0" aria-hidden="true" />}
-    </a>
+      {isActive && <span className="ml-auto w-1.5 h-1.5 rounded-full bg-blue-500 shrink-0" aria-hidden="true" />}
+    </Tag>
   );
 }

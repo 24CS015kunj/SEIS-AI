@@ -6,6 +6,7 @@ import WorkspaceCreationPage from './pages/WorkspaceCreationPage';
 import ImportRepositoryPage from './pages/ImportRepositoryPage';
 import AiRepositoryAnalysisPage from './pages/AiRepositoryAnalysisPage';
 import CommandCenterPage from './pages/CommandCenterPage';
+import SourceControlPage from './pages/SourceControlPage';
 
 export default function App() {
   return (
@@ -16,6 +17,7 @@ export default function App() {
       <Route path="/import-repository" element={<ImportRepositoryPage />} />
       <Route path="/analysis" element={<AiRepositoryAnalysisPage />} />
       <Route path="/command-center" element={<CommandCenterPage />} />
+      <Route path="/source-control" element={<SourceControlPage />} />
     </Routes>
   );
 }
