@@ -1,0 +1,309 @@
+{
+  "info": {
+    "_postman_id": "seis-ai-backend-collection",
+    "name": "SEIS-AI Backend API",
+    "description": "Postman Collection for testing SEIS-AI Backend OAuth, Repositories, Branches, Commits, Files, and Content APIs.",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "variable": [
+    {
+      "key": "baseUrl",
+      "value": "http://localhost:5000",
+      "type": "string"
+    },
+    {
+      "key": "jwtToken",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "repositoryId",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "branchId",
+      "value": "",
+      "type": "string"
+    }
+  ],
+  "item": [
+    {
+      "name": "0. Health",
+      "item": [
+        {
+          "name": "Root Status",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/",
+              "host": ["{{baseUrl}}"],
+              "path": [""]
+            }
+          }
+        },
+        {
+          "name": "Health Check",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/health",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "health"]
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "1. Authentication",
+      "item": [
+        {
+          "name": "Get GitHub OAuth URL",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/auth/github?json=true",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "auth", "github"],
+              "query": [
+                {
+                  "key": "json",
+                  "value": "true"
+                }
+              ]
+            }
+          }
+        },
+        {
+          "name": "GitHub OAuth Callback",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/auth/github/callback?code=GITHUB_AUTHORIZATION_CODE",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "auth", "github", "callback"],
+              "query": [
+                {
+                  "key": "code",
+                  "value": "GITHUB_AUTHORIZATION_CODE",
+                  "description": "Code obtained from GitHub redirect"
+                }
+              ]
+            }
+          }
+        },
+        {
+          "name": "Get Authenticated User Profile",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{jwtToken}}",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/auth/me",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "auth", "me"]
+            }
+          }
+        },
+        {
+          "name": "Logout",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{jwtToken}}",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/auth/logout",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "auth", "logout"]
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "2. Repositories",
+      "item": [
+        {
+          "name": "Get Synced Repositories",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{jwtToken}}",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/github/repositories?page=1&limit=20",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "github", "repositories"],
+              "query": [
+                {
+                  "key": "page",
+                  "value": "1"
+                },
+                {
+                  "key": "limit",
+                  "value": "20"
+                },
+                {
+                  "key": "search",
+                  "value": "",
+                  "disabled": true
+                },
+                {
+                  "key": "visibility",
+                  "value": "public",
+                  "disabled": true
+                }
+              ]
+            }
+          }
+        },
+        {
+          "name": "Sync Repositories from GitHub",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{jwtToken}}",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/github/repositories/sync",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "github", "repositories", "sync"]
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "3. Branches",
+      "item": [
+        {
+          "name": "Get & Sync Repository Branches",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{jwtToken}}",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/github/repositories/{{repositoryId}}/branches",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "github", "repositories", "{{repositoryId}}", "branches"]
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "4. Commits",
+      "item": [
+        {
+          "name": "Get & Sync Branch Commits",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{jwtToken}}",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/github/repositories/{{repositoryId}}/branches/{{branchId}}/commits?page=1&limit=30",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "github", "repositories", "{{repositoryId}}", "branches", "{{branchId}}", "commits"],
+              "query": [
+                {
+                  "key": "page",
+                  "value": "1"
+                },
+                {
+                  "key": "limit",
+                  "value": "30"
+                }
+              ]
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "5. Files & Content",
+      "item": [
+        {
+          "name": "Get & Sync Branch File Tree",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{jwtToken}}",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/github/repositories/{{repositoryId}}/branches/{{branchId}}/files",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "github", "repositories", "{{repositoryId}}", "branches", "{{branchId}}", "files"]
+            }
+          }
+        },
+        {
+          "name": "Get File Content",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{jwtToken}}",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/github/repositories/{{repositoryId}}/files/content?path=package.json",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "github", "repositories", "{{repositoryId}}", "files", "content"],
+              "query": [
+                {
+                  "key": "path",
+                  "value": "package.json",
+                  "description": "Repository-relative file path"
+                },
+                {
+                  "key": "ref",
+                  "value": "main",
+                  "disabled": true
+                }
+              ]
+            }
+          }
+        }
+      ]
+    }
+  ]
+}

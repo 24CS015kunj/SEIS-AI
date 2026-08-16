@@ -1,0 +1,118 @@
+================================================================================
+                     SEIS-AI BACKEND API - POSTMAN URL LIST
+================================================================================
+
+BASE URL: http://localhost:5000
+
+--------------------------------------------------------------------------------
+1. HEALTH & STATUS
+--------------------------------------------------------------------------------
+[GET]  http://localhost:5000/
+Description : Server root status
+Headers     : None
+Body        : None
+
+[GET]  http://localhost:5000/api/health
+Description : Application health check and uptime
+Headers     : None
+Body        : None
+
+
+--------------------------------------------------------------------------------
+2. AUTHENTICATION (GITHUB OAUTH & USER PROFILE)
+--------------------------------------------------------------------------------
+[GET]  http://localhost:5000/api/auth/github?json=true
+Description : Get GitHub OAuth Authorization URL
+Headers     : None
+Query Params: json=true (returns URL as JSON)
+
+[GET]  http://localhost:5000/api/auth/github/callback?code=PASTE_GITHUB_CODE_HERE
+Description : OAuth Callback endpoint (Returns JWT Token)
+Headers     : None
+Query Params: code=YOUR_GITHUB_CODE
+
+[GET]  http://localhost:5000/api/auth/me
+Description : Get currently authenticated user profile
+Headers     : Authorization: Bearer YOUR_JWT_TOKEN
+Body        : None
+
+[POST] http://localhost:5000/api/auth/logout
+Description : Logout user and clear session cookie
+Headers     : Authorization: Bearer YOUR_JWT_TOKEN
+Body        : None
+
+
+--------------------------------------------------------------------------------
+3. REPOSITORIES
+--------------------------------------------------------------------------------
+[POST] http://localhost:5000/api/github/repositories/sync
+Description : Fetch and synchronize all user repositories from GitHub into MongoDB
+Headers     : Authorization: Bearer YOUR_JWT_TOKEN
+Body        : None
+
+[GET]  http://localhost:5000/api/github/repositories?page=1&limit=20
+Description : List user's synchronized repositories from MongoDB with pagination
+Headers     : Authorization: Bearer YOUR_JWT_TOKEN
+Query Params: page=1
+              limit=20
+              search=repo_name      (Optional)
+              visibility=public     (Optional: public / private)
+
+
+--------------------------------------------------------------------------------
+4. BRANCHES
+--------------------------------------------------------------------------------
+[GET]  http://localhost:5000/api/github/repositories/:repositoryId/branches
+Description : Synchronize and list all branches for a given repository
+Example URL : http://localhost:5000/api/github/repositories/66bf5123456789abcdef0101/branches
+Headers     : Authorization: Bearer YOUR_JWT_TOKEN
+Path Params : repositoryId = MongoDB ObjectId of the repository
+
+
+--------------------------------------------------------------------------------
+5. COMMITS
+--------------------------------------------------------------------------------
+[GET]  http://localhost:5000/api/github/repositories/:repositoryId/branches/:branchId/commits?page=1&limit=30
+Description : Synchronize and list commits for a specific branch
+Example URL : http://localhost:5000/api/github/repositories/66bf5123456789abcdef0101/branches/66bf523456789abcdef0202/commits?page=1&limit=30
+Headers     : Authorization: Bearer YOUR_JWT_TOKEN
+Path Params : repositoryId = MongoDB ObjectId of the repository
+              branchId     = MongoDB ObjectId of the branch
+Query Params: page=1
+              limit=30
+
+
+--------------------------------------------------------------------------------
+6. FILE TREE & FILE CONTENT
+--------------------------------------------------------------------------------
+[GET]  http://localhost:5000/api/github/repositories/:repositoryId/branches/:branchId/files
+Description : Synchronize and list repository file tree metadata for a branch
+Example URL : http://localhost:5000/api/github/repositories/66bf5123456789abcdef0101/branches/66bf523456789abcdef0202/files
+Headers     : Authorization: Bearer YOUR_JWT_TOKEN
+Path Params : repositoryId = MongoDB ObjectId of the repository
+              branchId     = MongoDB ObjectId of the branch
+
+[GET]  http://localhost:5000/api/github/repositories/:repositoryId/files/content?path=package.json
+Description : Fetch decoded content of an individual file on-demand
+Example URL : http://localhost:5000/api/github/repositories/66bf5123456789abcdef0101/files/content?path=package.json
+Headers     : Authorization: Bearer YOUR_JWT_TOKEN
+Path Params : repositoryId = MongoDB ObjectId of the repository
+Query Params: path = File path inside repository (e.g. package.json or src/app.js)
+              ref  = Branch name or commit SHA (Optional, defaults to defaultBranch)
+
+
+================================================================================
+                       POSTMAN QUICK TESTING SEQUENCE
+================================================================================
+1. Call GET http://localhost:5000/api/auth/github?json=true
+2. Open the returned "authUrl" in your browser and authorize on GitHub.
+3. Copy the "token" from the callback response.
+4. Set "Authorization: Bearer <your_token>" in Postman headers.
+5. Call POST http://localhost:5000/api/github/repositories/sync -> returns your synced repositories.
+6. Copy a repository "_id" to use as :repositoryId.
+7. Call GET http://localhost:5000/api/github/repositories/:repositoryId/branches -> returns branches.
+8. Copy a branch "_id" to use as :branchId.
+9. Call GET http://localhost:5000/api/github/repositories/:repositoryId/branches/:branchId/commits
+10. Call GET http://localhost:5000/api/github/repositories/:repositoryId/branches/:branchId/files
+11. Call GET http://localhost:5000/api/github/repositories/:repositoryId/files/content?path=package.json
+================================================================================
