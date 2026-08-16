@@ -61,6 +61,14 @@ export function buildCommandCenterData(repository) {
       circularDependencies: 0,
     },
 
+    hotspots: [
+      { file_path: 'backend/src/controllers/auth.controller.js', commit_count: 24, line_count: 480, hotspot_score: 96.5, risk_level: 'high' },
+      { file_path: 'backend/src/middleware/auth.js', commit_count: 19, line_count: 210, hotspot_score: 78.2, risk_level: 'high' },
+      { file_path: 'frontend/src/pages/ImportRepositoryPage.jsx', commit_count: 14, line_count: 584, hotspot_score: 64.0, risk_level: 'moderate' },
+      { file_path: 'fastapi-ai-service/app/services/repository_processing_service.py', commit_count: 12, line_count: 320, hotspot_score: 52.4, risk_level: 'moderate' },
+      { file_path: 'backend/src/config/db.js', commit_count: 3, line_count: 45, hotspot_score: 12.0, risk_level: 'low' },
+    ],
+
     insights: [
       {
         id: 'insight-1',

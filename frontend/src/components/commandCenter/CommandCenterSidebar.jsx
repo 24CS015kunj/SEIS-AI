@@ -4,9 +4,9 @@ import { BrandGlyph } from '../common/BrandMark';
 
 const NAV_ITEMS = [
   { id: 'overview', label: 'Dashboard', icon: LayoutGrid, kind: 'active' },
-  { id: 'architecture', label: 'Architecture', icon: Boxes, kind: 'anchor' },
+  { id: 'hotspots', label: 'Software Evolution', icon: TrendingUp, kind: 'anchor' },
   { id: 'insights', label: 'Insights', icon: Sparkles, kind: 'anchor' },
-  { label: 'Software Evolution', icon: TrendingUp, kind: 'soon' },
+  { id: 'architecture', label: 'Architecture', icon: Boxes, kind: 'anchor' },
   { label: 'Source Control', icon: GitBranch, kind: 'soon' },
 ];
 

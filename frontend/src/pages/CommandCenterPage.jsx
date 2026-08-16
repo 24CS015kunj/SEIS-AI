@@ -7,6 +7,7 @@ import OverviewMetrics from '../components/commandCenter/OverviewMetrics';
 import TechStackStrip from '../components/commandCenter/TechStackStrip';
 import AiInsightsPanel from '../components/commandCenter/AiInsightsPanel';
 import ArchitectureSection from '../components/commandCenter/ArchitectureSection';
+import HotspotsSection from '../components/commandCenter/HotspotsSection';
 import ActivitySection from '../components/commandCenter/ActivitySection';
 import CopilotDrawer from '../components/commandCenter/CopilotDrawer';
 
@@ -65,6 +66,7 @@ export default function CommandCenterPage() {
                   <OverviewMetrics overview={data.overview} />
                 </section>
                 <AiInsightsPanel insights={data.insights} />
+                <HotspotsSection hotspots={data.hotspots} />
                 <ArchitectureSection architecture={data.architecture} />
               </div>
 
