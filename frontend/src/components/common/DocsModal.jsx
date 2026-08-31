@@ -12,24 +12,28 @@ const docs = [
 1. Click "Continue with GitHub" on the homepage.
 2. Authorize SEIS to access your repositories.
 3. Select the repository you want to analyze.
-4. SEIS will automatically index the repository AST tree.
-5. Explore the dashboard, architecture map, and AI Copilot.`,
+4. SEIS syncs the repository's files, branches, and commit history.
+5. Explore the dashboard, architecture view, and AI Copilot.`,
     code: '# No CLI required — start directly in your browser\n# Connect GitHub → Select repository → Start exploring',
   },
   {
     id: 'architecture',
     icon: Layers,
-    label: 'Architecture & AST',
-    title: 'Repository Architecture & AST Indexing',
-    content: `SEIS builds an Abstract Syntax Tree (AST) index of your repository using Tree-Sitter and Babel parsers across 15+ languages.
+    label: 'Architecture',
+    title: 'Repository Architecture',
+    content: `SEIS builds a real directory and file tree from your repository's synced source, plus a language breakdown sourced directly from GitHub's own languages API.
 
-The index tracks:
-- Module-to-module import/export relationships
-- Function and class definitions
-- Dependency coupling metrics
+Currently available:
+- Full repository directory/file structure
+- Per-directory and per-file counts
+- Language breakdown by file
+- Commit-churn-based hotspot and trend analysis (AI Insights)
+
+Not yet available — shown honestly as "Not available" in the product rather than guessed at:
+- Import/export dependency graphs
 - Circular dependency detection
 - Cyclomatic complexity scoring`,
-    code: '// SEIS analyzes your code server-side\n// No local installation or configuration needed\n// Supports: TypeScript, JavaScript, Python, Go, Rust, Java',
+    code: '// Architecture data is derived from real synced files and commits\n// No dependency-graph engine exists yet — the product says so directly\n// rather than inferring relationships from directory names or proximity',
   },
   {
     id: 'copilot',
@@ -45,8 +49,8 @@ Example questions:
 - "What changed in the last release?"
 - "Where is technical debt concentrated?"
 
-Answers include references to specific files, line numbers, and commit history.`,
-    code: '// All Copilot responses reference your actual repository files\n// Zero hallucinations on file paths or function signatures',
+Answers cite the specific indexed files and line ranges they're grounded in, so you can verify the source yourself.`,
+    code: '// Copilot answers are grounded in your indexed repository content\n// Every answer includes citations back to real file paths and line ranges',
   },
 ];
 

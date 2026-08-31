@@ -49,13 +49,13 @@ from __future__ import annotations
 
 import structlog
 
-from app.core.embedding.embedder import EMBEDDING_MODEL_NAME, NemotronEmbedder
-from app.core.embedding.embedding_cache import EmbeddingCache, compute_chunk_hash
-from app.core.processing.chunker import ASTChunker
+from app.core.embedding.embedder import NemotronEmbedder
+from app.core.embedding.embedding_cache import EmbeddingCache, embed_with_cache
+from app.core.processing.chunker import ASTChunker, build_chunks_for_documents
 from app.core.processing.document_processor import DocumentProcessor
 from app.core.processing.metadata_generator import MetadataGenerator
 from app.domain.enums import ProcessingStatus
-from app.domain.models import Chunk, DiffManifest, Embedding, RepositoryManifest
+from app.domain.models import DiffManifest, RepositoryManifest
 from app.infra.vectorstore.chroma_client import ChromaClient
 
 logger = structlog.get_logger("seis.core.processing")
@@ -118,39 +118,15 @@ class IncrementalSynchronizer:
             files=files_to_index,
         )
         documents = self._document_processor.process_manifest(manifest)
-
-        chunks: list[Chunk] = []
-        for document in documents:
-            for raw_chunk in self._chunker.chunk(document):
-                metadata = self._metadata_generator.generate_metadata(document, raw_chunk)
-                chunks.append(raw_chunk.model_copy(update={"metadata": metadata}))
+        chunks = build_chunks_for_documents(documents, self._chunker, self._metadata_generator)
 
         if not chunks:
             log.info("no_chunks_produced_from_diff", document_count=len(documents))
             return
 
-        embeddings = await self._embed_chunks(chunks)
+        embeddings = await embed_with_cache(chunks, self._embedder, self._embedding_cache)
         await self._chroma.upsert_chunks(repository_id, chunks, embeddings)
         log.info("chunks_reindexed", document_count=len(documents), chunk_count=len(chunks))
-
-    async def _embed_chunks(self, chunks: list[Chunk]) -> list[Embedding]:
-        hashes = [compute_chunk_hash(chunk.content, EMBEDDING_MODEL_NAME) for chunk in chunks]
-        cached = await self._embedding_cache.get_cached_embeddings(hashes)
-
-        missing_indices = [index for index, h in enumerate(hashes) if h not in cached]
-        if missing_indices:
-            missing_chunks = [chunks[index] for index in missing_indices]
-            new_vectors = await self._embedder.embed_chunks(missing_chunks)
-            new_hash_vector_map = dict(
-                zip((hashes[index] for index in missing_indices), new_vectors, strict=True)
-            )
-            await self._embedding_cache.cache_embeddings(new_hash_vector_map)
-            cached.update(new_hash_vector_map)
-
-        return [
-            Embedding(chunk_id=chunk.chunk_id, vector=cached[h], model_version=EMBEDDING_MODEL_NAME)
-            for chunk, h in zip(chunks, hashes, strict=True)
-        ]
 
     @staticmethod
     def _normalize_path(path: str) -> str:

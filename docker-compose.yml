@@ -24,6 +24,39 @@ services:
       - chromadb
     restart: unless-stopped
 
+  worker:
+    # Task 40: the Celery worker that actually consumes the ingestion
+    # jobs `api` (Task 30) enqueues. Same build context/Dockerfile/image
+    # as `api` -- only the container command differs -- so the worker
+    # always ships with the exact same application code (no separate
+    # Dockerfile to keep in sync).
+    build:
+      context: ./fastapi-ai-service
+      dockerfile: Dockerfile
+    container_name: fastapi-worker
+    command: >
+      celery -A app.infra.queue.task_queue worker
+      --include=app.tasks.ingestion
+      --queues=ingestion
+      --loglevel=info
+    volumes:
+      - ./fastapi-ai-service:/app
+      - /app/.venv
+    environment:
+      # Same Docker-service-name connectivity as `api` -- the worker
+      # reads/writes the exact same Redis (status records, locks,
+      # broker) and ChromaDB (vector upserts) `api` uses, per Task 40's
+      # "update the SAME status record" / "reuse the existing
+      # ChromaClient" requirements.
+      - CHROMA_HOST=chromadb
+      - CHROMA_PORT=8000
+      - TASK_QUEUE_BROKER_URL=redis://redis:6379/0
+      - PYTHONUNBUFFERED=1
+    depends_on:
+      - redis
+      - chromadb
+    restart: unless-stopped
+
   redis:
     image: redis:7-alpine
     container_name: fastapi-redis

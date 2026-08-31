@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
-import { Menu, X, Cpu } from 'lucide-react';
+import { Menu, X } from 'lucide-react';
 import GithubIcon from '../common/GithubIcon';
+import BrandMark from '../common/BrandMark';
 
 const navLinks = [
   { name: 'Features', href: '#features' },
@@ -37,23 +38,11 @@ export default function Navbar({ onOpenAuth, onOpenDocs }) {
     >
       <div className="max-w-[1280px] mx-auto px-6 lg:px-8 h-full flex items-center justify-between gap-8">
 
-        {/* Brand */}
-        <a href="#hero" className="flex items-center gap-2.5 flex-shrink-0 group" style={{ textDecoration: 'none' }}>
-          <div
-            style={{
-              width: 32,
-              height: 32,
-              borderRadius: 8,
-              background: '#2563EB',
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'center',
-            }}
-          >
-            <Cpu size={18} color="#FFFFFF" />
-          </div>
-          <span style={{ fontSize: 16, fontWeight: 800, color: '#0F172A', letterSpacing: '-0.02em' }}>
-            SEIS AI
+        {/* Brand — same mark used across Login/Workspace/Import/Command Center */}
+        <a href="#hero" className="flex items-center gap-2.5 flex-shrink-0 group no-underline">
+          <BrandMark size={32} />
+          <span className="text-[16px] font-extrabold text-slate-900 tracking-tight">
+            SEIS AI Copilot
           </span>
         </a>
 
@@ -97,7 +86,7 @@ export default function Navbar({ onOpenAuth, onOpenDocs }) {
             onMouseLeave={(e) => e.currentTarget.style.background = '#0F172A'}
           >
             <GithubIcon className="w-4 h-4" />
-            Start Free Trial
+            Get Started
           </button>
         </div>
 
@@ -149,7 +138,7 @@ export default function Navbar({ onOpenAuth, onOpenDocs }) {
               }}
             >
               <GithubIcon className="w-5 h-5" />
-              Start Free Trial
+              Get Started
             </button>
           </div>
         </div>

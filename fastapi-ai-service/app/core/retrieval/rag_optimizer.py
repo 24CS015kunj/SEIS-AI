@@ -27,14 +27,26 @@ endpoint. The correct endpoint was found by testing candidates directly
 against NVIDIA's live API (not by further speculative doc-reading) and
 confirmed working:
 
-- **Model**: ``nvidia/llama-nemotron-rerank-1b-v2`` --
-  https://build.nvidia.com/nvidia/llama-nemotron-rerank-1b-v2 , current
-  and non-deprecated (released 2/27/2026). The older
-  ``llama-3.2-nv-rerankqa-1b-v2`` returns a real ``410 Gone`` ("reached
-  its end of life on 2026-05-18") when tested live; ``nv-rerankqa-
-  mistral-4b-v3`` is also deprecated. Neither is used.
+- **Model**: ``nvidia/llama-nemotron-rerank-vl-1b-v2`` --
+  https://build.nvidia.com/nvidia/llama-nemotron-rerank-vl-1b-v2 .
+  **Task 60 update**: the previously-verified
+  ``nvidia/llama-nemotron-rerank-1b-v2`` (used since this module's
+  original implementation) returned a real, live ``410 Gone``
+  ("This endpoint has reached its end of life on 2026-08-25") when
+  re-verified during Task 60 -- the exact same deprecation pattern this
+  module's own history already saw twice before (``llama-3.2-nv-
+  rerankqa-1b-v2`` EOL 2026-05-18, ``nv-rerankqa-mistral-4b-v3``
+  deprecated). ``llama-nemotron-rerank-vl-1b-v2`` is its direct
+  architectural successor -- NVIDIA's own documentation confirms it
+  embeds the retired text-only model as its language component and
+  "incorporates the text-only reranking capabilities of its
+  predecessor" -- and was live-verified (Task 60) to correctly rank a
+  relevant code passage above an irrelevant one via the exact same
+  request/response schema documented below; nothing in
+  ``_call_reranking_api``/``_extract_logits`` needed to change, only
+  this constant and ``_RANKING_PATH``.
 - **Endpoint** (verified live, HTTP 200): ``POST
-  https://ai.api.nvidia.com/v1/retrieval/nvidia/llama-nemotron-rerank-1b-v2/reranking``
+  https://ai.api.nvidia.com/v1/retrieval/nvidia/llama-nemotron-rerank-vl-1b-v2/reranking``
   -- a *different host* (``ai.api.nvidia.com``, not
   ``integrate.api.nvidia.com``) and a per-model path, not the unified
   ``/v1/ranking`` path newer NIM endpoints (including embeddings) use.
@@ -117,16 +129,27 @@ logger = structlog.get_logger("seis.core.retrieval")
 T = TypeVar("T")
 
 # Verified current, non-deprecated hosted NVIDIA reranking model --
-# module docstring. Public (no leading underscore), same reasoning as
-# embedder.py's EMBEDDING_MODEL_NAME: a model change is a deliberate
-# code change, not a silent .env edit.
-RERANKING_MODEL_NAME = "nvidia/llama-nemotron-rerank-1b-v2"
+# module docstring (Task 60: the prior model this constant pinned,
+# nvidia/llama-nemotron-rerank-1b-v2, reached end-of-life 2026-08-25).
+# Public (no leading underscore), same reasoning as embedder.py's
+# EMBEDDING_MODEL_NAME: a model change is a deliberate code change, not
+# a silent .env edit.
+RERANKING_MODEL_NAME = "nvidia/llama-nemotron-rerank-vl-1b-v2"
 # Per-model path, verified live (module docstring) -- unlike embeddings'
 # shared /v1/embeddings path, this hosted API routes by model in the URL
 # itself, not only via the request body's "model" field.
-_RANKING_PATH = "/v1/retrieval/nvidia/llama-nemotron-rerank-1b-v2/reranking"
+_RANKING_PATH = "/v1/retrieval/nvidia/llama-nemotron-rerank-vl-1b-v2/reranking"
 _TRUNCATE_MODE = "END"
 _DEFAULT_TOP_K = 5
+# File-diversity cap (Task 60) -- see `rerank_chunks`'s own docstring for
+# the real evidence this was added in response to. 1, not 2 or more: a
+# real test against this repository showed a cap of 2 still let three
+# distinct files fill all 5 slots before the cross-encoder's own
+# ordering ever reached the one chunk from the file the question was
+# actually about -- only a strict per-file cap of 1 reliably surfaced it
+# while every multi-file case tested (4 of 8 real question categories)
+# stayed correct or improved.
+_DEFAULT_MAX_CHUNKS_PER_FILE = 1
 
 # Splits camelCase word boundaries (lower/digit -> upper) for code-search
 # recall, e.g. "getUserById" -> "get User By Id" (further normalized to
@@ -253,17 +276,38 @@ class RAGOptimizer:
         query: str,
         chunks: list[SearchResultItem],
         top_k: int = _DEFAULT_TOP_K,
+        max_chunks_per_file: int = _DEFAULT_MAX_CHUNKS_PER_FILE,
     ) -> list[SearchResultItem]:
         """Re-scores ``chunks`` against ``query`` using NVIDIA's hosted
         cross-encoder, replaces each chunk's ``score`` with the
-        resulting relevance probability, re-sorts descending, and
-        returns the top ``top_k``. ``chunks`` themselves are never
-        mutated -- each returned item is a new copy.
+        resulting relevance probability, and returns up to ``top_k``,
+        most relevant first. ``chunks`` themselves are never mutated --
+        each returned item is a new copy.
+
+        File-diversity selection (Task 60, live-evidenced): the raw
+        score-sorted order is not returned as-is. Real testing against
+        the Mazesolver repository found the cross-encoder repeatedly
+        concentrating several of the top-5 slots on the same file
+        (usually ``readme.md``) while crowding out a clearly relevant
+        chunk from a *different* file that the question specifically
+        needed -- e.g. "What does backend/maze.py do?" excluded
+        ``backend/maze.py`` itself (ranked #9) in favor of a 4th
+        ``readme.md``-family chunk, and a cross-file question excluded
+        ``frontend/app.js`` and ``backend/app.py`` entirely in favor of
+        four overlapping ``readme.md`` chunks. See
+        ``_select_diverse``'s own docstring for the exact selection
+        rule and why it never discards genuinely relevant content when
+        few distinct files exist (verified against a real single-file
+        "what is this repository about?" query, where all 4 relevant
+        candidates come from ``readme.md`` and all 4 are still
+        returned).
         """
         if not chunks:
             return []
         if top_k <= 0:
             raise ValueError("top_k must be positive")
+        if max_chunks_per_file <= 0:
+            raise ValueError("max_chunks_per_file must be positive")
 
         logits = await self._call_reranking_api(query, [chunk.content for chunk in chunks])
         rescored = [
@@ -272,11 +316,12 @@ class RAGOptimizer:
         ]
         rescored.sort(key=lambda item: item.score, reverse=True)
 
-        top = rescored[:top_k]
+        top = _select_diverse(rescored, top_k=top_k, max_per_file=max_chunks_per_file)
         self._log.info(
             "rag_optimizer.chunks_reranked",
             candidate_count=len(chunks),
             returned_count=len(top),
+            distinct_files=len({item.metadata.file_path for item in top}),
         )
         return top
 
@@ -361,6 +406,59 @@ class RAGOptimizer:
             await self._client.aclose()
             self._client = None
         self._log.debug("rag_optimizer.client_closed")
+
+
+def _select_diverse(
+    ranked: list[SearchResultItem], *, top_k: int, max_per_file: int
+) -> list[SearchResultItem]:
+    """Selects up to ``top_k`` items from ``ranked`` (already sorted,
+    most relevant first), preferring distinct ``file_path`` values over
+    the raw score order, most relevant first (Task 60, ``rerank_chunks``'s
+    own docstring has the real evidence this addresses).
+
+    Two-pass greedy selection, not a hard per-file quota:
+
+    1. Walk ``ranked`` in order, taking an item unless its file has
+       already reached ``max_per_file`` in this selection -- so a
+       lower-scored chunk from a *new* file is preferred over another
+       chunk from a file already represented, exactly the "don't let
+       the reranker crowd every slot with one file" fix this was added
+       for.
+    2. If fewer than ``top_k`` distinct-enough items exist (too few
+       distinct files to fill every slot under the cap), backfill the
+       remaining slots from whatever was skipped in pass 1, in their
+       original score order. This is what keeps a genuinely
+       single-file-relevant question (e.g. "what is this repository
+       about?", where every real candidate is a ``readme.md`` chunk)
+       returning every one of them, never artificially truncated to
+       one just because they share a file.
+
+    The returned list is re-sorted by score, descending, before return
+    -- diversity changes *which* items are selected, never the
+    relevance order the LLM and ``ContextBuilder``'s budget-truncation
+    logic sees them in.
+    """
+    selected: list[SearchResultItem] = []
+    skipped: list[SearchResultItem] = []
+    counts: dict[str, int] = {}
+
+    for item in ranked:
+        if len(selected) >= top_k:
+            break
+        path = item.metadata.file_path
+        if counts.get(path, 0) < max_per_file:
+            selected.append(item)
+            counts[path] = counts.get(path, 0) + 1
+        else:
+            skipped.append(item)
+
+    for item in skipped:
+        if len(selected) >= top_k:
+            break
+        selected.append(item)
+
+    selected.sort(key=lambda item: item.score, reverse=True)
+    return selected
 
 
 def _strip_filler_prefix(query: str) -> str:

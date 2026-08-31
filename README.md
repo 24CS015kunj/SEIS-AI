@@ -119,15 +119,15 @@ flowchart LR
     EXP[Express Backend<br/>Node.js + MongoDB Atlas]
     FAST[FastAPI AI Service<br/>Python]
     CHROMA[(ChromaDB)]
-    GEMINI[Gemini LLM]
+    NEMOTRON[NVIDIA Nemotron 3 Ultra]
     REACT[React Frontend]
     USER[End User]
 
     GH -->|OAuth / REST / Webhooks| EXP
     EXP -->|Ingested repository data| FAST
     FAST -->|Vectors + metadata| CHROMA
-    FAST -->|Grounded prompts| GEMINI
-    GEMINI -->|Generated response| FAST
+    FAST -->|Grounded prompts| NEMOTRON
+    NEMOTRON -->|Generated response| FAST
     FAST -->|AI results| EXP
     EXP -->|REST / WebSocket| REACT
     REACT --> USER
@@ -602,14 +602,13 @@ SERVICE_PORT=8000
 
 INTERNAL_API_KEY=change-me
 
-GEMINI_API_KEY=your-gemini-api-key
-GEMINI_MODEL_NAME=your-pinned-gemini-model
-GEMINI_TEMPERATURE=0.2
-GEMINI_MAX_OUTPUT_TOKENS=2048
-GEMINI_TIMEOUT_MS=30000
+NVIDIA_API_KEY=your-nvidia-api-key
+NEMOTRON_MODEL_NAME=nvidia/nemotron-3-ultra-550b-a55b
+NEMOTRON_MAX_OUTPUT_TOKENS=2048
+NEMOTRON_TIMEOUT_MS=30000
 
-EMBEDDING_MODEL_NAME=your-embedding-model
-EMBEDDING_MODEL_VERSION=1
+EMBEDDING_MODEL_NAME=nvidia/nemotron-3-embed-1b
+EMBEDDING_MODEL_VERSION=v1
 
 CHROMA_HOST=localhost
 CHROMA_PORT=8001

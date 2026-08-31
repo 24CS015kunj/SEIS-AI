@@ -1,18 +1,11 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
-import {
-  ShieldCheck,
-  Lock,
-  UserCheck,
-  Loader2,
-  AlertTriangle,
-  CheckCircle2,
-  RotateCw,
-  TrendingUp,
-} from 'lucide-react';
+import { ShieldCheck, Lock, UserCheck, Loader2, TrendingUp } from 'lucide-react';
 import GithubIcon from '../components/common/GithubIcon';
 import FadeIn from '../components/common/FadeIn';
 import BrandMark, { BrandGlyph } from '../components/common/BrandMark';
+import { useAuth } from '../context/AuthContext';
+import { API_BASE_URL } from '../services/apiClient';
 
 const trustPoints = [
   {
@@ -41,40 +34,28 @@ const footerLinks = [
 
 export default function LoginPage() {
   const navigate = useNavigate();
-  // default | loading | error | success
-  const [status, setStatus] = useState('default');
+  const { status: authStatus } = useAuth();
+  const [connecting, setConnecting] = useState(false);
+
+  // A manual visit to /login while already authenticated (real session,
+  // confirmed via GET /api/auth/me in AuthContext) should not re-prompt.
+  useEffect(() => {
+    if (authStatus === 'authenticated') {
+      navigate('/workspace', { replace: true });
+    }
+  }, [authStatus, navigate]);
 
   /**
-   * MOCK / FRONTEND-ONLY AUTH FLOW.
-   * No real GitHub OAuth call happens here — this only drives the four UI
-   * states requested for this phase. `?mockAuth=error` forces the very first
-   * attempt down the error path (for demoing/testing the error + retry UI);
-   * every retry always resolves to success, regardless of the param.
-   * On success, this mock now hands off to the Workspace Creation route
-   * (frontend navigation only — still no real session/auth is established).
-   * Wiring this to the real OAuth redirect/callback is a later phase.
-   *
-   * `isRetry` is passed explicitly (rather than tracked in state) to avoid a
-   * stale-closure bug: a state update from the same click that triggers this
-   * call would not yet be visible to this closure's `useState` value.
+   * Real GitHub OAuth handoff: a full browser navigation to Express's
+   * existing `GET /api/auth/github`, which redirects to GitHub. The
+   * frontend never talks to GitHub directly and never sees a client secret.
+   * This tab unloads immediately after, so `connecting` only covers the
+   * brief moment before that navigation happens.
    */
-  const handleConnect = (isRetry = false) => {
-    if (status === 'loading') return; // guard against duplicate clicks
-
-    const forceError =
-      !isRetry &&
-      typeof window !== 'undefined' &&
-      new URLSearchParams(window.location.search).get('mockAuth') === 'error';
-
-    setStatus('loading');
-    window.setTimeout(() => {
-      if (forceError) {
-        setStatus('error');
-      } else {
-        setStatus('success');
-        window.setTimeout(() => navigate('/workspace'), 1400);
-      }
-    }, 1200);
+  const handleConnect = () => {
+    if (connecting) return;
+    setConnecting(true);
+    window.location.href = `${API_BASE_URL}/api/auth/github`;
   };
 
   return (
@@ -178,17 +159,7 @@ export default function LoginPage() {
             <FadeIn direction="scale">
               <div className="bg-white border border-[#E2E8F0] rounded-2xl shadow-[0_8px_30px_rgba(15,23,42,0.08)] px-7 py-10 sm:px-[57px] sm:py-[57px]">
 
-                {status === 'error' && (
-                  <ErrorState onRetry={() => handleConnect(true)} />
-                )}
-
-                {status === 'success' && (
-                  <SuccessState />
-                )}
-
-                {(status === 'default' || status === 'loading') && (
-                  <DefaultState status={status} onConnect={handleConnect} />
-                )}
+                <DefaultState status={connecting ? 'loading' : 'default'} onConnect={handleConnect} />
 
               </div>
             </FadeIn>
@@ -295,51 +266,3 @@ function DefaultState({ status, onConnect }) {
   );
 }
 
-function ErrorState({ onRetry }) {
-  return (
-    <div role="alert" aria-live="assertive">
-      <div className="w-16 h-16 rounded-2xl bg-rose-50 flex items-center justify-center mx-auto mb-6">
-        <AlertTriangle size={28} className="text-rose-500" aria-hidden="true" />
-      </div>
-      <h2 className="text-xl font-bold text-slate-900 text-center mb-2">
-        Unable to Connect to GitHub
-      </h2>
-      <p className="text-sm text-slate-500 text-center leading-relaxed mb-8 max-w-[320px] mx-auto">
-        Unable to connect to GitHub. Please check your connection and try again.
-      </p>
-
-      <button
-        type="button"
-        onClick={onRetry}
-        className="w-full h-14 inline-flex items-center justify-center gap-2.5 bg-[#0F172A] text-white text-[15px] font-semibold rounded-xl border-0 cursor-pointer transition-colors hover:bg-[#1E293B] mb-6"
-      >
-        <RotateCw size={18} aria-hidden="true" />
-        Try Again
-      </button>
-
-      <p className="text-[12px] text-slate-400 text-center leading-relaxed m-0">
-        Still having trouble?{' '}
-        <a href="#" className="text-slate-600 underline hover:text-slate-900">Contact support</a>
-      </p>
-    </div>
-  );
-}
-
-function SuccessState() {
-  return (
-    <div role="status" aria-live="polite" className="py-4">
-      <div className="w-16 h-16 rounded-2xl bg-emerald-50 flex items-center justify-center mx-auto mb-6">
-        <CheckCircle2 size={30} className="text-emerald-500" aria-hidden="true" />
-      </div>
-      <h2 className="text-xl font-bold text-slate-900 text-center mb-2">
-        GitHub Connected!
-      </h2>
-      <p className="text-sm text-slate-500 text-center leading-relaxed mb-2">
-        Redirecting to your workspace…
-      </p>
-      <div className="flex items-center justify-center pt-4">
-        <Loader2 size={22} className="animate-spin text-slate-300" aria-hidden="true" />
-      </div>
-    </div>
-  );
-}

@@ -51,23 +51,23 @@ export default function DetailDrawer({ titleId, title, icon: Icon, onClose, chil
         aria-modal="true"
         aria-labelledby={titleId}
         onKeyDown={handleTabTrap}
-        className="relative w-full max-w-[420px] h-full bg-[#0B1220] border-l border-[#1E293B] flex flex-col"
+        className="relative w-full max-w-[420px] h-full bg-white border-l border-slate-200 shadow-[-8px_0_30px_rgba(15,23,42,0.08)] flex flex-col"
       >
-        <div className="flex items-center justify-between gap-3 h-14 px-5 border-b border-[#1E293B] shrink-0">
+        <div className="flex items-center justify-between gap-3 h-14 px-5 border-b border-slate-200 bg-white shrink-0">
           <div className="flex items-center gap-2 min-w-0">
             {Icon && (
-              <span className="w-7 h-7 rounded-lg bg-blue-500/10 flex items-center justify-center shrink-0">
-                <Icon size={14} className="text-blue-400" aria-hidden="true" />
+              <span className="w-7 h-7 rounded-lg bg-blue-50 flex items-center justify-center shrink-0">
+                <Icon size={14} className="text-blue-600" aria-hidden="true" />
               </span>
             )}
-            <h2 id={titleId} className="text-[13.5px] font-bold text-slate-100 truncate">{title}</h2>
+            <h2 id={titleId} className="text-[13.5px] font-bold text-slate-900 truncate">{title}</h2>
           </div>
           <button
             ref={closeRef}
             type="button"
             onClick={onClose}
             aria-label="Close panel"
-            className="w-8 h-8 rounded-md flex items-center justify-center text-slate-400 hover:text-slate-100 hover:bg-white/5 shrink-0"
+            className="w-8 h-8 rounded-md flex items-center justify-center text-slate-400 hover:text-slate-900 hover:bg-slate-50 shrink-0 transition-colors"
           >
             <X size={16} aria-hidden="true" />
           </button>

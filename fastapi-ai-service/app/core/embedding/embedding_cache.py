@@ -23,6 +23,8 @@ import json
 import structlog
 
 from app.config.settings import Settings
+from app.core.embedding.embedder import EMBEDDING_MODEL_NAME, NemotronEmbedder
+from app.domain.models import Chunk, Embedding
 from app.infra.cache.cache_client import RedisClient
 
 logger = structlog.get_logger("seis.core.embedding")
@@ -88,3 +90,37 @@ class EmbeddingCache:
             )
 
         self._log.info("embedding_cache_write", count=len(hash_vector_map))
+
+
+async def embed_with_cache(
+    chunks: list[Chunk], embedder: NemotronEmbedder, embedding_cache: EmbeddingCache
+) -> list[Embedding]:
+    """Embeds ``chunks``, reusing cached vectors for content already
+    embedded under the current model version and calling
+    ``embedder.embed_chunks`` only for genuine cache misses.
+
+    Factored out of :class:`~app.core.processing.synchronizer.IncrementalSynchronizer`
+    (Task 18) so the Repository Ingestion Worker (Task 40) reuses the
+    identical hash/lookup/embed-miss/write-back sequence instead of a
+    second, independent embedding-plus-caching implementation.
+    """
+    if not chunks:
+        return []
+
+    hashes = [compute_chunk_hash(chunk.content, EMBEDDING_MODEL_NAME) for chunk in chunks]
+    cached = await embedding_cache.get_cached_embeddings(hashes)
+
+    missing_indices = [index for index, h in enumerate(hashes) if h not in cached]
+    if missing_indices:
+        missing_chunks = [chunks[index] for index in missing_indices]
+        new_vectors = await embedder.embed_chunks(missing_chunks)
+        new_hash_vector_map = dict(
+            zip((hashes[index] for index in missing_indices), new_vectors, strict=True)
+        )
+        await embedding_cache.cache_embeddings(new_hash_vector_map)
+        cached.update(new_hash_vector_map)
+
+    return [
+        Embedding(chunk_id=chunk.chunk_id, vector=cached[h], model_version=EMBEDDING_MODEL_NAME)
+        for chunk, h in zip(chunks, hashes, strict=True)
+    ]

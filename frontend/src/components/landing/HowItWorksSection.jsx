@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Download, Search, Database, Compass, Lightbulb, Bot, Rocket, Zap } from 'lucide-react';
+import { Download, Search, Database, Compass, Lightbulb, Bot, Rocket } from 'lucide-react';
 import GithubIcon from '../common/GithubIcon';
 import FadeIn from '../common/FadeIn';
 

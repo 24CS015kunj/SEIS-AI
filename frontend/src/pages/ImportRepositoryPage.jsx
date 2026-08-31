@@ -1,5 +1,5 @@
-import React, { useEffect, useId, useMemo, useRef, useState } from 'react';
-import { Link, useNavigate } from 'react-router-dom';
+import React, { useEffect, useMemo, useState } from 'react';
+import { Link, useLocation, useNavigate } from 'react-router-dom';
 import {
   Search,
   X,
@@ -9,118 +9,15 @@ import {
   GitFork,
   Check,
   Loader2,
-  CheckCircle2,
-  Download,
-  Info,
+  AlertCircle,
   FolderGit2,
-  FileCode2,
-  HardDrive,
-  Timer,
+  RefreshCw,
   SearchX,
+  ArrowRight,
 } from 'lucide-react';
 import BrandMark from '../components/common/BrandMark';
 import FadeIn from '../components/common/FadeIn';
-
-/**
- * MOCK DATA ONLY. Nothing here comes from the GitHub API — this simulates
- * what a future `/api/repositories` response might look like, purely to
- * exercise the UI. Field shape: id, name, owner, description, visibility
- * ('public' | 'private'), language, stars, forks, updatedAt, alreadyImported,
- * plus mock analysis stats (fileCount, sizeLabel, estAnalysisTime) used only
- * by the sidebar preview.
- */
-const MOCK_REPOSITORIES = [
-  {
-    id: 'repo-1',
-    name: 'seis-ai-copilot',
-    owner: 'seis-ai',
-    description: 'AI-powered software evolution intelligence platform — core frontend and API.',
-    visibility: 'public',
-    language: 'JavaScript',
-    stars: 128,
-    forks: 24,
-    updatedAt: 'Updated 2 hours ago',
-    alreadyImported: false,
-    fileCount: '~420',
-    sizeLabel: '12.4 MB',
-    estAnalysisTime: '~2–3 mins',
-  },
-  {
-    id: 'repo-2',
-    name: 'platform-api',
-    owner: 'acme-corp',
-    description: 'Internal REST + GraphQL gateway used across every Acme product surface.',
-    visibility: 'private',
-    language: 'TypeScript',
-    stars: 6,
-    forks: 1,
-    updatedAt: 'Updated 1 day ago',
-    alreadyImported: false,
-    fileCount: '~610',
-    sizeLabel: '18.7 MB',
-    estAnalysisTime: '~3–4 mins',
-  },
-  {
-    id: 'repo-3',
-    name: 'resume-skill-extractor',
-    owner: 'alex-dev',
-    description: 'Python-based ML tool for extracting skills from PDF resumes.',
-    visibility: 'public',
-    language: 'Python',
-    stars: 45,
-    forks: 12,
-    updatedAt: 'Updated 3 days ago',
-    alreadyImported: false,
-    fileCount: '~180',
-    sizeLabel: '6.1 MB',
-    estAnalysisTime: '~1–2 mins',
-  },
-  {
-    id: 'repo-4',
-    name: 'design-system',
-    owner: 'acme-corp',
-    description: 'Shared component library, tokens, and Figma-to-code pipeline.',
-    visibility: 'private',
-    language: 'TypeScript',
-    stars: 19,
-    forks: 3,
-    updatedAt: 'Updated 5 hours ago',
-    alreadyImported: false,
-    fileCount: '~275',
-    sizeLabel: '9.8 MB',
-    estAnalysisTime: '~2 mins',
-  },
-  {
-    id: 'repo-5',
-    name: 'docs-site',
-    owner: 'seis-ai',
-    description: 'Public documentation site for SEIS AI Copilot, built with Vite.',
-    visibility: 'public',
-    language: 'JavaScript',
-    stars: 15,
-    forks: 5,
-    updatedAt: 'Updated 1 week ago',
-    alreadyImported: true,
-    fileCount: '~95',
-    sizeLabel: '3.2 MB',
-    estAnalysisTime: '~1 min',
-  },
-  {
-    id: 'repo-6',
-    name: 'legacy-monolith',
-    owner: 'acme-corp',
-    description: 'The original Acme application, pre-microservices. Still in production.',
-    visibility: 'public',
-    language: 'Python',
-    stars: 302,
-    forks: 88,
-    updatedAt: 'Updated 2 months ago',
-    alreadyImported: true,
-    fileCount: '~1,240',
-    sizeLabel: '41.5 MB',
-    estAnalysisTime: '~6–8 mins',
-  },
-];
+import { listRepositories, syncRepositories } from '../services/repositoryService';
 
 const VISIBILITY_FILTERS = [
   { value: 'all', label: 'All' },
@@ -128,69 +25,89 @@ const VISIBILITY_FILTERS = [
   { value: 'private', label: 'Private' },
 ];
 
-const LANGUAGE_FILTERS = [
-  { value: 'JavaScript', label: 'JavaScript', dot: '#F7DF1E' },
-  { value: 'TypeScript', label: 'TypeScript', dot: '#3178C6' },
-];
-
+/**
+ * Task 45: repositories now come from the real
+ * `GET /api/github/repositories` / `POST /api/github/repositories/sync`
+ * endpoints (Task 37/39/43) instead of a hardcoded mock array. `workspaceId`
+ * arrives via router state from WorkspaceCreationPage (Task 45) -- never
+ * fabricated here, and never sent to the ingestion endpoint later (Task 44
+ * derives it from `Repository.workspaceId`, not from any caller input).
+ */
 export default function ImportRepositoryPage() {
   const navigate = useNavigate();
-  const [loadStatus, setLoadStatus] = useState('loading'); // loading | ready
+  const location = useLocation();
+  const workspaceId = location.state?.workspaceId ?? null;
+  const workspaceName = location.state?.workspaceName ?? null;
+
+  const [repos, setRepos] = useState([]);
+  const [loadStatus, setLoadStatus] = useState('loading'); // loading | ready | error
+  const [syncStatus, setSyncStatus] = useState('idle'); // idle | syncing | error
+  const [syncError, setSyncError] = useState(null);
   const [query, setQuery] = useState('');
   const [visibility, setVisibility] = useState('all');
   const [language, setLanguage] = useState(null);
-  const [selectedId, setSelectedId] = useState('repo-1');
-  const [importStatus, setImportStatus] = useState('idle'); // idle | importing | success
+  const [selectedId, setSelectedId] = useState(null);
 
-  const searchId = useId();
-  const cardRefs = useRef({});
+  const loadRepositories = () => {
+    setLoadStatus('loading');
+    listRepositories()
+      .then((data) => {
+        setRepos(data);
+        setLoadStatus('ready');
+        setSelectedId((current) => current ?? data[0]?._id ?? null);
+      })
+      .catch(() => setLoadStatus('error'));
+  };
 
-  // Simulate fetching the repository list from GitHub.
-  useEffect(() => {
-    const timer = window.setTimeout(() => setLoadStatus('ready'), 900);
-    return () => window.clearTimeout(timer);
-  }, []);
+  useEffect(loadRepositories, []);
+
+  const handleSync = () => {
+    if (syncStatus === 'syncing') return;
+    setSyncStatus('syncing');
+    setSyncError(null);
+    syncRepositories(workspaceId)
+      .then(() => {
+        setSyncStatus('idle');
+        loadRepositories();
+      })
+      .catch((err) => {
+        setSyncStatus('error');
+        setSyncError(
+          err.response?.data?.message || 'Failed to sync repositories from GitHub. Please try again.'
+        );
+      });
+  };
+
+  const languageOptions = useMemo(() => {
+    const seen = new Map();
+    for (const repo of repos) {
+      if (repo.language && !seen.has(repo.language)) seen.set(repo.language, true);
+    }
+    return [...seen.keys()];
+  }, [repos]);
 
   const filteredRepos = useMemo(() => {
     const q = query.trim().toLowerCase();
-    return MOCK_REPOSITORIES.filter((repo) => {
+    return repos.filter((repo) => {
       if (visibility !== 'all' && repo.visibility !== visibility) return false;
       if (language && repo.language !== language) return false;
-      if (q && !repo.name.toLowerCase().includes(q) && !repo.description.toLowerCase().includes(q)) return false;
+      if (
+        q &&
+        !repo.name.toLowerCase().includes(q) &&
+        !(repo.description ?? '').toLowerCase().includes(q)
+      ) {
+        return false;
+      }
       return true;
     });
-  }, [query, visibility, language]);
+  }, [repos, query, visibility, language]);
 
   const selectedRepo = useMemo(
-    () => MOCK_REPOSITORIES.find((r) => r.id === selectedId) ?? null,
-    [selectedId]
+    () => repos.find((r) => r._id === selectedId) ?? null,
+    [repos, selectedId]
   );
 
-  const selectRepo = (id) => {
-    setSelectedId(id);
-    cardRefs.current[id]?.focus();
-  };
-
-  const handleListKeyDown = (e) => {
-    if (!['ArrowDown', 'ArrowUp', 'Home', 'End'].includes(e.key)) return;
-    if (filteredRepos.length === 0) return;
-    e.preventDefault();
-
-    const currentIndex = filteredRepos.findIndex((r) => r.id === selectedId);
-    let nextIndex;
-    if (e.key === 'ArrowDown') nextIndex = currentIndex < 0 ? 0 : Math.min(currentIndex + 1, filteredRepos.length - 1);
-    else if (e.key === 'ArrowUp') nextIndex = currentIndex < 0 ? 0 : Math.max(currentIndex - 1, 0);
-    else if (e.key === 'Home') nextIndex = 0;
-    else nextIndex = filteredRepos.length - 1;
-
-    selectRepo(filteredRepos[nextIndex].id);
-  };
-
-  const handleImport = () => {
-    if (!selectedRepo || selectedRepo.alreadyImported || importStatus === 'importing') return;
-    setImportStatus('importing');
-    window.setTimeout(() => setImportStatus('success'), 1500);
-  };
+  const selectRepo = (id) => setSelectedId(id);
 
   const clearFilters = () => {
     setQuery('');
@@ -198,9 +115,12 @@ export default function ImportRepositoryPage() {
     setLanguage(null);
   };
 
-  if (importStatus === 'success' && selectedRepo) {
-    return <ImportSuccessScreen repo={selectedRepo} />;
-  }
+  const openSelectedRepository = () => {
+    if (!selectedRepo) return;
+    // Task 71: the repository's real Mongo `_id` now lives in the URL
+    // itself (survives refresh/direct link), not in router `state`.
+    navigate(`/source-control/${selectedRepo._id}`);
+  };
 
   return (
     <div className="min-h-screen w-full bg-[#F5F6FA] flex items-start lg:items-center justify-center px-4 sm:px-6 py-10 lg:py-12">
@@ -212,86 +132,120 @@ export default function ImportRepositoryPage() {
             <div className="flex items-start gap-3">
               <BrandMark size={36} />
               <div>
-                <h1 className="text-lg sm:text-xl font-bold text-slate-900 leading-tight">Import GitHub Repository</h1>
+                <h1 className="text-lg sm:text-xl font-bold text-slate-900 leading-tight">
+                  {workspaceName ? `Repositories — ${workspaceName}` : 'Import GitHub Repository'}
+                </h1>
                 <p className="text-[13.5px] text-slate-500 mt-1">
-                  Search and select a repository to analyze with SEIS AI Copilot.
+                  Sync and select a repository to analyze with SEIS AI Copilot.
                 </p>
               </div>
             </div>
             <Link
               to="/workspace"
-              aria-label="Cancel and return to workspace setup"
+              aria-label="Back to workspace setup"
               className="shrink-0 w-9 h-9 rounded-lg border border-[#E2E8F0] flex items-center justify-center text-slate-500 hover:text-slate-900 hover:bg-slate-50 transition-colors"
             >
               <X size={17} aria-hidden="true" />
             </Link>
           </div>
 
-          {/* ---------- Search + filters ---------- */}
+          {!workspaceId && (
+            <div className="mx-6 sm:mx-8 mt-6 flex items-start gap-2.5 rounded-xl bg-amber-50 border border-amber-200 px-3.5 py-3">
+              <AlertCircle size={15} className="text-amber-600 shrink-0 mt-0.5" aria-hidden="true" />
+              <p className="text-[12.5px] text-amber-900 leading-relaxed m-0">
+                No workspace was selected. Repositories you sync now won't be associated with a
+                workspace, and ingestion will be blocked until they are. <Link to="/workspace" className="font-semibold underline">Choose a workspace</Link>.
+              </p>
+            </div>
+          )}
+
+          {/* ---------- Search + filters + sync ---------- */}
           <div className="px-6 sm:px-8 pt-6">
-            <label htmlFor={searchId} className="sr-only">Search repositories</label>
-            <div className="relative mb-4">
-              <Search size={17} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400" aria-hidden="true" />
-              <input
-                id={searchId}
-                type="text"
-                value={query}
-                onChange={(e) => setQuery(e.target.value)}
-                placeholder="Search repositories…"
-                className="w-full h-11 pl-10 pr-4 rounded-lg border border-[#E2E8F0] text-[14.5px] text-slate-900 focus-visible:border-blue-500 transition-colors"
-              />
+            <div className="flex flex-col sm:flex-row gap-3 mb-4">
+              <div className="relative flex-1">
+                <Search size={17} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400" aria-hidden="true" />
+                <label htmlFor="repo-search" className="sr-only">Search repositories</label>
+                <input
+                  id="repo-search"
+                  type="text"
+                  value={query}
+                  onChange={(e) => setQuery(e.target.value)}
+                  placeholder="Search repositories…"
+                  className="w-full h-11 pl-10 pr-4 rounded-lg border border-[#E2E8F0] text-[14.5px] text-slate-900 focus-visible:border-blue-500 transition-colors"
+                />
+              </div>
+              <button
+                type="button"
+                onClick={handleSync}
+                disabled={syncStatus === 'syncing'}
+                aria-busy={syncStatus === 'syncing'}
+                className="inline-flex items-center justify-center gap-2 h-11 px-4 rounded-lg border border-[#E2E8F0] bg-white text-slate-700 text-[13.5px] font-semibold transition-colors hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-70 whitespace-nowrap"
+              >
+                <RefreshCw size={15} className={syncStatus === 'syncing' ? 'animate-spin' : ''} aria-hidden="true" />
+                {syncStatus === 'syncing' ? 'Syncing…' : 'Sync from GitHub'}
+              </button>
             </div>
 
-            <div className="flex flex-wrap items-center gap-x-5 gap-y-3 mb-5">
-              <div role="group" aria-label="Filter by visibility" className="flex items-center gap-2">
-                <span className="text-[11px] font-bold uppercase tracking-wider text-slate-400 mr-0.5">Visibility</span>
-                {VISIBILITY_FILTERS.map((f) => (
-                  <button
-                    key={f.value}
-                    type="button"
-                    aria-pressed={visibility === f.value}
-                    onClick={() => setVisibility(f.value)}
-                    className={`h-7 px-3 rounded-full text-[12.5px] font-semibold border transition-colors ${
-                      visibility === f.value
-                        ? 'bg-blue-600 border-blue-600 text-white'
-                        : 'bg-white border-[#E2E8F0] text-slate-600 hover:bg-slate-50'
-                    }`}
-                  >
-                    {f.label}
-                  </button>
-                ))}
-              </div>
+            {syncStatus === 'error' && syncError && (
+              <p role="alert" className="flex items-center gap-1.5 text-[13px] text-rose-600 mb-4">
+                <AlertCircle size={13} className="shrink-0" aria-hidden="true" />
+                {syncError}
+              </p>
+            )}
 
-              <div aria-hidden="true" className="hidden sm:block w-px h-5 bg-[#E2E8F0]" />
-
-              <div role="group" aria-label="Filter by language" className="flex items-center gap-2">
-                <span className="text-[11px] font-bold uppercase tracking-wider text-slate-400 mr-0.5">Language</span>
-                {LANGUAGE_FILTERS.map((f) => {
-                  const active = language === f.value;
-                  return (
+            {repos.length > 0 && (
+              <div className="flex flex-wrap items-center gap-x-5 gap-y-3 mb-5">
+                <div role="group" aria-label="Filter by visibility" className="flex items-center gap-2">
+                  <span className="text-[11px] font-bold uppercase tracking-wider text-slate-400 mr-0.5">Visibility</span>
+                  {VISIBILITY_FILTERS.map((f) => (
                     <button
                       key={f.value}
                       type="button"
-                      aria-pressed={active}
-                      onClick={() => setLanguage(active ? null : f.value)}
-                      className={`inline-flex items-center gap-1.5 h-7 px-3 rounded-full text-[12.5px] font-semibold border transition-colors ${
-                        active
-                          ? 'bg-slate-900 border-slate-900 text-white'
+                      aria-pressed={visibility === f.value}
+                      onClick={() => setVisibility(f.value)}
+                      className={`h-7 px-3 rounded-full text-[12.5px] font-semibold border transition-colors ${
+                        visibility === f.value
+                          ? 'bg-blue-600 border-blue-600 text-white'
                           : 'bg-white border-[#E2E8F0] text-slate-600 hover:bg-slate-50'
                       }`}
                     >
-                      <span className="w-1.5 h-1.5 rounded-full shrink-0" style={{ background: f.dot }} aria-hidden="true" />
                       {f.label}
                     </button>
-                  );
-                })}
+                  ))}
+                </div>
+
+                {languageOptions.length > 0 && (
+                  <>
+                    <div aria-hidden="true" className="hidden sm:block w-px h-5 bg-[#E2E8F0]" />
+                    <div role="group" aria-label="Filter by language" className="flex items-center gap-2">
+                      <span className="text-[11px] font-bold uppercase tracking-wider text-slate-400 mr-0.5">Language</span>
+                      {languageOptions.map((lang) => {
+                        const active = language === lang;
+                        return (
+                          <button
+                            key={lang}
+                            type="button"
+                            aria-pressed={active}
+                            onClick={() => setLanguage(active ? null : lang)}
+                            className={`h-7 px-3 rounded-full text-[12.5px] font-semibold border transition-colors ${
+                              active
+                                ? 'bg-slate-900 border-slate-900 text-white'
+                                : 'bg-white border-[#E2E8F0] text-slate-600 hover:bg-slate-50'
+                            }`}
+                          >
+                            {lang}
+                          </button>
+                        );
+                      })}
+                    </div>
+                  </>
+                )}
               </div>
-            </div>
+            )}
           </div>
 
           {/* ---------- Body: list + sidebar ---------- */}
           <div className="flex flex-col lg:flex-row gap-5 px-6 sm:px-8 pb-6">
-            {/* Repository list */}
             <div className="flex-1 min-w-0">
               <p className="sr-only" role="status" aria-live="polite">
                 {loadStatus === 'ready' ? `${filteredRepos.length} repositories found.` : 'Loading repositories…'}
@@ -300,22 +254,24 @@ export default function ImportRepositoryPage() {
               <div className="border border-[#E2E8F0] rounded-xl overflow-y-auto max-h-[360px]">
                 {loadStatus === 'loading' ? (
                   <RepoListSkeleton />
+                ) : loadStatus === 'error' ? (
+                  <ErrorResults />
+                ) : repos.length === 0 ? (
+                  <NoReposYet onSync={handleSync} syncing={syncStatus === 'syncing'} />
                 ) : filteredRepos.length === 0 ? (
                   <EmptyResults onClear={clearFilters} />
                 ) : (
                   <div
                     role="radiogroup"
                     aria-label="Repositories"
-                    onKeyDown={handleListKeyDown}
                     className="divide-y divide-[#EDF0F5]"
                   >
                     {filteredRepos.map((repo) => (
                       <RepoCard
-                        key={repo.id}
+                        key={repo._id}
                         repo={repo}
-                        selected={repo.id === selectedId}
-                        onSelect={() => selectRepo(repo.id)}
-                        cardRef={(el) => { cardRefs.current[repo.id] = el; }}
+                        selected={repo._id === selectedId}
+                        onSelect={() => selectRepo(repo._id)}
                       />
                     ))}
                   </div>
@@ -323,7 +279,6 @@ export default function ImportRepositoryPage() {
               </div>
             </div>
 
-            {/* Sidebar */}
             <div className="lg:w-[280px] shrink-0">
               <SidebarPanel repo={selectedRepo} />
             </div>
@@ -339,31 +294,13 @@ export default function ImportRepositoryPage() {
             </Link>
             <button
               type="button"
-              onClick={handleImport}
-              disabled={!selectedRepo || selectedRepo.alreadyImported || importStatus === 'importing'}
-              aria-busy={importStatus === 'importing'}
+              onClick={openSelectedRepository}
+              disabled={!selectedRepo}
               className="inline-flex items-center justify-center gap-2 h-11 px-6 rounded-lg bg-gradient-to-r from-blue-600 to-indigo-600 text-white text-[14px] font-semibold border-0 cursor-pointer transition-opacity hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-50 w-full sm:w-auto whitespace-nowrap"
             >
-              {importStatus === 'importing' ? (
-                <>
-                  <Loader2 size={17} className="animate-spin" aria-hidden="true" />
-                  Importing Repository…
-                </>
-              ) : selectedRepo?.alreadyImported ? (
-                <>
-                  <Check size={16} aria-hidden="true" />
-                  Already Imported
-                </>
-              ) : (
-                <>
-                  <Download size={16} aria-hidden="true" />
-                  Import Repository
-                </>
-              )}
+              Open Repository
+              <ArrowRight size={16} aria-hidden="true" />
             </button>
-            <span className="sr-only" role="status" aria-live="polite">
-              {importStatus === 'importing' ? 'Importing repository, please wait.' : ''}
-            </span>
           </div>
         </div>
       </FadeIn>
@@ -371,10 +308,9 @@ export default function ImportRepositoryPage() {
   );
 }
 
-function RepoCard({ repo, selected, onSelect, cardRef }) {
+function RepoCard({ repo, selected, onSelect }) {
   return (
     <div
-      ref={cardRef}
       role="radio"
       aria-checked={selected}
       tabIndex={selected ? 0 : -1}
@@ -404,29 +340,19 @@ function RepoCard({ repo, selected, onSelect, cardRef }) {
             {repo.owner}/{repo.name}
           </span>
           <VisibilityBadge visibility={repo.visibility} />
-          {repo.alreadyImported && (
-            <span className="inline-flex items-center gap-1 text-[11px] font-semibold text-emerald-700 bg-emerald-50 border border-emerald-200 rounded-full px-2 py-0.5">
-              <Check size={10} aria-hidden="true" />
-              Already imported
-            </span>
-          )}
         </div>
-        <p className="text-[13px] text-slate-500 mt-1 leading-snug line-clamp-2">{repo.description}</p>
+        {repo.description && (
+          <p className="text-[13px] text-slate-500 mt-1 leading-snug line-clamp-2">{repo.description}</p>
+        )}
         <div className="flex flex-wrap items-center gap-x-3 gap-y-1 mt-2 text-[12px] text-slate-500">
-          <span className="inline-flex items-center gap-1 whitespace-nowrap">
-            <span className="w-2 h-2 rounded-full" style={{ background: LANGUAGE_DOT[repo.language] ?? '#94A3B8' }} aria-hidden="true" />
-            {repo.language}
-          </span>
-          <span className="inline-flex items-center gap-1 whitespace-nowrap"><Star size={11} aria-hidden="true" />{repo.stars}</span>
-          <span className="inline-flex items-center gap-1 whitespace-nowrap"><GitFork size={11} aria-hidden="true" />{repo.forks}</span>
-          <span className="whitespace-nowrap">{repo.updatedAt}</span>
+          {repo.language && <span className="whitespace-nowrap">{repo.language}</span>}
+          <span className="inline-flex items-center gap-1 whitespace-nowrap"><Star size={11} aria-hidden="true" />{repo.stars ?? 0}</span>
+          <span className="inline-flex items-center gap-1 whitespace-nowrap"><GitFork size={11} aria-hidden="true" />{repo.forks ?? 0}</span>
         </div>
       </div>
     </div>
   );
 }
-
-const LANGUAGE_DOT = { JavaScript: '#F7DF1E', TypeScript: '#3178C6', Python: '#3776AB' };
 
 function VisibilityBadge({ visibility }) {
   const isPrivate = visibility === 'private';
@@ -451,6 +377,39 @@ function RepoListSkeleton() {
           </div>
         </div>
       ))}
+    </div>
+  );
+}
+
+function ErrorResults() {
+  return (
+    <div className="flex flex-col items-center justify-center text-center px-6 py-12">
+      <div className="w-12 h-12 rounded-xl bg-rose-50 flex items-center justify-center mb-3">
+        <AlertCircle size={22} className="text-rose-500" aria-hidden="true" />
+      </div>
+      <p className="text-[14px] font-semibold text-slate-700 mb-1">Couldn't load repositories</p>
+      <p className="text-[13px] text-slate-500">Check that you're logged in and try again.</p>
+    </div>
+  );
+}
+
+function NoReposYet({ onSync, syncing }) {
+  return (
+    <div className="flex flex-col items-center justify-center text-center px-6 py-12">
+      <div className="w-12 h-12 rounded-xl bg-blue-50 flex items-center justify-center mb-3">
+        <FolderGit2 size={22} className="text-blue-500" aria-hidden="true" />
+      </div>
+      <p className="text-[14px] font-semibold text-slate-700 mb-1">No repositories synced yet</p>
+      <p className="text-[13px] text-slate-500 mb-4">Sync your GitHub account to see your repositories here.</p>
+      <button
+        type="button"
+        onClick={onSync}
+        disabled={syncing}
+        className="inline-flex items-center gap-2 h-9 px-4 rounded-lg bg-blue-600 text-white text-[13px] font-semibold border-0 cursor-pointer transition-colors hover:bg-blue-700 disabled:cursor-not-allowed disabled:opacity-70"
+      >
+        {syncing ? <Loader2 size={14} className="animate-spin" aria-hidden="true" /> : <RefreshCw size={14} aria-hidden="true" />}
+        {syncing ? 'Syncing…' : 'Sync from GitHub'}
+      </button>
     </div>
   );
 }
@@ -498,16 +457,20 @@ function SidebarPanel({ repo }) {
                   <div className="text-[11.5px] text-slate-400 truncate">{repo.owner}</div>
                 </div>
               </div>
-              <div className={`flex items-center gap-1.5 text-[12px] font-semibold ${repo.alreadyImported ? 'text-slate-500' : 'text-emerald-600'}`}>
-                {repo.alreadyImported ? (
+              <div
+                className={`flex items-center gap-1.5 text-[12px] font-semibold ${
+                  repo.workspaceId ? 'text-emerald-600' : 'text-amber-600'
+                }`}
+              >
+                {repo.workspaceId ? (
                   <>
                     <Check size={12} aria-hidden="true" />
-                    Already imported into this workspace
+                    Associated with this workspace
                   </>
                 ) : (
                   <>
-                    <span className="w-1.5 h-1.5 rounded-full bg-emerald-500" aria-hidden="true" />
-                    Ready for analysis
+                    <AlertCircle size={12} aria-hidden="true" />
+                    Not associated with a workspace
                   </>
                 )}
               </div>
@@ -515,16 +478,9 @@ function SidebarPanel({ repo }) {
           </div>
 
           <div className="border border-[#E2E8F0] rounded-xl divide-y divide-[#EDF0F5] mb-4">
-            <StatRow icon={FileCode2} label="Files" value={repo.fileCount} />
-            <StatRow icon={HardDrive} label="Size" value={repo.sizeLabel} />
-            <StatRow icon={Timer} label="Est. Analysis Time" value={repo.estAnalysisTime} accent />
-          </div>
-
-          <div className="flex items-start gap-2.5 rounded-xl bg-blue-50/70 border border-blue-100 px-3.5 py-3">
-            <Info size={15} className="text-blue-500 shrink-0 mt-0.5" aria-hidden="true" />
-            <p className="text-[12px] text-blue-900 leading-relaxed m-0">
-              SEIS will map the architecture and generate foundational documentation upon import.
-            </p>
+            <StatRow icon={Star} label="Stars" value={repo.stars ?? 0} />
+            <StatRow icon={GitFork} label="Forks" value={repo.forks ?? 0} />
+            <StatRow icon={repo.visibility === 'private' ? Lock : Globe} label="Visibility" value={repo.visibility ?? 'unknown'} />
           </div>
         </>
       )}
@@ -532,52 +488,14 @@ function SidebarPanel({ repo }) {
   );
 }
 
-function StatRow({ icon: Icon, label, value, accent }) {
+function StatRow({ icon: Icon, label, value }) {
   return (
     <div className="flex items-center justify-between px-3.5 py-2.5">
       <span className="inline-flex items-center gap-2 text-[12.5px] text-slate-500">
         <Icon size={14} className="text-slate-400" aria-hidden="true" />
         {label}
       </span>
-      <span className={`text-[12.5px] font-bold ${accent ? 'text-indigo-600' : 'text-slate-900'}`}>{value}</span>
-    </div>
-  );
-}
-
-function ImportSuccessScreen({ repo }) {
-  const navigate = useNavigate();
-
-  // Mock hand-off to AI Repository Analysis — frontend navigation only, the
-  // repo record travels via router state so the next page knows what to show.
-  useEffect(() => {
-    const timer = window.setTimeout(() => navigate('/analysis', { state: { repo } }), 1400);
-    return () => window.clearTimeout(timer);
-  }, [navigate, repo]);
-
-  return (
-    <div className="min-h-screen w-full bg-[#F5F6FA] flex items-center justify-center px-6 py-16">
-      <FadeIn direction="scale">
-        <div
-          role="status"
-          aria-live="polite"
-          className="w-full max-w-[440px] bg-white border border-[#E2E8F0] rounded-2xl shadow-[0_8px_30px_rgba(15,23,42,0.08)] px-8 py-12 sm:px-[57px] sm:py-[57px] text-center"
-        >
-          <div className="w-16 h-16 rounded-2xl bg-emerald-50 flex items-center justify-center mx-auto mb-6">
-            <CheckCircle2 size={30} className="text-emerald-500" aria-hidden="true" />
-          </div>
-          <h1 className="text-xl font-bold text-slate-900 mb-2">Repository Imported</h1>
-          <p className="text-sm text-slate-500 leading-relaxed mb-2">
-            <span className="font-semibold text-slate-700">{repo.owner}/{repo.name}</span> is ready.
-          </p>
-          <p className="text-sm text-slate-500 leading-relaxed mb-6">
-            Next, SEIS will analyze the codebase and map its architecture.
-          </p>
-          <div className="flex items-center justify-center gap-2 text-slate-400 text-[13px]">
-            <Loader2 size={16} className="animate-spin" aria-hidden="true" />
-            Preparing AI analysis…
-          </div>
-        </div>
-      </FadeIn>
+      <span className="text-[12.5px] font-bold text-slate-900">{value}</span>
     </div>
   );
 }

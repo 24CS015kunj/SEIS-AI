@@ -172,7 +172,7 @@ async def test_rerank_sends_the_documented_request_shape() -> None:
     optimizer = _optimizer_with_transport(handler)
     await optimizer.rerank_chunks("auth query", [_item("c1", "def authenticate(): ...")])
 
-    assert captured["path"] == "/v1/retrieval/nvidia/llama-nemotron-rerank-1b-v2/reranking"
+    assert captured["path"] == "/v1/retrieval/nvidia/llama-nemotron-rerank-vl-1b-v2/reranking"
     assert captured["body"] == {
         "model": RERANKING_MODEL_NAME,
         "query": {"text": "auth query"},
@@ -258,6 +258,169 @@ async def test_rejects_non_positive_top_k() -> None:
 
     with pytest.raises(ValueError, match="top_k"):
         await optimizer.rerank_chunks("q", [_item("c1", "x")], top_k=0)
+
+
+async def test_rejects_non_positive_max_chunks_per_file() -> None:
+    optimizer = RAGOptimizer(settings=_settings())
+
+    with pytest.raises(ValueError, match="max_chunks_per_file"):
+        await optimizer.rerank_chunks("q", [_item("c1", "x")], max_chunks_per_file=0)
+
+
+# ---------------------------------------------------------------------------
+# File-diversity selection (Task 60, dedicated tests added Task 61) --
+# see `rerank_chunks`/`_select_diverse`'s own docstrings for the real,
+# live-evidenced failure this fixes: the cross-encoder repeatedly
+# concentrated the top-5 on one file (usually `readme.md`), crowding out
+# a chunk from a different file the question specifically needed.
+# ---------------------------------------------------------------------------
+async def test_multiple_chunks_from_one_file_do_not_crowd_out_other_files() -> None:
+    """3 chunks from file A outrank everything else, but 4 other distinct
+    files exist -- the diversity cap must promote them into the top-5
+    instead of returning A, A, A, B, C."""
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        return _rerank_response([6.0, 5.0, 4.0, 3.0, 2.0, 1.0, 0.0])
+
+    optimizer = _optimizer_with_transport(handler)
+    chunks = [
+        _item("a1", "a1", file_path="fileA.py"),
+        _item("a2", "a2", file_path="fileA.py"),
+        _item("a3", "a3", file_path="fileA.py"),
+        _item("b1", "b1", file_path="fileB.py"),
+        _item("c1", "c1", file_path="fileC.py"),
+        _item("d1", "d1", file_path="fileD.py"),
+        _item("e1", "e1", file_path="fileE.py"),
+    ]
+
+    result = await optimizer.rerank_chunks("q", chunks, top_k=5)
+
+    ids = [item.chunk_id for item in result]
+    assert len(ids) == 5
+    assert ids.count("a1") + ids.count("a2") + ids.count("a3") == 1  # only one of A's 3 chunks
+    assert {"b1", "c1", "d1", "e1"}.issubset(set(ids))
+    # The highest-scored chunk overall (a1) is still the one A chunk kept.
+    assert "a1" in ids
+
+
+async def test_fewer_distinct_files_than_top_k_backfills_from_the_same_files() -> None:
+    """Only 2 distinct files exist among 5 candidates -- the diversity
+    cap must not needlessly drop chunks just because they share a file;
+    all 5 legitimate candidates should still come back."""
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        return _rerank_response([5.0, 4.0, 3.0, 2.0, 1.0])
+
+    optimizer = _optimizer_with_transport(handler)
+    chunks = [
+        _item("a1", "a1", file_path="fileA.py"),
+        _item("a2", "a2", file_path="fileA.py"),
+        _item("a3", "a3", file_path="fileA.py"),
+        _item("b1", "b1", file_path="fileB.py"),
+        _item("b2", "b2", file_path="fileB.py"),
+    ]
+
+    result = await optimizer.rerank_chunks("q", chunks, top_k=5)
+
+    assert {item.chunk_id for item in result} == {"a1", "a2", "a3", "b1", "b2"}
+
+
+async def test_exactly_five_distinct_files_returns_one_chunk_each() -> None:
+    def handler(request: httpx.Request) -> httpx.Response:
+        return _rerank_response([5.0, 4.0, 3.0, 2.0, 1.0])
+
+    optimizer = _optimizer_with_transport(handler)
+    chunks = [
+        _item("a1", "a1", file_path="fileA.py"),
+        _item("b1", "b1", file_path="fileB.py"),
+        _item("c1", "c1", file_path="fileC.py"),
+        _item("d1", "d1", file_path="fileD.py"),
+        _item("e1", "e1", file_path="fileE.py"),
+    ]
+
+    result = await optimizer.rerank_chunks("q", chunks, top_k=5)
+
+    assert len(result) == 5
+    assert len({item.metadata.file_path for item in result}) == 5
+
+
+async def test_single_file_question_still_returns_a_full_top_k() -> None:
+    """Every real candidate comes from the same file (the real-world
+    "what is this repository about?" case, where every relevant chunk is
+    from readme.md) -- the diversity cap must gracefully backfill rather
+    than returning fewer than top_k results just because nothing else
+    exists to diversify with."""
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        return _rerank_response([6.0, 5.0, 4.0, 3.0, 2.0, 1.0])
+
+    optimizer = _optimizer_with_transport(handler)
+    chunks = [_item(f"c{i}", f"content {i}", file_path="readme.md") for i in range(6)]
+
+    result = await optimizer.rerank_chunks("q", chunks, top_k=5)
+
+    assert len(result) == 5
+    assert all(item.metadata.file_path == "readme.md" for item in result)
+
+
+async def test_diverse_selection_still_prefers_higher_ranked_chunks() -> None:
+    """Ranking is preserved as much as possible: among the chunks that
+    survive diversity selection, higher cross-encoder scores still come
+    first -- diversity changes *which* chunks are chosen, never the
+    relevance order they're returned in."""
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        # a1=10 (kept), a2=9 (capped out), b1=8 (kept), a3=7 (capped
+        # out), c1=6 (kept) -- top_k=3 is reached without ever needing
+        # to backfill a capped-out chunk.
+        return _rerank_response([10.0, 9.0, 8.0, 7.0, 6.0])
+
+    optimizer = _optimizer_with_transport(handler)
+    chunks = [
+        _item("a1", "a1", file_path="fileA.py"),
+        _item("a2", "a2", file_path="fileA.py"),
+        _item("b1", "b1", file_path="fileB.py"),
+        _item("a3", "a3", file_path="fileA.py"),
+        _item("c1", "c1", file_path="fileC.py"),
+    ]
+
+    result = await optimizer.rerank_chunks("q", chunks, top_k=3)
+
+    assert [item.chunk_id for item in result] == ["a1", "b1", "c1"]
+    assert [item.score for item in result] == sorted((item.score for item in result), reverse=True)
+
+
+async def test_diversity_uses_the_existing_file_path_metadata_field() -> None:
+    """File identification must use `metadata.file_path` -- the field
+    the rest of the codebase (ContextBuilder, CitationEngine) already
+    keys off -- not chunk_id, content, or any new field. Two chunks
+    sharing a file_path are capped together even with unrelated
+    chunk_ids; two chunks with different file_paths are never capped
+    together even with similar-looking chunk_ids."""
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        return _rerank_response([4.0, 3.0, 2.0, 1.0])
+
+    optimizer = _optimizer_with_transport(handler)
+    chunks = [
+        _item("zz-unrelated-id", "x", file_path="same.py"),
+        _item("aa-another-id", "y", file_path="same.py"),
+        _item("same.py", "z", file_path="different.py"),  # chunk_id looks like a file_path
+        _item("bb-id", "w", file_path="another.py"),
+    ]
+
+    # top_k=3, not 4: with 3 distinct files and cap=1, pass 1 alone
+    # already fills all 3 slots -- if file identification incorrectly
+    # keyed off chunk_id (or anything else), a different chunk would be
+    # excluded than the one this test expects.
+    result = await optimizer.rerank_chunks("q", chunks, top_k=3)
+
+    ids = [item.chunk_id for item in result]
+    assert len(ids) == 3
+    assert "zz-unrelated-id" in ids  # highest-scored of the same.py pair
+    assert "aa-another-id" not in ids  # capped out: same file_path as zz
+    assert "same.py" in ids  # different.py's chunk -- file_path differs, never capped
+    assert "bb-id" in ids
 
 
 async def test_empty_chunks_list_returns_empty_without_a_request() -> None:

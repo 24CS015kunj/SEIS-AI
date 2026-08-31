@@ -152,9 +152,11 @@ class CacheError(SEISError):
 
 
 class LLMError(SEISError):
-    """Gemini Gateway failure (§5.9) -- timeout, malformed response,
-    generation failure. Retryable by default, subject to the circuit
-    breaker described in §14.2.
+    """LLM Gateway failure (§5.9) -- timeout, malformed response,
+    generation failure. Provider-agnostic by design (originally Gemini,
+    NVIDIA Nemotron 3 Ultra since Task 60/ADR-008) -- the name has never
+    referenced a specific provider. Retryable by default, subject to the
+    circuit breaker described in §14.2.
     """
 
     code: ClassVar[str] = "LLM_ERROR"
@@ -164,9 +166,10 @@ class LLMError(SEISError):
 
 
 class LLMRateLimitError(LLMError):
-    """Gemini rate-limited this service. A distinct subclass (rather
-    than a generic LLMError) so callers and the circuit breaker can
-    apply backoff specifically for rate limiting (§14.1 Rate Limit).
+    """The LLM generation provider rate-limited this service. A distinct
+    subclass (rather than a generic LLMError) so callers and the circuit
+    breaker can apply backoff specifically for rate limiting (§14.1 Rate
+    Limit).
     """
 
     code: ClassVar[str] = "LLM_RATE_LIMIT"

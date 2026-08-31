@@ -29,7 +29,7 @@ export default function HeroSection({ onOpenAuth }) {
             {/* CTA Row */}
             <div className="flex flex-wrap items-center justify-center gap-4">
               <button onClick={() => onOpenAuth('github')} className="btn-primary shadow-lg shadow-blue-600/20 hover:-translate-y-0.5 transition-transform">
-                Start Free Trial
+                Get Started
                 <Rocket className="w-5 h-5" />
               </button>
 

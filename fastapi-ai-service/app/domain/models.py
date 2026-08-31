@@ -189,7 +189,10 @@ class ProcessingStatusRecord(BaseModel):
 
 
 class TokenUsage(BaseModel):
-    """Gemini token accounting for one generation call (§24.7)."""
+    """LLM token accounting for one generation call (§24.7). Originally
+    Gemini; the generation provider moved to NVIDIA Nemotron 3 Ultra in
+    Task 60/ADR-008 -- this shape (prompt/completion/total) is what that
+    provider's response also reports, unchanged."""
 
     prompt_tokens: int = Field(ge=0)
     completion_tokens: int = Field(ge=0)
@@ -280,7 +283,8 @@ class ContextBlock(BaseModel):
 class GroundedPrompt(BaseModel):
     """A fully assembled, injection-defended prompt payload (§5.8, Task
     22) -- the Grounded Prompt Builder's output and
-    ``GeminiGateway.generate_text``'s (Task 12) input. Its two fields
+    ``NemotronGateway.generate_text``'s (Task 12, renamed from
+    ``GeminiGateway`` in Task 60/ADR-008) input. Its two fields
     map directly onto that frozen signature's ``system_instruction``
     and ``prompt`` parameters, so a caller (Task 32's Repository Chat
     Service) can pass them straight through without reshaping.
@@ -304,6 +308,33 @@ class ChatResponse(BaseModel):
     answer: str
     citations: list[Citation] = Field(default_factory=list)
     token_usage: TokenUsage | None = None
+
+
+class StoredChatMessage(BaseModel):
+    """One persisted turn in a Repository Chat conversation (Task 65).
+
+    Deliberately narrow -- only what a conversation needs to be replayed
+    into :meth:`PromptBuilder.build_chat_prompt` (role, content) plus a
+    ``timestamp`` for ordering/debugging. Never carries an API key,
+    token, embedding, retrieved chunk, or raw infrastructure response --
+    those live in the retrieval pipeline, not in stored chat history.
+    """
+
+    role: ConversationRole
+    content: str
+    timestamp: datetime
+
+
+class StoredConversation(BaseModel):
+    """The full persisted record for one ``(repository_id,
+    conversation_id)`` pair (Task 65) -- see
+    ``app.core.generation.conversation_store`` for the storage key
+    design and isolation guarantee this model is stored under.
+    """
+
+    repository_id: str
+    conversation_id: str
+    messages: list[StoredChatMessage] = Field(default_factory=list)
 
 
 class CommitInfo(BaseModel):

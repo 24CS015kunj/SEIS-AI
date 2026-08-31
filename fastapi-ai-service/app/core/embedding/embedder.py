@@ -9,7 +9,10 @@ throughput and checked against the Embedding Cache before recomputing
 Gemini API (confirmed live: ``404 models/text-embedding-004 is not
 found``). ADR-003's embedding clause is superseded by ADR-007 for this
 reason; ADR-003's answer-generation half (Gemini 2.5 via
-``app.infra.llm.gemini_client.GeminiGateway``) is untouched. The FINAL
+``app.infra.llm.gemini_client.GeminiGateway``) was untouched at the
+time -- that half was later superseded too, by ADR-008 (Task 60), which
+moved answer generation to NVIDIA Nemotron 3 Ultra via the same module
+(class renamed ``GeminiGateway`` -> ``NemotronGateway``). The FINAL
 embedding provider is now NVIDIA's **hosted** inference API serving
 **Nemotron-3-Embed-1B** (``nvidia/nemotron-3-embed-1b``) -- the model is
 never downloaded or loaded inside this process; every embedding call is

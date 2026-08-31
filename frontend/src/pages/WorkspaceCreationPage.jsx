@@ -18,6 +18,7 @@ import {
 } from 'lucide-react';
 import BrandMark, { BrandGlyph } from '../components/common/BrandMark';
 import FadeIn from '../components/common/FadeIn';
+import { createWorkspace, listWorkspaces } from '../services/workspaceService';
 
 const STEPS = [
   { number: 1, status: 'complete' },
@@ -32,30 +33,19 @@ const WORKSPACE_TYPES = [
   { value: 'org', label: 'Organization (Enterprise)' },
 ];
 
-/**
- * MOCK ONLY — no backend exists yet. A submitted name matching one of these
- * (case-insensitive, trimmed) simulates a "workspace already exists" response
- * from a future API. "ai research lab" is included deliberately: it's the
- * Figma-specified pre-filled default, so submitting it unedited demonstrates
- * the duplicate-name state without any extra steps.
- */
-const MOCK_TAKEN_NAMES = ['ai research lab', 'acme corp'];
-
 const ACCEPTED_LOGO_TYPES = ['image/png', 'image/jpeg', 'image/webp'];
 const MAX_LOGO_BYTES = 5 * 1024 * 1024; // 5MB — reasonable frontend-only assumption; Figma doesn't specify one.
 
 /**
- * Minimal, documented validation. Business rules beyond "required" and
- * "not just whitespace" aren't specified anywhere in Figma or the project
- * brief, so nothing more elaborate (character sets, slugs, etc.) is invented.
+ * Client-side pre-validation only (required, not-just-whitespace, minimum
+ * length). Duplicate-name detection is no longer simulated here (Task 45)
+ * -- the real backend enforces a unique {ownerId, name} index
+ * (`workspaces.model.js`) and returns a 409 handled in `handleSubmit`.
  */
 function validateWorkspaceName(raw) {
   const trimmed = raw.trim();
   if (trimmed.length === 0) return 'Workspace name is required.';
   if (trimmed.length < 2) return 'Workspace name must be at least 2 characters.';
-  if (MOCK_TAKEN_NAMES.includes(trimmed.toLowerCase())) {
-    return 'A workspace with this name already exists.';
-  }
   return null;
 }
 
@@ -66,9 +56,45 @@ export default function WorkspaceCreationPage() {
   const [workspaceType, setWorkspaceType] = useState('team');
   const [orgName, setOrgName] = useState('');
   const [submitStatus, setSubmitStatus] = useState('idle'); // idle | submitting | success
+  const [submitError, setSubmitError] = useState(null);
+  const [createdWorkspace, setCreatedWorkspace] = useState(null);
 
+  // Existing workspaces (Task 45 §4): the smallest possible integration of
+  // "authenticated user can see their own workspace" -- checked once, on
+  // this page, rather than a separate dashboard/switcher that doesn't
+  // exist anywhere in this application yet.
+  const [existingWorkspaces, setExistingWorkspaces] = useState([]);
+  const [existingWorkspacesStatus, setExistingWorkspacesStatus] = useState('loading'); // loading | ready | error
+
+  const navigate = useNavigate();
   const nameInputRef = useRef(null);
   const nameErrorId = useId();
+
+  useEffect(() => {
+    let cancelled = false;
+    listWorkspaces()
+      .then((workspaces) => {
+        if (!cancelled) {
+          setExistingWorkspaces(workspaces);
+          setExistingWorkspacesStatus('ready');
+        }
+      })
+      .catch(() => {
+        // Not authenticated yet, or the request otherwise failed -- this is
+        // not fatal to the page: the user can still fill out the creation
+        // form below. No error is shown for this background check.
+        if (!cancelled) setExistingWorkspacesStatus('error');
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  const useExistingWorkspace = (workspace) => {
+    navigate('/import-repository', {
+      state: { workspaceId: workspace._id, workspaceName: workspace.name },
+    });
+  };
 
   const handleNameChange = (e) => {
     setName(e.target.value);
@@ -79,7 +105,7 @@ export default function WorkspaceCreationPage() {
     setNameError(validateWorkspaceName(name));
   };
 
-  const handleSubmit = (e) => {
+  const handleSubmit = async (e) => {
     e.preventDefault();
     if (submitStatus === 'submitting') return;
 
@@ -90,12 +116,29 @@ export default function WorkspaceCreationPage() {
       return;
     }
 
+    setSubmitError(null);
     setSubmitStatus('submitting');
-    window.setTimeout(() => setSubmitStatus('success'), 1400);
+    try {
+      const workspace = await createWorkspace(name.trim());
+      setCreatedWorkspace(workspace);
+      setSubmitStatus('success');
+    } catch (err) {
+      setSubmitStatus('idle');
+      if (err.response?.status === 409) {
+        setNameError('A workspace with this name already exists.');
+        nameInputRef.current?.focus();
+      } else if (err.response?.status === 401) {
+        setSubmitError('Your session has expired. Please log in again.');
+      } else {
+        setSubmitError(
+          err.response?.data?.message || 'Something went wrong creating your workspace. Please try again.'
+        );
+      }
+    }
   };
 
-  if (submitStatus === 'success') {
-    return <SuccessScreen workspaceName={name.trim()} />;
+  if (submitStatus === 'success' && createdWorkspace) {
+    return <SuccessScreen workspace={createdWorkspace} />;
   }
 
   return (
@@ -215,6 +258,13 @@ export default function WorkspaceCreationPage() {
                   <Stepper />
                 </div>
 
+                {existingWorkspacesStatus === 'ready' && existingWorkspaces.length > 0 && (
+                  <ExistingWorkspacesPanel
+                    workspaces={existingWorkspaces}
+                    onSelect={useExistingWorkspace}
+                  />
+                )}
+
                 <form onSubmit={handleSubmit} noValidate>
                   {/* ---- Logo upload ---- */}
                   <div className="mb-7">
@@ -306,6 +356,13 @@ export default function WorkspaceCreationPage() {
 
                   {/* ---- Live preview ---- */}
                   <WorkspacePreview name={name.trim() || 'Your Workspace'} />
+
+                  {submitError && (
+                    <p role="alert" className="flex items-center gap-1.5 text-[13px] text-rose-600 mt-4">
+                      <AlertCircle size={13} className="shrink-0" aria-hidden="true" />
+                      {submitError}
+                    </p>
+                  )}
 
                   {/* ---- Actions ---- */}
                   <div className="flex flex-col-reverse sm:flex-row sm:items-center sm:justify-between gap-3 mt-7">
@@ -534,6 +591,41 @@ function LogoUpload() {
   );
 }
 
+/**
+ * Task 45 §4 -- the smallest possible "see and use your own workspace"
+ * surface: a plain list with a "Use this workspace" action per row, shown
+ * only when GET /api/workspaces actually returns at least one. Not a
+ * workspace switcher (no persisted "current workspace" concept, no nav
+ * integration) -- just enough for the immediate requirement.
+ */
+function ExistingWorkspacesPanel({ workspaces, onSelect }) {
+  return (
+    <div className="mb-7 rounded-xl border border-[#E2E8F0] bg-slate-50/60 p-4">
+      <span className="block text-[11px] font-bold uppercase tracking-wider text-slate-500 mb-3">
+        You already have {workspaces.length === 1 ? 'a workspace' : 'workspaces'}
+      </span>
+      <ul className="flex flex-col gap-2">
+        {workspaces.map((workspace) => (
+          <li
+            key={workspace._id}
+            className="flex items-center justify-between gap-3 bg-white border border-[#E2E8F0] rounded-lg px-3.5 py-2.5"
+          >
+            <span className="text-[14px] font-semibold text-slate-900 truncate">{workspace.name}</span>
+            <button
+              type="button"
+              onClick={() => onSelect(workspace)}
+              className="shrink-0 h-8 px-3 rounded-md bg-blue-600 text-white text-[12.5px] font-semibold border-0 cursor-pointer transition-colors hover:bg-blue-700"
+            >
+              Use this workspace
+            </button>
+          </li>
+        ))}
+      </ul>
+      <p className="text-[12.5px] text-slate-500 mt-3 mb-0">Or create another one below.</p>
+    </div>
+  );
+}
+
 function WorkspacePreview({ name }) {
   return (
     <div
@@ -559,15 +651,21 @@ function WorkspacePreview({ name }) {
   );
 }
 
-function SuccessScreen({ workspaceName }) {
+function SuccessScreen({ workspace }) {
   const navigate = useNavigate();
 
-  // Mock hand-off to Import Repository — still frontend-only navigation,
-  // no workspace was actually persisted anywhere.
+  // Task 45: the real, persisted workspace._id now travels forward via
+  // router state -- this is what lets the repository sync step (Import
+  // Repository page) associate synced repositories with this exact
+  // workspace, instead of no workspace concept existing at all.
   useEffect(() => {
-    const timer = window.setTimeout(() => navigate('/import-repository'), 1600);
+    const timer = window.setTimeout(() => {
+      navigate('/import-repository', {
+        state: { workspaceId: workspace._id, workspaceName: workspace.name },
+      });
+    }, 1600);
     return () => window.clearTimeout(timer);
-  }, [navigate]);
+  }, [navigate, workspace]);
 
   return (
     <div className="min-h-screen w-full bg-[#F5F6FA] flex items-center justify-center px-6 py-16">
@@ -582,7 +680,7 @@ function SuccessScreen({ workspaceName }) {
           </div>
           <h1 className="text-xl font-bold text-slate-900 mb-2">Workspace Created Successfully</h1>
           <p className="text-sm text-slate-500 leading-relaxed mb-2">
-            <span className="font-semibold text-slate-700">{workspaceName}</span> is ready to go.
+            <span className="font-semibold text-slate-700">{workspace.name}</span> is ready to go.
           </p>
           <p className="text-sm text-slate-500 leading-relaxed mb-6">
             Next, you'll connect a repository for SEIS to analyze.
