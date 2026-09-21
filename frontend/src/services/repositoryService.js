@@ -1,4 +1,4 @@
-import apiClient from './apiClient';
+import apiClient, { API_BASE_URL, getAuthToken } from './apiClient';
 
 /**
  * Lists the authenticated user's already-synced repositories
@@ -101,6 +101,24 @@ export async function getRepositoryFiles(repositoryId, branchId) {
 }
 
 /**
+ * Fetches real directed dependency graph analysis for one branch of a repository
+ * (`GET /api/github/repositories/:repositoryId/branches/:branchId/dependencies`)
+ *
+ * @param {string} repositoryId
+ * @param {string} branchId
+ * @param {{forceRefresh?: boolean}} [options]
+ */
+export async function getRepositoryDependencies(repositoryId, branchId, options = {}) {
+  const params = {};
+  if (options.forceRefresh) params.forceRefresh = true;
+  const response = await apiClient.get(
+    `/api/github/repositories/${repositoryId}/branches/${branchId}/dependencies`,
+    { params }
+  );
+  return response.data;
+}
+
+/**
  * Fetches the real, aggregated Dashboard data for a repository (Task 68 --
  * `GET /api/github/repositories/:repositoryId/dashboard`). Every section
  * carries its own `available` flag; a `false` value means the data is
@@ -170,6 +188,64 @@ export async function sendChatMessage(repositoryId, message, conversationId) {
 }
 
 /**
+ * Streams chat tokens real-time using Server-Sent Events (SSE).
+ *
+ * @param {string} repositoryId
+ * @param {string} message
+ * @param {string} conversationId
+ * @param {object} callbacks - { onToken, onDone, onError }
+ * @param {AbortSignal} [signal]
+ */
+export async function streamRepositoryChat(repositoryId, message, conversationId, { onToken, onDone, onError }, signal) {
+  const token = getAuthToken();
+  const response = await fetch(`${API_BASE_URL}/api/github/repositories/${repositoryId}/chat/stream`, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      ...(token ? { Authorization: `Bearer ${token}` } : {}),
+    },
+    body: JSON.stringify({ message, conversation_id: conversationId }),
+    signal,
+  });
+
+  if (!response.ok) {
+    const errData = await response.json().catch(() => ({}));
+    throw new Error(errData.message || `HTTP ${response.status}: Failed to stream chat`);
+  }
+
+  const reader = response.body.getReader();
+  const decoder = new TextDecoder('utf-8');
+  let buffer = '';
+
+  while (true) {
+    const { done, value } = await reader.read();
+    if (done) break;
+
+    buffer += decoder.decode(value, { stream: true });
+    const lines = buffer.split('\n\n');
+    buffer = lines.pop() || '';
+
+    for (const line of lines) {
+      const trimmed = line.trim();
+      if (!trimmed || !trimmed.startsWith('data: ')) continue;
+      const jsonStr = trimmed.slice(6).trim();
+      try {
+        const payload = JSON.parse(jsonStr);
+        if (payload.type === 'token' && onToken) {
+          onToken(payload.content);
+        } else if (payload.type === 'done' && onDone) {
+          onDone(payload);
+        } else if (payload.type === 'error' && onError) {
+          onError(payload.error);
+        }
+      } catch (e) {
+        // Skip malformed JSON frame
+      }
+    }
+  }
+}
+
+/**
  * Triggers ingestion for one repository (Task 44's endpoint). The frontend
  * never sends a `workspaceId` here -- the backend derives it exclusively
  * from the persisted `Repository.workspaceId` (Task 44's own guarantee).
@@ -198,5 +274,53 @@ export async function getRepositoryFileContent(repositoryId, filePath, ref) {
     { params }
   );
   return response.data.file;
+}
+
+/**
+ * Requests a grounded AI explanation for a specific repository file
+ * (Task 93 — CODE_EXPLANATION via POST /api/github/repositories/:repositoryId/explain).
+ * The response contains a structured explanation (purpose, key functions, data
+ * flows, dependencies) and source citations from the indexed repository chunks.
+ *
+ * Never retried by this service — LLM calls are not idempotent.
+ *
+ * @param {string} repositoryId
+ * @param {string} filePath  Repository-relative path (e.g. 'backend/maze.py')
+ * @returns {Promise<{taskType: string, filePath: string|null, answer: string, citations: object[]}>}
+ */
+export async function explainFile(repositoryId, filePath) {
+  const response = await apiClient.post(
+    `/api/github/repositories/${repositoryId}/explain`,
+    { task_type: 'code_explanation', file_path: filePath }
+  );
+  return response.data;
+}
+
+/**
+ * Requests a grounded AI architectural summary for a whole repository
+ * (Task 93 — ARCHITECTURE_SUMMARY via POST /api/github/repositories/:repositoryId/explain).
+ * The response covers purpose, major subsystems, technology stack, data flows,
+ * and architectural concerns, with source citations.
+ *
+ * @param {string} repositoryId
+ * @returns {Promise<{taskType: string, filePath: string|null, answer: string, citations: object[]}>}
+ */
+export async function getArchitectureSummary(repositoryId) {
+  const response = await apiClient.post(
+    `/api/github/repositories/${repositoryId}/explain`,
+    { task_type: 'architecture_summary' }
+  );
+  return response.data;
+}
+
+/**
+ * Triggers full Software Evolution & Code Churn Analytics report generation (Task #9).
+ *
+ * @param {string} repositoryId
+ * @returns {Promise<object>}
+ */
+export async function generateEvolutionAnalysis(repositoryId) {
+  const response = await apiClient.post(`/api/github/repositories/${repositoryId}/evolution`);
+  return response.data;
 }
 

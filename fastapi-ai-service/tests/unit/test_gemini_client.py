@@ -27,12 +27,12 @@ from app.infra.llm.gemini_client import NemotronGateway
 
 
 def _settings(**overrides: Any) -> Settings:
-    # nemotron_model_name is pinned explicitly, same as nvidia_api_key --
+    # nemotron_model_name is pinned explicitly, same as nvidia_chat_api_key --
     # otherwise Settings() falls through to the ambient .env file's real
     # value, making this suite's expectations depend on local
     # configuration instead of being fully isolated (Task 55).
     defaults: dict[str, Any] = {
-        "nvidia_api_key": "fake-test-key",
+        "nvidia_chat_api_key": "fake-test-key",
         "nemotron_model_name": "nvidia/nemotron-3-ultra-550b-a55b",
     }
     defaults.update(overrides)
@@ -90,8 +90,16 @@ def _request_body(request: httpx.Request) -> dict[str, Any]:
 # Lazy construction / missing API key
 # ---------------------------------------------------------------------------
 async def test_missing_api_key_raises_llmerror_without_making_a_request() -> None:
-    gateway = NemotronGateway(settings=_settings(nvidia_api_key=""))
-    with pytest.raises(LLMError, match="NVIDIA_API_KEY is not configured"):
+    gateway = NemotronGateway(settings=_settings(nvidia_chat_api_key=""))
+    with pytest.raises(LLMError, match="NVIDIA_CHAT_API_KEY is not configured"):
+        await gateway.generate_text("hello", None, 0.2)
+    assert gateway._client is None
+
+
+async def test_chat_client_ignores_embedding_api_key_when_chat_key_is_missing() -> None:
+    settings = Settings(nvidia_chat_api_key="", nvidia_embedding_api_key="embedding-key-only")
+    gateway = NemotronGateway(settings=settings)
+    with pytest.raises(LLMError, match="NVIDIA_CHAT_API_KEY is not configured"):
         await gateway.generate_text("hello", None, 0.2)
     assert gateway._client is None
 
@@ -219,7 +227,7 @@ async def test_authorization_header_is_a_bearer_token_from_settings() -> None:
         captured.append(request)
         return _chat_response("generated response")
 
-    gateway = NemotronGateway(settings=_settings(nvidia_api_key="real-looking-key-123"))
+    gateway = NemotronGateway(settings=_settings(nvidia_chat_api_key="real-looking-key-123"))
     # Let `_get_client()` build the client for real (exercises the actual
     # header-construction code path), then swap only the transport.
     client = gateway._get_client()

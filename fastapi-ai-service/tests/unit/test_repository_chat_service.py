@@ -205,6 +205,19 @@ class _StubLLMGateway:
             raise self._error
         return self._answer
 
+    async def generate_text_stream(
+        self, prompt: str, system_instruction: str | None, temperature: float
+    ):
+        self.calls.append(
+            {"prompt": prompt, "system_instruction": system_instruction, "temperature": temperature}
+        )
+        if self._error is not None:
+            raise self._error
+        yield self._answer
+
+    async def count_tokens(self, text: str) -> int:
+        return max(1, len(text) // 4)
+
 
 class _StubCitationEngine:
     def __init__(
@@ -1032,3 +1045,15 @@ async def test_ordinary_rag_question_never_reaches_the_structure_service(
     await harness.service().chat(_request(message="What does maze.py do?"))
 
     assert harness.structure_service.calls == []
+
+
+async def test_chat_stream_yields_expected_events(harness: Harness) -> None:
+    events = []
+    async for frame in harness.service().chat_stream(_request(message="how does maze work?")):
+        events.append(frame)
+
+    assert len(events) >= 3
+    assert "data: {\"type\": \"start\"" in events[0]
+    assert "data: {\"type\": \"token\"" in events[1]
+    assert "data: {\"type\": \"done\"" in events[-1]
+

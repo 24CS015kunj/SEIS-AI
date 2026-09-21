@@ -37,8 +37,14 @@ export default function CommitDetailDrawer({ commit, repositoryId, validFilePath
       </div>
 
       <div className="flex items-center gap-4 text-[12.5px] font-mono mb-5">
-        <span className="text-emerald-600">+{commit.additions} additions</span>
-        <span className="text-rose-600">-{commit.deletions} deletions</span>
+        {commit.additions != null && commit.deletions != null ? (
+          <>
+            <span className="text-emerald-600">+{commit.additions} additions</span>
+            <span className="text-rose-600">-{commit.deletions} deletions</span>
+          </>
+        ) : (
+          <span className="text-slate-400">Statistics not available</span>
+        )}
       </div>
 
       {commit.files.length === 0 ? (

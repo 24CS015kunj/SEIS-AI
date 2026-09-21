@@ -132,6 +132,37 @@ const RepositorySchema = new mongoose.Schema(
 
         lastFetchedAt: {
             type: Date
+        },
+
+        ingestionStatus: {
+            type: String,
+            enum: ["pending", "processing", "completed", "failed"],
+            default: "pending"
+        },
+
+        ingestionStage: {
+            type: String,
+            default: null
+        },
+
+        chunkCount: {
+            type: Number,
+            default: 0
+        },
+
+        lastIngestedAt: {
+            type: Date,
+            default: null
+        },
+
+        ingestionError: {
+            type: String,
+            default: null
+        },
+
+        lastIngestedCommitSha: {
+            type: String,
+            default: null
         }
     },
     {

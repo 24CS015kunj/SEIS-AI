@@ -206,10 +206,10 @@ class RAGOptimizer:
     # ------------------------------------------------------------------
     def _get_client(self) -> httpx.AsyncClient:
         if self._client is None:
-            api_key = self._settings.nvidia_api_key.get_secret_value()
+            api_key = self._settings.nvidia_embedding_api_key.get_secret_value()
             if not api_key:
                 raise RerankError(
-                    "NVIDIA_API_KEY is not configured -- cannot call the NVIDIA "
+                    "NVIDIA_EMBEDDING_API_KEY is not configured -- cannot call the NVIDIA "
                     "hosted Reranking API.",
                     details={"model": RERANKING_MODEL_NAME},
                 )

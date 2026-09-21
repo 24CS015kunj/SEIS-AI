@@ -17,6 +17,7 @@ vectors are JSON-encoded/decoded here.
 
 from __future__ import annotations
 
+import asyncio
 import hashlib
 import json
 
@@ -67,10 +68,20 @@ class EmbeddingCache:
         from the returned dict -- never represented as a ``None`` value.
         """
         results: dict[str, list[float]] = {}
-        for content_hash in hashes:
-            raw = await self._redis.get_cache(self._key(content_hash))
+        if not hashes:
+            return results
+
+        async def _lookup(h: str) -> tuple[str, str | None]:
+            raw = await self._redis.get_cache(self._key(h))
+            return h, raw
+
+        lookups = await asyncio.gather(*[_lookup(h) for h in hashes])
+        for content_hash, raw in lookups:
             if raw is not None:
-                results[content_hash] = json.loads(raw)
+                try:
+                    results[content_hash] = json.loads(raw)
+                except Exception:
+                    pass
 
         self._log.info(
             "embedding_cache_lookup",
@@ -84,11 +95,15 @@ class EmbeddingCache:
         """Writes every ``(hash, vector)`` pair, each with the
         configured ``embedding_cache_ttl_seconds`` TTL.
         """
-        for content_hash, vector in hash_vector_map.items():
+        if not hash_vector_map:
+            return
+
+        async def _set(h: str, vec: list[float]) -> None:
             await self._redis.set_cache(
-                self._key(content_hash), json.dumps(vector), self._ttl_seconds
+                self._key(h), json.dumps(vec), self._ttl_seconds
             )
 
+        await asyncio.gather(*[_set(h, v) for h, v in hash_vector_map.items()])
         self._log.info("embedding_cache_write", count=len(hash_vector_map))
 
 

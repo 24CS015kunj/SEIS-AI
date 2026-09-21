@@ -28,7 +28,7 @@ from app.domain.models import ChunkMetadata, SearchResultItem
 
 
 def _settings(**overrides: Any) -> Settings:
-    defaults: dict[str, Any] = {"nvidia_api_key": "fake-test-key"}
+    defaults: dict[str, Any] = {"nvidia_embedding_api_key": "fake-test-key"}
     defaults.update(overrides)
     return Settings(**defaults)
 
@@ -155,9 +155,9 @@ def test_variant_order_is_original_then_split_then_filler_stripped() -> None:
 
 
 async def test_missing_api_key_raises_rerankerror_without_making_a_request() -> None:
-    optimizer = RAGOptimizer(settings=_settings(nvidia_api_key=""))
+    optimizer = RAGOptimizer(settings=_settings(nvidia_embedding_api_key=""))
 
-    with pytest.raises(RerankError, match="NVIDIA_API_KEY"):
+    with pytest.raises(RerankError, match="NVIDIA_EMBEDDING_API_KEY"):
         await optimizer.rerank_chunks("query", [_item("c1", "content")])
 
 
@@ -189,7 +189,7 @@ async def test_authorization_header_is_a_bearer_token_from_settings() -> None:
         return _rerank_response([0.0])
 
     optimizer = _optimizer_with_transport(
-        handler, settings=_settings(nvidia_api_key="super-secret-key")
+        handler, settings=_settings(nvidia_embedding_api_key="super-secret-key")
     )
     await optimizer.rerank_chunks("q", [_item("c1", "x")])
 

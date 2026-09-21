@@ -9,6 +9,7 @@ import {
   ingestRepository,
 } from '../services/repositoryService';
 import { useRepositoryIdentity } from '../hooks/useRepositoryIdentity';
+import { API_BASE_URL } from '../services/apiClient';
 import { useRepositoryHeader, formatRelativeTime } from '../hooks/useRepositoryHeader';
 import CommandCenterSidebar from '../components/commandCenter/CommandCenterSidebar';
 import CommandCenterHeader from '../components/commandCenter/CommandCenterHeader';
@@ -37,8 +38,9 @@ function mapCommit(raw, branchName) {
     timestamp: formatRelativeTime(raw.committedAt) || 'Unknown time',
     committedAtRaw: raw.committedAt,
     branch: branchName,
-    additions: raw.additions ?? 0,
-    deletions: raw.deletions ?? 0,
+    hasStats: raw.hasStats ?? (raw.additions !== null && raw.additions !== undefined && raw.deletions !== null && raw.deletions !== undefined),
+    additions: raw.additions ?? null,
+    deletions: raw.deletions ?? null,
     filesChanged: raw.changedFilesCount ?? (raw.filesChanged?.length ?? 0),
     files: (raw.filesChanged || []).map((p) => ({ path: p })),
   };
@@ -332,8 +334,11 @@ function SourceControlPageContent({ repositoryId }) {
 
               <IngestionAction
                 repositoryId={repositoryId}
+                repository={identity.repository}
+                onRefreshRepository={identity.refresh}
                 branchSyncStatus={branchSyncStatus}
                 branchSyncError={branchSyncError}
+                defaultBranch={resolvedFileBranch}
               />
 
               <section aria-label="Source control">
@@ -355,7 +360,13 @@ function SourceControlPageContent({ repositoryId }) {
 
                 <div role="tabpanel" id="panel-commits" aria-labelledby="tab-commits" hidden={activeTab !== 'commits'}>
                   {activeTab === 'commits' && (
-                    <CommitsPanel repositoryId={repositoryId} entry={commitsEntry} onOpenCommit={setOpenCommit} />
+                    <CommitsPanel
+                      repositoryId={repositoryId}
+                      entry={commitsEntry}
+                      branchSyncStatus={branchSyncStatus}
+                      branchSyncError={branchSyncError}
+                      onOpenCommit={setOpenCommit}
+                    />
                   )}
                 </div>
                 <div role="tabpanel" id="panel-branches" aria-labelledby="tab-branches" hidden={activeTab !== 'branches'}>
@@ -440,10 +451,46 @@ function RepositoryNotFoundState() {
  * resolved *yet*. Collapsing the two previously left this panel showing
  * "Loading commits…" forever whenever no real repository existed to load
  * anything for (Task 57 live-verification finding).
+ *
+ * Commits can only ever be fetched once branch sync succeeds (a commit
+ * request needs a real Branch `_id`, which only a successful
+ * `getRepositoryBranches` call produces) -- so `entry` (keyed by
+ * `commitsCache`) never even starts a fetch while `branchSyncStatus` isn't
+ * `'ready'`, and previously stayed at its default `{status: 'idle'}`
+ * forever whenever branch sync itself failed, which this panel rendered
+ * identically to "still loading" -- an authentication failure (or any
+ * other real branch-sync error) was indistinguishable from "hasn't
+ * finished yet" and never surfaced here at all (confirmed live: GitHub
+ * rejecting a revoked access token with a real 401 "Bad credentials" left
+ * this panel spinning on "Loading commits…" indefinitely, even though the
+ * real error was already being shown elsewhere on the page). `entry`'s own
+ * `'error'` state (below) is a *different*, later failure -- the commits
+ * call itself failing after branches loaded fine -- and is kept separate.
  */
-function CommitsPanel({ repositoryId, entry, onOpenCommit }) {
+function CommitsPanel({ repositoryId, entry, branchSyncStatus, branchSyncError, onOpenCommit }) {
   if (!repositoryId) {
     return <SectionMessage text="Open this page from a real, synced repository to see commits." />;
+  }
+  if (branchSyncStatus === 'error') {
+    const isGithubAuthFailure = String(branchSyncError || '').startsWith('GitHub Authentication failed');
+    return (
+      <div className="bg-white border border-slate-200 rounded-xl shadow-sm p-8 text-center flex flex-col items-center gap-3">
+        <AlertTriangle size={20} className="text-rose-400" aria-hidden="true" />
+        <p className="text-[13px] text-rose-600 m-0">
+          {isGithubAuthFailure
+            ? 'Unable to load commits. GitHub authentication failed. Please reconnect GitHub.'
+            : branchSyncError || 'Unable to load commits. Failed to synchronize branch information.'}
+        </p>
+        {isGithubAuthFailure && (
+          <a
+            href={`${API_BASE_URL}/api/auth/github`}
+            className="text-[12.5px] font-semibold text-blue-600 hover:text-blue-700"
+          >
+            Reconnect GitHub
+          </a>
+        )}
+      </div>
+    );
   }
   if (entry.status === 'loading' || entry.status === 'idle') {
     return <SectionMessage text="Loading commits…" />;
@@ -536,23 +583,67 @@ function PullRequestsUnavailable() {
  * read Redis directly -- so this component still only ever reflects the
  * single ingest response it receives, never a live/polled READY state.
  */
-function IngestionAction({ repositoryId, branchSyncStatus, branchSyncError }) {
+function IngestionAction({
+  repositoryId,
+  repository,
+  onRefreshRepository,
+  branchSyncStatus,
+  branchSyncError,
+  defaultBranch,
+}) {
   const [requesting, setRequesting] = useState(false);
-  const [result, setResult] = useState(null); // { tone: 'success'|'error', message }
+  const [actionError, setActionError] = useState(null);
+  const requestingRef = useRef(false);
+
+  const ingestionStatus = repository?.ingestionStatus || 'pending';
+  const ingestionStage = repository?.ingestionStage;
+  const chunkCount = repository?.chunkCount || 0;
+  const lastIngestedAt = repository?.lastIngestedAt;
+  const ingestionError = repository?.ingestionError;
+  const lastIngestedCommitSha = repository?.lastIngestedCommitSha;
+
+  const currentCommitSha = defaultBranch?.latestCommitSha;
+  const isCurrentCommitIngested =
+    ingestionStatus === 'completed' &&
+    Boolean(lastIngestedCommitSha) &&
+    Boolean(currentCommitSha) &&
+    lastIngestedCommitSha === currentCommitSha;
+
+  const isStaleCommit =
+    ingestionStatus === 'completed' &&
+    Boolean(lastIngestedCommitSha) &&
+    Boolean(currentCommitSha) &&
+    lastIngestedCommitSha !== currentCommitSha;
+
+  // Poll repository status while processing
+  useEffect(() => {
+    if (ingestionStatus !== 'processing' || !onRefreshRepository) return;
+    const intervalId = setInterval(() => {
+      onRefreshRepository();
+    }, 4000);
+    return () => clearInterval(intervalId);
+  }, [ingestionStatus, onRefreshRepository]);
 
   const handleRequestIngestion = async () => {
-    if (!repositoryId || branchSyncStatus !== 'ready' || requesting) return;
+    if (
+      !repositoryId ||
+      branchSyncStatus !== 'ready' ||
+      requestingRef.current ||
+      requesting ||
+      ingestionStatus === 'processing'
+    ) {
+      return;
+    }
+
+    requestingRef.current = true;
     setRequesting(true);
-    setResult(null);
+    setActionError(null);
+
     try {
-      const response = await ingestRepository(repositoryId);
-      setResult({
-        tone: 'success',
-        message:
-          response.filesEligible === 0
-            ? 'No eligible files were found to ingest.'
-            : `Ingestion started — job ${response.submittedJob?.jobId ?? ''} is now processing.`,
-      });
+      await ingestRepository(repositoryId);
+      if (onRefreshRepository) {
+        await onRefreshRepository();
+      }
     } catch (err) {
       const httpStatus = err.response?.status;
       const backendMessage = err.response?.data?.message;
@@ -565,14 +656,20 @@ function IngestionAction({ repositoryId, branchSyncStatus, branchSyncError }) {
           'This repository is not associated with a workspace. Associate it with a workspace before requesting ingestion.';
       } else if (httpStatus === 400) message = backendMessage || 'This repository cannot be ingested yet.';
       else message = backendMessage || 'Ingestion request failed. Please try again.';
-      setResult({ tone: 'error', message });
+      setActionError(message);
     } finally {
+      requestingRef.current = false;
       setRequesting(false);
     }
   };
 
   const branchSyncReady = branchSyncStatus === 'ready';
-  const disabled = !repositoryId || !branchSyncReady || requesting;
+  const disabled =
+    !repositoryId ||
+    !branchSyncReady ||
+    requesting ||
+    ingestionStatus === 'processing' ||
+    isCurrentCommitIngested;
 
   let helperText;
   if (!repositoryId) {
@@ -581,18 +678,56 @@ function IngestionAction({ repositoryId, branchSyncStatus, branchSyncError }) {
     helperText = 'Synchronizing branch information from GitHub before ingestion can start…';
   } else if (branchSyncStatus === 'error') {
     helperText = branchSyncError || 'Failed to synchronize branch information. Please try again.';
+  } else if (ingestionStatus === 'processing') {
+    helperText = `AI Ingestion in progress… Stage: ${ingestionStage || 'processing'}`;
+  } else if (isCurrentCommitIngested) {
+    helperText = `Repository is fully ingested for commit ${lastIngestedCommitSha.slice(0, 7)}${
+      chunkCount > 0 ? ` (${chunkCount} vector chunks indexed)` : ''
+    }.`;
+  } else if (isStaleCommit) {
+    helperText = `Ingested for commit ${lastIngestedCommitSha.slice(0, 7)}. New commit ${currentCommitSha.slice(
+      0,
+      7
+    )} available for ingestion.`;
+  } else if (ingestionStatus === 'failed') {
+    helperText = `Ingestion failed: ${ingestionError || 'Unknown error'}. Click to retry.`;
   } else {
     helperText = 'Index this repository so SEIS AI Copilot can answer questions about it.';
   }
+
+  let buttonText = 'Request AI Ingestion';
+  if (requesting) buttonText = 'Requesting…';
+  else if (branchSyncStatus === 'loading') buttonText = 'Syncing branches…';
+  else if (ingestionStatus === 'processing') buttonText = 'Ingestion Processing…';
+  else if (isCurrentCommitIngested) buttonText = 'Ingested (Up to Date)';
+  else if (isStaleCommit) buttonText = 'Ingest New Commit';
+  else if (ingestionStatus === 'failed') buttonText = 'Retry Ingestion';
 
   return (
     <div className="rounded-xl border border-slate-200 bg-white shadow-sm px-4 sm:px-5 py-4 flex flex-col gap-3">
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
         <div className="min-w-0">
-          <p className="text-[13.5px] font-semibold text-slate-900 m-0">AI Ingestion</p>
+          <div className="flex items-center gap-2">
+            <p className="text-[13.5px] font-semibold text-slate-900 m-0">AI Ingestion</p>
+            {ingestionStatus === 'completed' && (
+              <span className="px-2 py-0.5 rounded-full text-[11px] font-medium bg-emerald-50 text-emerald-700 border border-emerald-200">
+                READY
+              </span>
+            )}
+            {ingestionStatus === 'processing' && (
+              <span className="px-2 py-0.5 rounded-full text-[11px] font-medium bg-blue-50 text-blue-700 border border-blue-200 flex items-center gap-1">
+                <Loader2 size={11} className="animate-spin" /> PROCESSING
+              </span>
+            )}
+            {ingestionStatus === 'failed' && (
+              <span className="px-2 py-0.5 rounded-full text-[11px] font-medium bg-rose-50 text-rose-700 border border-rose-200">
+                FAILED
+              </span>
+            )}
+          </div>
           <p
-            className={`text-[12.5px] mt-0.5 m-0 ${
-              branchSyncStatus === 'error' ? 'text-rose-600' : 'text-slate-500'
+            className={`text-[12.5px] mt-1 m-0 ${
+              ingestionStatus === 'failed' || branchSyncStatus === 'error' ? 'text-rose-600' : 'text-slate-500'
             }`}
           >
             {helperText}
@@ -602,27 +737,24 @@ function IngestionAction({ repositoryId, branchSyncStatus, branchSyncError }) {
           type="button"
           onClick={handleRequestIngestion}
           disabled={disabled}
-          aria-busy={requesting || branchSyncStatus === 'loading'}
+          aria-busy={requesting || branchSyncStatus === 'loading' || ingestionStatus === 'processing'}
           className="shrink-0 inline-flex items-center justify-center gap-1.5 h-9 px-3.5 rounded-lg bg-gradient-to-r from-blue-600 to-indigo-600 text-white text-[13px] font-semibold border-0 cursor-pointer transition-opacity hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-40"
         >
-          {requesting || branchSyncStatus === 'loading' ? (
+          {requesting || branchSyncStatus === 'loading' || ingestionStatus === 'processing' ? (
             <Loader2 size={14} className="animate-spin" aria-hidden="true" />
+          ) : isCurrentCommitIngested ? (
+            <Check size={14} aria-hidden="true" />
           ) : (
             <Sparkles size={14} aria-hidden="true" />
           )}
-          {requesting ? 'Requesting…' : branchSyncStatus === 'loading' ? 'Syncing branches…' : 'Request AI Ingestion'}
+          {buttonText}
         </button>
       </div>
 
-      {result && (
-        <p
-          role="status"
-          className={`text-[12.5px] flex items-center gap-1.5 m-0 ${
-            result.tone === 'success' ? 'text-emerald-600' : 'text-rose-600'
-          }`}
-        >
-          {result.tone === 'success' ? <Check size={13} aria-hidden="true" /> : <AlertTriangle size={13} aria-hidden="true" />}
-          {result.message}
+      {actionError && (
+        <p role="status" className="text-[12.5px] flex items-center gap-1.5 m-0 text-rose-600">
+          <AlertTriangle size={13} aria-hidden="true" />
+          {actionError}
         </p>
       )}
     </div>

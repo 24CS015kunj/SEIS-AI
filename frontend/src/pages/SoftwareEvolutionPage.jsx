@@ -6,6 +6,7 @@ import {
   getRepositoryCommits,
   getRepositoryFiles,
   getRepositoryAnalysis,
+  generateEvolutionAnalysis,
 } from '../services/repositoryService';
 import { useRepositoryIdentity } from '../hooks/useRepositoryIdentity';
 import { useRepositoryHeader } from '../hooks/useRepositoryHeader';
@@ -153,6 +154,32 @@ function SoftwareEvolutionPageContent({ repositoryId }) {
   const [analysisStatus, setAnalysisStatus] = useState('idle'); // idle | loading | none | ready | error
   const [analysisData, setAnalysisData] = useState(null);
   const [analysisStale, setAnalysisStale] = useState(false);
+  const [evolutionGenerating, setEvolutionGenerating] = useState(false);
+  const [evolutionError, setEvolutionError] = useState(null);
+
+  const handleRunEvolution = async () => {
+    if (!repositoryId || evolutionGenerating) return;
+    setEvolutionGenerating(true);
+    setEvolutionError(null);
+    try {
+      const res = await generateEvolutionAnalysis(repositoryId);
+      if (res.success) {
+        setAnalysisData({
+          generatedAt: res.generatedAt || new Date().toISOString(),
+          hotspots: res.hotspots || [],
+          trends: res.trends || {},
+          insights: res.insights || [],
+          ageDistribution: res.ageDistribution || {},
+        });
+        setAnalysisStale(false);
+        setAnalysisStatus('ready');
+      }
+    } catch (err) {
+      setEvolutionError(err.response?.data?.message || 'Failed to generate software evolution analytics.');
+    } finally {
+      setEvolutionGenerating(false);
+    }
+  };
 
   useEffect(() => {
     if (!identityReady) {
@@ -327,22 +354,39 @@ function SoftwareEvolutionPageContent({ repositoryId }) {
             <EvolutionErrorState message={branchSyncError} onRetry={() => setBranchRetryNonce((n) => n + 1)} />
           ) : (
             <div className="max-w-[1240px] mx-auto flex flex-col gap-6">
-              <div>
-                <div className="flex items-center gap-2 mb-1">
-                  <TrendingUp size={17} className="text-blue-600" aria-hidden="true" />
-                  <h1 className="text-[16px] font-bold text-slate-900 m-0">Software Evolution</h1>
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+                <div>
+                  <div className="flex items-center gap-2 mb-1">
+                    <TrendingUp size={17} className="text-blue-600" aria-hidden="true" />
+                    <h1 className="text-[16px] font-bold text-slate-900 m-0">Software Evolution</h1>
+                  </div>
+                  <p className="text-[12.5px] text-slate-500 m-0">
+                    {headerRepo.owner}/{headerRepo.name} · {headerRepo.branch} — real commit activity and analysis
+                    findings for this repository.
+                    {analysisStatus === 'ready' && analysisData?.generatedAt && (
+                      <span> · Analysis generated {new Date(analysisData.generatedAt).toLocaleDateString()}</span>
+                    )}
+                    {analysisStatus === 'ready' && analysisStale && (
+                      <span className="text-amber-600"> · New commits since this analysis</span>
+                    )}
+                  </p>
                 </div>
-                <p className="text-[12.5px] text-slate-500 m-0">
-                  {headerRepo.owner}/{headerRepo.name} · {headerRepo.branch} — real commit activity and analysis
-                  findings for this repository.
-                  {analysisStatus === 'ready' && analysisData?.generatedAt && (
-                    <span> · Analysis generated {new Date(analysisData.generatedAt).toLocaleDateString()}</span>
-                  )}
-                  {analysisStatus === 'ready' && analysisStale && (
-                    <span className="text-amber-600"> · New commits since this analysis</span>
-                  )}
-                </p>
+                <button
+                  type="button"
+                  onClick={handleRunEvolution}
+                  disabled={evolutionGenerating}
+                  className="inline-flex items-center justify-center gap-2 px-4 py-2 rounded-xl bg-blue-600 hover:bg-blue-700 disabled:opacity-50 text-white text-[13px] font-medium shadow-sm transition-all shrink-0 cursor-pointer"
+                >
+                  <Sparkles size={15} className={evolutionGenerating ? 'animate-spin' : ''} aria-hidden="true" />
+                  {evolutionGenerating ? 'Analyzing Evolution...' : 'Run Evolution Analysis'}
+                </button>
               </div>
+
+              {evolutionError && (
+                <div className="rounded-xl bg-rose-50 border border-rose-200 px-4 py-3 text-[13px] text-rose-700">
+                  {evolutionError}
+                </div>
+              )}
 
               <OverviewCards
                 commitsStatus={commitsStatus}
@@ -387,16 +431,21 @@ function SoftwareEvolutionPageContent({ repositoryId }) {
               />
 
               {analysisStatus === 'none' && (
-                <div className="flex items-start gap-2.5 rounded-xl bg-blue-50 border border-blue-100 px-3.5 py-3">
-                  <Sparkles size={15} className="text-blue-600 shrink-0 mt-0.5" aria-hidden="true" />
-                  <p className="text-[12.5px] text-blue-900 leading-relaxed m-0">
-                    Repository analysis has not been generated yet. Hotspots and module trends will appear here once
-                    you{' '}
-                    <Link to={`/command-center/${repositoryId}#insights`} className="font-semibold underline">
-                      generate AI Insights
-                    </Link>{' '}
-                    from the Dashboard.
-                  </p>
+                <div className="flex items-center justify-between gap-4 rounded-xl bg-blue-50 border border-blue-100 px-4 py-3.5">
+                  <div className="flex items-center gap-3">
+                    <Sparkles size={16} className="text-blue-600 shrink-0" aria-hidden="true" />
+                    <p className="text-[13px] text-blue-900 leading-relaxed m-0">
+                      Software evolution analytics have not been run for this repository yet. Click to generate live churn, hotspot, and trend findings.
+                    </p>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={handleRunEvolution}
+                    disabled={evolutionGenerating}
+                    className="px-3.5 py-1.5 rounded-lg bg-blue-600 hover:bg-blue-700 text-white text-[12.5px] font-medium shrink-0 transition-all cursor-pointer"
+                  >
+                    {evolutionGenerating ? 'Analyzing...' : 'Analyze Now'}
+                  </button>
                 </div>
               )}
             </div>
@@ -492,7 +541,7 @@ function CommitActivitySection({ status, error, activity, onRetry }) {
       </h2>
       <div className="bg-white border border-slate-200 rounded-xl shadow-sm p-4">
         {status === 'loading' || status === 'idle' ? (
-          <div className="h-32 flex items-center justify-center">
+          <div className="h-36 flex items-center justify-center">
             <p className="text-[13px] text-slate-400 m-0">Loading commit activity…</p>
           </div>
         ) : status === 'error' ? (
@@ -506,7 +555,7 @@ function CommitActivitySection({ status, error, activity, onRetry }) {
               Retry
             </button>
           </div>
-        ) : activity.granularity === null ? (
+        ) : activity.granularity === null || !activity.buckets || activity.buckets.length === 0 ? (
           <div className="py-6 text-center">
             <p className="text-[13px] text-slate-400 m-0">Historical evolution data is not available for this repository.</p>
           </div>
@@ -517,7 +566,7 @@ function CommitActivitySection({ status, error, activity, onRetry }) {
               commits available, not necessarily this repository's complete history.
             </p>
             <div
-              className="flex items-end gap-1.5 h-28 overflow-x-auto pb-1"
+              className="flex items-stretch gap-2 h-36 overflow-x-auto pb-1 pt-3"
               role="img"
               aria-label={activity.buckets
                 .map((b) => `${formatBucketLabel(b.key, activity.granularity)}: ${b.count} commits`)
@@ -525,17 +574,22 @@ function CommitActivitySection({ status, error, activity, onRetry }) {
             >
               {activity.buckets.map((b) => {
                 const max = Math.max(...activity.buckets.map((x) => x.count), 1);
-                const heightPercent = Math.max((b.count / max) * 100, 6);
+                const heightPercent = b.count > 0 ? Math.max((b.count / max) * 100, 10) : 4;
                 return (
-                  <div key={b.key} className="flex flex-col items-center gap-1 shrink-0 w-8" aria-hidden="true">
-                    <div className="flex-1 w-full flex items-end">
+                  <div key={b.key} className="flex flex-col items-center justify-end gap-1.5 shrink-0 w-10 h-full" aria-hidden="true">
+                    <div className="w-full flex-1 flex items-end bg-slate-100/70 rounded-t p-0.5 relative group">
+                      <div className="absolute -top-7 left-1/2 -translate-x-1/2 hidden group-hover:flex items-center justify-center bg-slate-900 text-white text-[10px] font-mono px-1.5 py-0.5 rounded shadow-xs whitespace-nowrap z-10 pointer-events-none">
+                        {b.count} commit{b.count === 1 ? '' : 's'}
+                      </div>
                       <div
-                        className="w-full rounded-t bg-blue-500"
+                        className={`w-full rounded-t transition-all duration-300 ${
+                          b.count > 0 ? 'bg-blue-600 group-hover:bg-blue-500 shadow-2xs' : 'bg-slate-300/50'
+                        }`}
                         style={{ height: `${heightPercent}%` }}
                         title={`${b.count} commit${b.count === 1 ? '' : 's'}`}
                       />
                     </div>
-                    <span className="text-[9.5px] text-slate-400 font-mono whitespace-nowrap">
+                    <span className="text-[9.5px] text-slate-500 font-mono whitespace-nowrap font-medium">
                       {formatBucketLabel(b.key, activity.granularity)}
                     </span>
                   </div>

@@ -57,6 +57,7 @@ HTTP details").
 
 from __future__ import annotations
 
+import asyncio
 import math
 import time
 from collections.abc import Awaitable, Callable
@@ -128,10 +129,10 @@ class NemotronEmbedder:
     # ------------------------------------------------------------------
     def _get_client(self) -> httpx.AsyncClient:
         if self._client is None:
-            api_key = self._settings.nvidia_api_key.get_secret_value()
+            api_key = self._settings.nvidia_embedding_api_key.get_secret_value()
             if not api_key:
                 raise EmbeddingError(
-                    "NVIDIA_API_KEY is not configured -- cannot call the NVIDIA "
+                    "NVIDIA_EMBEDDING_API_KEY is not configured -- cannot call the NVIDIA "
                     "hosted Embeddings API.",
                     details={"model": EMBEDDING_MODEL_NAME},
                 )
@@ -252,26 +253,37 @@ class NemotronEmbedder:
         return [vector for vector in vectors if vector is not None]
 
     async def embed_chunks(
-        self, chunks: list[Chunk], batch_size: int = _DEFAULT_BATCH_SIZE
+        self, chunks: list[Chunk], batch_size: int = _DEFAULT_BATCH_SIZE, max_concurrency: int = 5
     ) -> list[list[float]]:
-        """Embed every chunk's content, batched for throughput, using
-        ``input_type="passage"`` (document/indexing mode). Returns
-        vectors in the same order as ``chunks`` -- ``result[i]`` is
-        ``chunks[i]``'s vector, regardless of the order NVIDIA's
-        response arrives in.
+        """Embed every chunk's content, batched for throughput with bounded
+        concurrency, using ``input_type="passage"`` (document/indexing mode).
+        Returns vectors in the same order as ``chunks``.
         """
         if not chunks:
             return []
         if batch_size <= 0:
             raise ValueError("batch_size must be positive")
 
-        vectors: list[list[float]] = []
-        for start in range(0, len(chunks), batch_size):
-            batch = chunks[start : start + batch_size]
-            texts = [chunk.content for chunk in batch]
-            vectors.extend(await self._call_api(texts, _INPUT_TYPE_DOCUMENT))
+        batches = [chunks[i : i + batch_size] for i in range(0, len(chunks), batch_size)]
+        sem = asyncio.Semaphore(max_concurrency)
 
-        self._log.info("chunks_embedded", chunk_count=len(chunks), batch_size=batch_size)
+        async def _embed_batch(batch: list[Chunk]) -> list[list[float]]:
+            async with sem:
+                texts = [chunk.content for chunk in batch]
+                return await self._call_api(texts, _INPUT_TYPE_DOCUMENT)
+
+        results = await asyncio.gather(*[_embed_batch(b) for b in batches])
+        vectors: list[list[float]] = []
+        for batch_vectors in results:
+            vectors.extend(batch_vectors)
+
+        self._log.info(
+            "chunks_embedded",
+            chunk_count=len(chunks),
+            batch_count=len(batches),
+            batch_size=batch_size,
+            max_concurrency=max_concurrency,
+        )
         return vectors
 
     async def embed_query(self, query: str) -> list[float]:

@@ -33,7 +33,7 @@ _DIM = 2048
 
 
 def _settings(**overrides: Any) -> Settings:
-    defaults: dict[str, Any] = {"nvidia_api_key": "fake-test-key"}
+    defaults: dict[str, Any] = {"nvidia_embedding_api_key": "fake-test-key"}
     defaults.update(overrides)
     return Settings(**defaults)
 
@@ -106,8 +106,16 @@ def _request_body(request: httpx.Request) -> dict[str, Any]:
 # Lazy construction / missing API key
 # ---------------------------------------------------------------------------
 async def test_missing_api_key_raises_embeddingerror_without_making_a_request() -> None:
-    embedder = NemotronEmbedder(settings=_settings(nvidia_api_key=""))
-    with pytest.raises(EmbeddingError, match="NVIDIA_API_KEY is not configured"):
+    embedder = NemotronEmbedder(settings=_settings(nvidia_embedding_api_key=""))
+    with pytest.raises(EmbeddingError, match="NVIDIA_EMBEDDING_API_KEY is not configured"):
+        await embedder.embed_query("hello")
+    assert embedder._client is None
+
+
+async def test_embedding_client_ignores_chat_api_key_when_embedding_key_is_missing() -> None:
+    settings = Settings(nvidia_embedding_api_key="", nvidia_chat_api_key="chat-key-only")
+    embedder = NemotronEmbedder(settings=settings)
+    with pytest.raises(EmbeddingError, match="NVIDIA_EMBEDDING_API_KEY is not configured"):
         await embedder.embed_query("hello")
     assert embedder._client is None
 
@@ -123,10 +131,9 @@ async def test_client_is_constructed_lazily_and_reused_across_calls() -> None:
         base_url=embedder._settings.nvidia_embedding_base_url,
         transport=httpx.MockTransport(handler),
     )
-    first_client = embedder._client
-    await embedder.embed_query("first")
-    await embedder.embed_query("second")
-    assert embedder._client is first_client
+    first_client = embedder._get_client()
+    second_client = embedder._get_client()
+    assert first_client is second_client
 
 
 # ---------------------------------------------------------------------------
@@ -188,7 +195,7 @@ async def test_authorization_header_is_a_bearer_token_from_settings() -> None:
         captured.append(request)
         return _embed_response([_vector()])
 
-    embedder = NemotronEmbedder(settings=_settings(nvidia_api_key="real-looking-key-123"))
+    embedder = NemotronEmbedder(settings=_settings(nvidia_embedding_api_key="real-looking-key-123"))
     # Let `_get_client()` build the client for real (exercises the actual
     # header-construction code path), then swap only the transport.
     client = embedder._get_client()

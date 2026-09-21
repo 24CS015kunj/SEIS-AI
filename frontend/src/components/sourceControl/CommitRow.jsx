@@ -2,6 +2,8 @@ import React from 'react';
 import { GitCommitHorizontal } from 'lucide-react';
 
 export default function CommitRow({ commit, onOpen }) {
+  const hasValidStats = commit.additions != null && commit.deletions != null;
+
   return (
     <li>
       <button
@@ -22,8 +24,14 @@ export default function CommitRow({ commit, onOpen }) {
           </div>
         </div>
         <div className="hidden sm:flex items-center gap-2 text-[11px] font-mono shrink-0 mt-1">
-          <span className="text-emerald-600">+{commit.additions}</span>
-          <span className="text-rose-600">-{commit.deletions}</span>
+          {hasValidStats ? (
+            <>
+              <span className="text-emerald-600">+{commit.additions}</span>
+              <span className="text-rose-600">-{commit.deletions}</span>
+            </>
+          ) : (
+            <span className="text-slate-400" title="Commit statistics not available">+— -—</span>
+          )}
         </div>
       </button>
     </li>

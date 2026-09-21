@@ -61,6 +61,8 @@ class Settings(BaseSettings):
     service_port: int = Field(default=8000, ge=1024, le=65535)
     # Secret — service-to-service auth token Express must present (§26.1-§26.2).
     internal_api_key: SecretStr = SecretStr("")
+    # Express gateway base URL for webhook callbacks (§11.2)
+    express_base_url: str = "http://localhost:5000"
 
     # --- Generation — NVIDIA hosted Nemotron 3 Ultra (Task 60, ADR-008).
     # Replaces Gemini as the answer-generation LLM: real Gemini
@@ -89,6 +91,10 @@ class Settings(BaseSettings):
     # --- Embedding — NVIDIA Nemotron-3-Embed-1B, hosted API (ADR-007). ---
     # Secret — never logged, never committed. Empty by default so import/
     # boot never fails; only an actual embed call raises if this is blank.
+    nvidia_embedding_api_key: SecretStr = SecretStr("")
+    # --- Generation — NVIDIA Nemotron-3-Ultra-550B-A55B, hosted API (Task 60). ---
+    nvidia_chat_api_key: SecretStr = SecretStr("")
+    # Legacy fallback — single NVIDIA_API_KEY for backward compatibility.
     nvidia_api_key: SecretStr = SecretStr("")
     # NVIDIA's documented hosted-inference base URL (verified against
     # https://docs.api.nvidia.com/nim/reference/nvidia-nemotron-3-embed-1b
@@ -126,10 +132,8 @@ class Settings(BaseSettings):
     # model's hosted reranking endpoint is served from `ai.api.nvidia.com`
     # under a per-model path, not `integrate.api.nvidia.com/v1/ranking`
     # (which 404s for this model) — see app/core/retrieval/rag_optimizer.py's
-    # module docstring for the full verification trail. Reuses
-    # `nvidia_api_key`/`nvidia_embedding_timeout_ms` rather than adding
-    # near-duplicate secret/timeout fields for what is still just one more
-    # hosted NVIDIA HTTP call.
+    # module docstring for the full verification trail. Uses
+    # `nvidia_embedding_api_key`/`nvidia_embedding_timeout_ms`.
     nvidia_reranking_base_url: str = "https://ai.api.nvidia.com"
 
     # --- Vector Store (§19 — connection only, no indexing this task) ---
@@ -148,11 +152,10 @@ class Settings(BaseSettings):
     # its own setting even when a value happens to coincide" reasoning
     # NVIDIA_RERANKING_BASE_URL's own comment already establishes. ---
     # 24h: long enough to resume a real coding-chat session later the same
-    # day without re-explaining context, short enough that an abandoned
-    # conversation's Redis key doesn't linger indefinitely (every stored
-    # conversation always expires -- there is no non-expiring write, same
-    # rule RedisClient.set_cache's own docstring already enforces).
+    # day, short enough to bound Redis memory growth automatically.
     conversation_history_ttl_seconds: int = Field(default=86_400, ge=0)
+    # Maximum conversation turns sent to LLM per request (§20).
+    max_history_turns: int = Field(default=10, ge=0)
     # Messages, not turns (1 turn = 2 messages: user + assistant) -- 12
     # messages = 6 prior turns. Bounds both what's persisted (oldest
     # messages are dropped first) and what's sent to Nemotron 3 Ultra per
@@ -196,6 +199,17 @@ class Settings(BaseSettings):
         return f"http://{self.chroma_host}:{self.chroma_port}"
 
     @model_validator(mode="after")
+    def _fallback_legacy_nvidia_api_key(self) -> "Settings":
+        """Fallback for legacy NVIDIA_API_KEY if specific keys are unconfigured."""
+        legacy_key = self.nvidia_api_key.get_secret_value()
+        if legacy_key:
+            if not self.nvidia_embedding_api_key.get_secret_value():
+                self.nvidia_embedding_api_key = self.nvidia_api_key
+            if not self.nvidia_chat_api_key.get_secret_value():
+                self.nvidia_chat_api_key = self.nvidia_api_key
+        return self
+
+    @model_validator(mode="after")
     def _require_secrets_in_production(self) -> "Settings":
         """Configuration validation (§19, §26.3): production may never
         boot with empty secrets. Development/testing/staging are allowed
@@ -208,7 +222,8 @@ class Settings(BaseSettings):
 
         required: dict[str, SecretStr] = {
             "INTERNAL_API_KEY": self.internal_api_key,
-            "NVIDIA_API_KEY": self.nvidia_api_key,
+            "NVIDIA_EMBEDDING_API_KEY": self.nvidia_embedding_api_key,
+            "NVIDIA_CHAT_API_KEY": self.nvidia_chat_api_key,
         }
         missing = [name for name, value in required.items() if not value.get_secret_value()]
         if missing:

@@ -54,6 +54,7 @@ from __future__ import annotations
 
 from collections.abc import Mapping
 from datetime import UTC, datetime
+import time
 from typing import Any
 
 import structlog
@@ -67,6 +68,7 @@ from app.core.processing.metadata_generator import MetadataGenerator
 from app.domain.enums import ProcessingStage, ProcessingStatus
 from app.domain.models import ProcessingStatusRecord, RepositoryManifest
 from app.infra.cache.cache_client import RedisClient
+from app.infra.http.express_client import ExpressCallbackClient
 from app.infra.vectorstore.chroma_client import ChromaClient
 from app.services.repository_processing_service import _STATUS_KEY_PREFIX, _STATUS_TTL_SECONDS
 
@@ -85,6 +87,7 @@ class RepositoryIngestionWorkerService:
         embedder: NemotronEmbedder,
         embedding_cache: EmbeddingCache,
         cache_client: RedisClient,
+        express_callback_client: ExpressCallbackClient | None = None,
     ) -> None:
         self._chroma = chroma_client
         self._document_processor = document_processor
@@ -93,6 +96,7 @@ class RepositoryIngestionWorkerService:
         self._embedder = embedder
         self._embedding_cache = embedding_cache
         self._cache_client = cache_client
+        self._express_callback_client = express_callback_client
         self._log = logger.bind(component="repository_ingestion_worker")
 
     async def process_ingestion_job(
@@ -127,7 +131,17 @@ class RepositoryIngestionWorkerService:
             raise
 
         log = log.bind(repository_id=manifest.repository_id, commit_sha=manifest.commit_sha)
+        ingestion_start_time = time.monotonic()
+        log.info(
+            "ingestion_started",
+            repository_id=manifest.repository_id,
+            commit_sha=manifest.commit_sha,
+            files_discovered=len(manifest.files),
+        )
+
         try:
+            # 1. Document Processing Stage
+            t0 = time.monotonic()
             await self._transition(
                 manifest.repository_id,
                 status=ProcessingStatus.PROCESSING,
@@ -136,41 +150,86 @@ class RepositoryIngestionWorkerService:
                 file_count=len(manifest.files),
             )
             documents = self._document_processor.process_manifest(manifest)
+            doc_duration = round((time.monotonic() - t0) * 1000, 2)
+            log.info(
+                "document_processing_completed",
+                files_discovered=len(manifest.files),
+                files_filtered=len(documents),
+                duration_ms=doc_duration,
+            )
 
+            # 2. AST Chunking Stage
+            t0 = time.monotonic()
             await self._transition(
                 manifest.repository_id,
                 status=ProcessingStatus.PROCESSING,
                 stage=ProcessingStage.CHUNKING,
             )
             chunks = build_chunks_for_documents(documents, self._chunker, self._metadata_generator)
+            chunk_duration = round((time.monotonic() - t0) * 1000, 2)
+            log.info(
+                "chunking_completed",
+                chunks_created=len(chunks),
+                duration_ms=chunk_duration,
+            )
 
+            # 3. Embedding Stage
+            t0 = time.monotonic()
             await self._transition(
                 manifest.repository_id,
                 status=ProcessingStatus.PROCESSING,
                 stage=ProcessingStage.EMBEDDING,
             )
             embeddings = await embed_with_cache(chunks, self._embedder, self._embedding_cache)
+            embed_duration = round((time.monotonic() - t0) * 1000, 2)
+            log.info(
+                "embedding_completed",
+                chunks_embedded=len(embeddings),
+                duration_ms=embed_duration,
+            )
 
+            # 4. ChromaDB Vector Storage Stage
+            t0 = time.monotonic()
             await self._transition(
                 manifest.repository_id,
                 status=ProcessingStatus.PROCESSING,
                 stage=ProcessingStage.INDEXING,
             )
             await self._chroma.upsert_chunks(manifest.repository_id, chunks, embeddings)
+            chroma_duration = round((time.monotonic() - t0) * 1000, 2)
+            log.info(
+                "chromadb_completed",
+                vectors_upserted=len(embeddings),
+                duration_ms=chroma_duration,
+            )
 
+            # 5. Ready & Webhook Notification Stage
+            t0 = time.monotonic()
             await self._transition(
                 manifest.repository_id,
                 status=ProcessingStatus.READY,
                 stage=None,
                 chunk_count=len(chunks),
             )
+            webhook_duration = round((time.monotonic() - t0) * 1000, 2)
+            total_duration = round((time.monotonic() - ingestion_start_time) * 1000, 2)
+
             log.info(
-                "ingestion_worker.completed",
+                "ingestion_completed",
+                repository_id=manifest.repository_id,
+                commit_sha=manifest.commit_sha,
                 document_count=len(documents),
                 chunk_count=len(chunks),
+                total_duration_ms=total_duration,
+                webhook_duration_ms=webhook_duration,
             )
         except Exception as exc:
-            log.error("ingestion_worker.processing_failed", error=str(exc))
+            total_duration = round((time.monotonic() - ingestion_start_time) * 1000, 2)
+            log.error(
+                "ingestion_worker.processing_failed",
+                error=str(exc),
+                duration_ms=total_duration,
+            )
             await self._mark_failed(manifest.repository_id, error=str(exc))
             raise
 
@@ -217,6 +276,18 @@ class RepositoryIngestionWorkerService:
         await self._cache_client.set_cache(
             f"{_STATUS_KEY_PREFIX}{repository_id}", record.model_dump_json(), _STATUS_TTL_SECONDS
         )
+        if self._express_callback_client is not None:
+            try:
+                await self._express_callback_client.send_status_update(
+                    repository_id=repository_id,
+                    status=status.value,
+                    stage=stage.value if stage else None,
+                    chunk_count=record.chunk_count or 0,
+                    file_count=record.file_count or 0,
+                    error=record.error,
+                )
+            except Exception as exc:
+                self._log.warning("ingestion_worker.express_callback_failed", error=str(exc))
 
     async def _read_status(self, repository_id: str) -> ProcessingStatusRecord | None:
         raw = await self._cache_client.get_cache(f"{_STATUS_KEY_PREFIX}{repository_id}")

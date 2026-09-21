@@ -1,79 +1,19 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { Link } from 'react-router-dom';
-import { X, Sparkles, Send, Loader2, AlertCircle, ArrowUpRight } from 'lucide-react';
-import { sendChatMessage } from '../../services/repositoryService';
+import { X, Sparkles, Send, Loader2, AlertCircle, ArrowUpRight, Eye } from 'lucide-react';
+import { sendChatMessage, streamRepositoryChat } from '../../services/repositoryService';
 import CopilotMarkdown from './CopilotMarkdown';
+import CitationDrawer from '../chat/CitationDrawer';
 
-/**
- * Task 75: a citation is only ever rendered as clickable when its
- * `file_path` (`fastapi-ai-service/app/domain/models.py`'s `Citation`
- * model -- `file_path`, `start_line`, `end_line`, `chunk_id`, no
- * `document_type` field) looks like a real repository-relative path, not
- * an absolute URL or a rooted filesystem path. This is a cheap shape
- * check, not an existence claim -- it cannot know whether the file still
- * exists in the currently synced tree (only Architecture's own
- * `findNodeByPath`, run against real synced file data, can determine
- * that). Today every citation the live retrieval pipeline can produce
- * does trace back to a real synced repository file (confirmed by
- * inspection: the only non-file `DocumentType`, `EVOLUTION_REPORT`, is
- * produced by `EvolutionAnalysisService`, which has no reachable API
- * route yet per Task 74's findings) -- this check exists as a durable
- * guard for if that ever changes, not because it's expected to reject
- * anything today.
- */
-function isRepositoryRelativePath(filePath) {
-  if (typeof filePath !== 'string') return false;
-  const trimmed = filePath.trim();
-  if (!trimmed) return false;
-  if (/^([a-z][a-z0-9+.-]*:)?\/\//i.test(trimmed)) return false; // absolute URL
-  if (trimmed.startsWith('/')) return false; // rooted filesystem path, not repo-relative
-  return true;
-}
-
-/**
- * Real AI Copilot chat (Task 59), proxied through Express to the live,
- * already-verified FastAPI repository chat pipeline (Task 54/55):
- * retrieve -> rerank -> build context -> Gemini -> cite. No mock answers --
- * `suggestedQuestions` remain a static list of prompts to try, but clicking
- * one now sends a real request exactly like typing it would.
- *
- * `repositoryId` is the repository's real Mongo `_id` (Task 48's identity
- * chain), separate from `repository`, which is display-only text (owner/
- * name for the header) and never carries an `_id`. When `repositoryId` is
- * null -- this page wasn't opened from a real, synced repository -- chat is
- * disabled with an honest message instead of silently no-op'ing or, worse,
- * answering from nothing.
- *
- * Task 75: a citation's Architecture deep-link is always built from this
- * exact `repositoryId` prop -- never a cached, stored, or previously seen
- * value -- so a citation from an old conversation can never navigate to a
- * repository other than the one this drawer instance is currently open
- * for. Closing the drawer (this component unmounting) already discards
- * `messages`/citations entirely; the same `key={repositoryId}` remount
- * every host page already applies to itself covers the rest. Rendered as
- * a real `<Link>` (a genuine `<a href>`), not a button with a programmatic
- * `navigate()` call -- navigation is the citation's primary action, so it
- * gets real anchor semantics: middle-click/open-in-new-tab, a visible
- * href on hover, and no dependency on JS re-implementing what an anchor
- * already does.
- */
 export default function CopilotDrawer({ repository, repositoryId, suggestedQuestions, onClose }) {
   const [messages, setMessages] = useState([]);
   const [input, setInput] = useState('');
   const [sending, setSending] = useState(false);
+  const [activeCitation, setActiveCitation] = useState(null);
   const panelRef = useRef(null);
   const closeRef = useRef(null);
   const messagesEndRef = useRef(null);
   const hadMessagesRef = useRef(false);
-  // One conversation_id per drawer session, generated once and passed
-  // through unchanged on every message. Closing/reopening the drawer
-  // unmounts this component (see the parent's `{copilotOpen && ...}`),
-  // which discards this ref along with `messages` -- so a fresh open
-  // always starts a fresh conversation_id/history pair. FastAPI persists
-  // the actual conversation history server-side, keyed by
-  // (repository_id, conversation_id), as of Task 65 (see
-  // conversation_store.py) -- this id is still only generated here, never
-  // the repository id, which always comes from `repositoryId` above.
   const conversationIdRef = useRef(
     typeof crypto !== 'undefined' && crypto.randomUUID
       ? crypto.randomUUID()
@@ -82,11 +22,6 @@ export default function CopilotDrawer({ repository, repositoryId, suggestedQuest
 
   const canChat = Boolean(repositoryId);
 
-  // Independent of focus: if the answer swap unmounts whatever the user had
-  // focused (e.g. the suggested-question button they just clicked), focus
-  // silently falls back to <body>, which is outside `panelRef` and would
-  // otherwise stop Escape/Tab from reaching the handlers below. A
-  // document-level listener keeps Escape working regardless of focus state.
   useEffect(() => {
     const onKeyDown = (e) => {
       if (e.key === 'Escape') {
@@ -98,9 +33,6 @@ export default function CopilotDrawer({ repository, repositoryId, suggestedQuest
     return () => document.removeEventListener('keydown', onKeyDown);
   }, [onClose]);
 
-  // Re-anchor focus inside the dialog the first time the suggested-question
-  // list unmounts (i.e. the first message is sent), so keyboard users are
-  // never dropped back to the page body.
   useEffect(() => {
     const hasMessages = messages.length > 0;
     if (hasMessages && !hadMessagesRef.current) {
@@ -117,36 +49,87 @@ export default function CopilotDrawer({ repository, repositoryId, suggestedQuest
     const trimmed = text.trim();
     if (!trimmed || sending || !canChat) return;
 
-    setMessages((prev) => [...prev, { id: `u-${Date.now()}`, role: 'user', content: trimmed }]);
+    const assistantId = `a-${Date.now()}`;
+    setMessages((prev) => [
+      ...prev,
+      { id: `u-${Date.now()}`, role: 'user', content: trimmed },
+      { id: assistantId, role: 'assistant', content: '', citations: [], isStreaming: true }
+    ]);
     setInput('');
     setSending(true);
 
     try {
-      const result = await sendChatMessage(repositoryId, trimmed, conversationIdRef.current);
-      if (result?.conversationId) {
-        conversationIdRef.current = result.conversationId;
-      }
-      setMessages((prev) => [
-        ...prev,
+      await streamRepositoryChat(
+        repositoryId,
+        trimmed,
+        conversationIdRef.current,
         {
-          id: `a-${Date.now()}`,
-          role: 'assistant',
-          content: result.answer,
-          citations: Array.isArray(result.citations) ? result.citations : [],
-        },
-      ]);
+          onToken: (token) => {
+            setMessages((prev) =>
+              prev.map((msg) =>
+                msg.id === assistantId
+                  ? { ...msg, content: msg.content + token }
+                  : msg
+              )
+            );
+          },
+          onDone: (data) => {
+            setMessages((prev) =>
+              prev.map((msg) =>
+                msg.id === assistantId
+                  ? {
+                      ...msg,
+                      citations: Array.isArray(data.citations) ? data.citations : [],
+                      isStreaming: false,
+                    }
+                  : msg
+              )
+            );
+          },
+          onError: (errMsg) => {
+            setMessages((prev) =>
+              prev.map((msg) =>
+                msg.id === assistantId
+                  ? { ...msg, isError: true, content: errMsg || 'Error streaming response.', isStreaming: false }
+                  : msg
+              )
+            );
+          },
+        }
+      );
     } catch (err) {
-      setMessages((prev) => [
-        ...prev,
-        {
-          id: `e-${Date.now()}`,
-          role: 'assistant',
-          isError: true,
-          content:
-            err.response?.data?.message ||
-            'The AI Copilot could not answer that question. Please try again.',
-        },
-      ]);
+      // Fallback to non-streaming sendChatMessage if streaming connection fails
+      try {
+        const result = await sendChatMessage(repositoryId, trimmed, conversationIdRef.current);
+        setMessages((prev) =>
+          prev.map((msg) =>
+            msg.id === assistantId
+              ? {
+                  ...msg,
+                  content: result.answer,
+                  citations: Array.isArray(result.citations) ? result.citations : [],
+                  isStreaming: false,
+                }
+              : msg
+          )
+        );
+      } catch (fallbackErr) {
+        setMessages((prev) =>
+          prev.map((msg) =>
+            msg.id === assistantId
+              ? {
+                  ...msg,
+                  isError: true,
+                  content:
+                    fallbackErr.response?.data?.message ||
+                    err.message ||
+                    'The AI Copilot could not answer that question. Please try again.',
+                  isStreaming: false,
+                }
+              : msg
+          )
+        );
+      }
     } finally {
       setSending(false);
     }
@@ -247,30 +230,17 @@ export default function CopilotDrawer({ repository, repositoryId, suggestedQuest
                         <div className="flex flex-wrap gap-1 px-0.5">
                           {m.citations.map((c, i) => {
                             const label = `${c.file_path}${c.start_line != null ? `:${c.start_line}-${c.end_line}` : ''}`;
-                            const clickable = Boolean(repositoryId) && isRepositoryRelativePath(c.file_path);
-
-                            if (!clickable) {
-                              return (
-                                <span
-                                  key={`${m.id}-cite-${i}`}
-                                  className="inline-flex items-center max-w-full text-[11px] font-mono text-blue-700 bg-blue-50 border border-blue-100 rounded-full px-2 py-0.5"
-                                >
-                                  <span className="truncate">{label}</span>
-                                </span>
-                              );
-                            }
-
                             return (
-                              <Link
+                              <button
                                 key={`${m.id}-cite-${i}`}
-                                to={`/architecture/${repositoryId}?file=${encodeURIComponent(c.file_path)}`}
-                                onClick={onClose}
-                                aria-label={`Open ${c.file_path} in Architecture`}
-                                className="inline-flex items-center gap-0.5 max-w-full text-[11px] font-mono text-blue-700 bg-blue-50 border border-blue-100 rounded-full pl-2 pr-1.5 py-0.5 no-underline transition-colors hover:bg-blue-100 hover:border-blue-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500/40"
+                                type="button"
+                                onClick={() => setActiveCitation(c)}
+                                aria-label={`Inspect citation ${c.file_path}`}
+                                className="inline-flex items-center gap-1 max-w-full text-[11px] font-mono text-blue-700 bg-blue-50 border border-blue-100 rounded-full pl-2 pr-2 py-0.5 cursor-pointer transition-colors hover:bg-blue-100 hover:border-blue-300 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500/40"
                               >
+                                <Eye size={10} className="shrink-0 text-blue-500" aria-hidden="true" />
                                 <span className="truncate">{label}</span>
-                                <ArrowUpRight size={10} className="shrink-0" aria-hidden="true" />
-                              </Link>
+                              </button>
                             );
                           })}
                         </div>
@@ -321,6 +291,13 @@ export default function CopilotDrawer({ repository, repositoryId, suggestedQuest
             </button>
           </div>
         </form>
+
+        <CitationDrawer
+          repositoryId={repositoryId}
+          citation={activeCitation}
+          isOpen={Boolean(activeCitation)}
+          onClose={() => setActiveCitation(null)}
+        />
       </aside>
   );
 }

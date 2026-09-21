@@ -1,13 +1,15 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import { useParams } from 'react-router-dom';
 import { AlertTriangle, SearchX } from 'lucide-react';
-import { getRepositoryDashboard, getRepositoryAnalysis, generateRepositoryAnalysis } from '../services/repositoryService';
+import { getRepositoryDashboard, getRepositoryAnalysis, generateRepositoryAnalysis, getRepositoryCommits } from '../services/repositoryService';
 import { useRepositoryIdentity } from '../hooks/useRepositoryIdentity';
 import { useRepositoryHeader, formatRelativeTime } from '../hooks/useRepositoryHeader';
 import CommandCenterSidebar from '../components/commandCenter/CommandCenterSidebar';
 import CommandCenterHeader from '../components/commandCenter/CommandCenterHeader';
 import OverviewMetrics from '../components/commandCenter/OverviewMetrics';
 import RepositoryHealthCard from '../components/commandCenter/RepositoryHealthCard';
+import RepositoryActivitySection from '../components/commandCenter/RepositoryActivitySection';
+import EngineeringHotspotsSection from '../components/commandCenter/EngineeringHotspotsSection';
 import TechStackStrip from '../components/commandCenter/TechStackStrip';
 import AiInsightsPanel from '../components/commandCenter/AiInsightsPanel';
 import ArchitectureSection from '../components/commandCenter/ArchitectureSection';
@@ -204,6 +206,35 @@ function CommandCenterPageContent({ repositoryId }) {
     };
   }, [repositoryId, identityReady]);
 
+  // Task 95: Real commit history for activity & contribution analytics
+  const [commitsStatus, setCommitsStatus] = useState('idle'); // idle | loading | ready | error
+  const [branchCommits, setBranchCommits] = useState([]);
+
+  useEffect(() => {
+    if (!repositoryId || !dashboardData?.branch?.id) {
+      setCommitsStatus('idle');
+      setBranchCommits([]);
+      return;
+    }
+
+    let cancelled = false;
+    setCommitsStatus('loading');
+    getRepositoryCommits(repositoryId, dashboardData.branch.id, { limit: 100 })
+      .then((data) => {
+        if (cancelled) return;
+        setBranchCommits(data.commits ?? []);
+        setCommitsStatus('ready');
+      })
+      .catch(() => {
+        if (cancelled) return;
+        setCommitsStatus('error');
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [repositoryId, dashboardData?.branch?.id]);
+
   const handleGenerateAnalysis = () => {
     if (!repositoryId || analysisGenerating) return;
     setAnalysisGenerating(true);
@@ -269,6 +300,20 @@ function CommandCenterPageContent({ repositoryId }) {
                 <RepositoryHealthCard
                   status={analysisStatus === 'idle' ? 'loading' : analysisStatus}
                   analysis={analysisData}
+                />
+                {/* Task 95: Repository Activity & Contribution Insights */}
+                <RepositoryActivitySection
+                  commits={branchCommits}
+                  dashboardData={dashboardData}
+                  loading={commitsStatus === 'loading' && branchCommits.length === 0}
+                />
+                {/* Repository Engineering Risk & Hotspots */}
+                <EngineeringHotspotsSection
+                  commits={branchCommits}
+                  dashboardData={dashboardData}
+                  analysisData={analysisData}
+                  loading={commitsStatus === 'loading' && branchCommits.length === 0}
+                  onPreviewFile={(path) => setPreviewFilePath(path)}
                 />
                 <AiInsightsPanel
                   status={analysisStatus === 'idle' ? 'loading' : analysisStatus}

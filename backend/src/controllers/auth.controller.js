@@ -1,5 +1,5 @@
 import User from "../models/user.model.js";
-import { generateToken } from "../utils/jwt.util.js";
+import { generateToken, generateRefreshToken, verifyRefreshToken } from "../utils/jwt.util.js";
 import * as githubService from "../services/github.service.js";
 import * as emailService from "../services/email.service.js";
 
@@ -95,12 +95,19 @@ export const githubCallback = async (req, res, next) => {
             }
         }
 
-        // 4. Generate SEIS-AI JWT
+        // 4. Generate SEIS-AI Access & Refresh JWTs
         const token = generateToken(user._id);
+        const refreshToken = generateRefreshToken(user._id);
 
-        // 5. Set HTTP-only Cookie
+        // 5. Set HTTP-only Cookies
         const isProduction = process.env.NODE_ENV === "production";
         res.cookie("token", token, {
+            httpOnly: true,
+            secure: isProduction,
+            sameSite: isProduction ? "none" : "lax",
+            maxAge: 15 * 60 * 1000, // 15 minutes
+        });
+        res.cookie("refreshToken", refreshToken, {
             httpOnly: true,
             secure: isProduction,
             sameSite: isProduction ? "none" : "lax",
@@ -121,6 +128,7 @@ export const githubCallback = async (req, res, next) => {
             success: true,
             message: isNewUser ? "User registered and authenticated successfully" : "User authenticated successfully",
             token,
+            refreshToken,
             user: sanitizedUser,
         });
     } catch (error) {
@@ -144,11 +152,67 @@ export const getMe = async (req, res) => {
 };
 
 /**
+ * Rotates Access & Refresh tokens
+ * POST /api/auth/refresh
+ */
+export const refreshAuthToken = async (req, res, next) => {
+    try {
+        const refreshToken = req.body?.refreshToken || req.cookies?.refreshToken;
+        if (!refreshToken) {
+            return res.status(401).json({
+                success: false,
+                message: "Refresh token is required.",
+            });
+        }
+
+        const decoded = verifyRefreshToken(refreshToken);
+        const user = await User.findById(decoded.userId);
+        if (!user) {
+            return res.status(401).json({
+                success: false,
+                message: "Invalid refresh token or user not found.",
+            });
+        }
+
+        const newAccessToken = generateToken(user._id);
+        const newRefreshToken = generateRefreshToken(user._id);
+
+        const isProduction = process.env.NODE_ENV === "production";
+        res.cookie("token", newAccessToken, {
+            httpOnly: true,
+            secure: isProduction,
+            sameSite: isProduction ? "none" : "lax",
+            maxAge: 15 * 60 * 1000,
+        });
+
+        res.cookie("refreshToken", newRefreshToken, {
+            httpOnly: true,
+            secure: isProduction,
+            sameSite: isProduction ? "none" : "lax",
+            maxAge: 7 * 24 * 60 * 60 * 1000,
+        });
+
+        return res.json({
+            success: true,
+            token: newAccessToken,
+            refreshToken: newRefreshToken,
+        });
+    } catch (error) {
+        return res.status(401).json({
+            success: false,
+            message: "Invalid or expired refresh token.",
+            error: error.message,
+        });
+    }
+};
+
+/**
  * Logs out the user by clearing the auth cookie
  * POST /api/auth/logout
  */
 export const logout = (req, res) => {
     res.clearCookie("token");
+    res.clearCookie("refreshToken");
     return res.json({
         success: true,
         message: "Logged out successfully",

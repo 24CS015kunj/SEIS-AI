@@ -29,11 +29,10 @@ _EXPECTED_DIMENSION = 2048
 _settings_for_skip_check = get_settings()
 
 pytestmark = pytest.mark.skipif(
-    not _settings_for_skip_check.nvidia_api_key.get_secret_value(),
+    not _settings_for_skip_check.nvidia_embedding_api_key.get_secret_value(),
     reason=(
-        "No NVIDIA_API_KEY configured in this environment. Set it in "
-        "fastapi-ai-service/.env (see .env.example) and re-run to verify "
-        "against the real NVIDIA hosted Nemotron-3-Embed-1B API."
+        "No NVIDIA_EMBEDDING_API_KEY configured in this environment. Set it in "
+        "fastapi-ai-service/.env to run live integration tests."
     ),
 )
 

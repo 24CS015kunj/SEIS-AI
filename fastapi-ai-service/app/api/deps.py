@@ -32,6 +32,7 @@ from app.core.retrieval.repository_structure import RepositoryStructureService
 from app.core.retrieval.retriever import VectorRetriever
 from app.domain.exceptions import SEISAuthorizationError
 from app.infra.cache.cache_client import RedisClient
+from app.infra.http.express_client import ExpressCallbackClient
 from app.infra.llm.gemini_client import NemotronGateway
 from app.infra.queue.task_queue import celery_app
 from app.infra.vectorstore.chroma_client import ChromaClient
@@ -39,6 +40,7 @@ from app.services.evaluation_service import EvaluationService
 from app.services.evolution_analysis_service import EvolutionAnalysisService
 from app.services.repository_analysis_service import RepositoryAnalysisService
 from app.services.repository_chat_service import RepositoryChatService
+from app.services.repository_explain_service import RepositoryExplainService
 from app.services.repository_processing_service import RepositoryProcessingService
 from app.services.semantic_search_service import SemanticSearchService
 
@@ -171,6 +173,12 @@ def get_cache_client() -> RedisClient:
     return RedisClient(settings=get_settings())
 
 
+@lru_cache(maxsize=1)
+def get_express_callback_client() -> ExpressCallbackClient:
+    """FastAPI dependency provider for outbound Express callback client."""
+    return ExpressCallbackClient(settings=get_settings())
+
+
 def get_task_queue() -> Celery:
     """FastAPI dependency provider for the process-wide Celery task queue (Task 11).
 
@@ -198,7 +206,7 @@ def get_nemotron_gateway() -> NemotronGateway:
     :func:`get_chroma_client`/:func:`get_cache_client` -- one
     ``NemotronGateway`` per process, constructed lazily (the underlying
     ``httpx.AsyncClient`` is built on first real call inside
-    ``NemotronGateway``, not here, so a missing ``NVIDIA_API_KEY`` never
+    ``NemotronGateway``, not here, so a missing ``NVIDIA_CHAT_API_KEY`` never
     prevents the process from starting).
     """
     return NemotronGateway(settings=get_settings())
@@ -212,7 +220,7 @@ def get_rag_optimizer() -> RAGOptimizer:
     and holds one ``httpx.AsyncClient`` for NVIDIA's hosted reranking
     API, so a new instance per request would leak a client per call
     instead of reusing one for the process lifetime. A missing
-    ``NVIDIA_API_KEY`` never prevents the process from starting; it
+    ``NVIDIA_EMBEDDING_API_KEY`` never prevents the process from starting; it
     only fails an actual rerank call (Task 54).
     """
     return RAGOptimizer(settings=get_settings())
@@ -223,7 +231,7 @@ def get_embedder() -> NemotronEmbedder:
     """FastAPI dependency provider for the process-wide embedding client
     (ADR-007). Same ``lru_cache`` process-lifetime singleton pattern as
     :func:`get_nemotron_gateway` -- constructed lazily, so a missing
-    ``NVIDIA_API_KEY`` never prevents the process from starting. First
+    ``NVIDIA_EMBEDDING_API_KEY`` never prevents the process from starting. First
     needed by a route/service provider in Task 31 (``EvolutionIndexer``
     requires it); no provider existed for it before this task since
     nothing above the Core layer called into embedding directly.
@@ -260,18 +268,21 @@ def get_semantic_search_service(
     settings: Settings = Depends(get_settings_dep),
     chroma_client: ChromaClient = Depends(get_chroma_client),
     embedder: NemotronEmbedder = Depends(get_embedder),
+    rag_optimizer: RAGOptimizer = Depends(get_rag_optimizer),
 ) -> SemanticSearchService:
-    """Dependency provider for SemanticSearchService (Task 53).
+    """Dependency provider for SemanticSearchService (Task 53 / Task #3).
 
-    Constructs the ``VectorRetriever`` (Task 19) inline from the two
-    process-wide infra singletons it needs -- no separate
-    ``get_vector_retriever`` provider, same "no DI provider for a
-    component with no independent lifecycle of its own" pattern
-    ``get_evolution_analysis_service`` already uses for its
-    ``EvolutionIndexer``.
+    Constructs ``VectorRetriever`` and ``LexicalRetriever`` inline and injects
+    ``RAGOptimizer`` for hybrid search and reranking.
     """
     retriever = VectorRetriever(chroma_client=chroma_client, embedder=embedder)
-    return SemanticSearchService(retriever=retriever, settings=settings)
+    lexical_retriever = LexicalRetriever(chroma_client=chroma_client)
+    return SemanticSearchService(
+        retriever=retriever,
+        lexical_retriever=lexical_retriever,
+        rag_optimizer=rag_optimizer,
+        settings=settings,
+    )
 
 
 def get_repository_chat_service(
@@ -361,6 +372,34 @@ def get_evolution_analysis_service(
         evolution_indexer=evolution_indexer,
         cache_client=cache_client,
         settings=settings,
+    )
+
+
+def get_explain_service(
+    settings: Settings = Depends(get_settings_dep),
+    chroma_client: ChromaClient = Depends(get_chroma_client),
+    embedder: NemotronEmbedder = Depends(get_embedder),
+    llm_gateway: NemotronGateway = Depends(get_nemotron_gateway),
+    rag_optimizer: RAGOptimizer = Depends(get_rag_optimizer),
+) -> RepositoryExplainService:
+    """Dependency provider for RepositoryExplainService (Task 93).
+
+    Constructs ``VectorRetriever``, ``LexicalRetriever``,
+    ``ContextBuilder``, ``PromptBuilder``, and ``CitationEngine`` inline --
+    none hold a connection/resource worth caching; same reasoning as
+    ``get_repository_chat_service`` (Task 54).
+    """
+    retriever = VectorRetriever(chroma_client=chroma_client, embedder=embedder)
+    lexical_retriever = LexicalRetriever(chroma_client=chroma_client)
+    context_builder = ContextBuilder(llm_gateway=llm_gateway)
+    return RepositoryExplainService(
+        retriever=retriever,
+        lexical_retriever=lexical_retriever,
+        rag_optimizer=rag_optimizer,
+        context_builder=context_builder,
+        prompt_builder=PromptBuilder(),
+        llm_gateway=llm_gateway,
+        citation_engine=CitationEngine(),
     )
 
 

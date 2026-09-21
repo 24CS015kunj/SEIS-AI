@@ -7,19 +7,43 @@ import jwt from "jsonwebtoken";
  */
 export const generateToken = (userId) => {
     return jwt.sign(
-        { userId },
+        { userId, type: "access" },
         process.env.JWT_SECRET,
         {
-            expiresIn: process.env.JWT_EXPIRES_IN || "7d",
+            expiresIn: process.env.JWT_EXPIRES_IN || "15m",
         }
     );
 };
 
 /**
- * Verify a JWT token
- * @param {string} token - JWT token string
+ * Generate a long-lived JWT refresh token for session rotation
+ * @param {string|mongoose.Types.ObjectId} userId
+ * @returns {string} Signed JWT refresh token
+ */
+export const generateRefreshToken = (userId) => {
+    return jwt.sign(
+        { userId, type: "refresh" },
+        process.env.JWT_REFRESH_SECRET || process.env.JWT_SECRET + "_refresh",
+        {
+            expiresIn: "7d",
+        }
+    );
+};
+
+/**
+ * Verify an Access JWT token
+ * @param {string} token
  * @returns {object} Decoded payload
  */
 export const verifyToken = (token) => {
     return jwt.verify(token, process.env.JWT_SECRET);
+};
+
+/**
+ * Verify a Refresh JWT token
+ * @param {string} token
+ * @returns {object} Decoded payload
+ */
+export const verifyRefreshToken = (token) => {
+    return jwt.verify(token, process.env.JWT_REFRESH_SECRET || process.env.JWT_SECRET + "_refresh");
 };

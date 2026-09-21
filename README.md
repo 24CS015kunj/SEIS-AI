@@ -1,5 +1,9 @@
 # SEIS — Software Evolution Intelligence System
 
+> **⚠️ STATUS NOTICE (added 2026-09-02, updated in the same day's later cleanup pass)**: This README describes an earlier project vision and technology stack (Gemini, self-hosted-only ChromaDB, FastAPI as a network-isolated private service) that has since evolved. For the current, code-verified architecture, see **[`docs/PROJECT_CONTEXT.md`](docs/PROJECT_CONTEXT.md)**. For the target production deployment architecture, see **[`docs/deployment/DEPLOYMENT_ARCHITECTURE.md`](docs/deployment/DEPLOYMENT_ARCHITECTURE.md)**. For a full map of the documentation tree, see **[`docs/DOCUMENTATION_INDEX.md`](docs/DOCUMENTATION_INDEX.md)**. The content below is preserved as originally written and was not rewritten as part of either cleanup pass.
+>
+> **Note**: `docs/` is intentionally excluded from git (see `.gitignore`'s "Internal working documentation" section) — this is a deliberate, pre-existing project convention, not an oversight, and was not changed by this cleanup.
+
 > **AI-powered intelligence layer for understanding how software repositories are structured, how they evolve, and how engineers can query them using grounded AI.**
 
 SEIS (Software Evolution Intelligence System) analyzes GitHub repositories as **living software systems**. It combines repository structure, source code, documentation, and commit history to produce engineering intelligence such as code hotspots, churn trends, architectural signals, documentation gaps, and grounded repository conversations.

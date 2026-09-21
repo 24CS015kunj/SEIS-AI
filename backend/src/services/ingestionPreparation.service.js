@@ -29,6 +29,35 @@ import * as githubServiceReal from "./github.service.js";
 import * as fastapiClientReal from "./fastapiClient.service.js";
 import { detectLanguage } from "../controllers/github.controller.js";
 import { getFastapiConfig } from "../config/fastapi.config.js";
+import Repository from "../models/repositories.model.js";
+
+/**
+ * Auto-fails stuck ingestion jobs older than maxAgeMinutes (Task #7).
+ * @param {number} [maxAgeMinutes=20]
+ * @returns {Promise<number>} Number of stuck jobs updated
+ */
+export async function cleanupStuckIngestions(maxAgeMinutes = 20) {
+    try {
+        const cutoff = new Date(Date.now() - maxAgeMinutes * 60 * 1000);
+        const result = await Repository.updateMany(
+            {
+                ingestionStatus: "processing",
+                updatedAt: { $lt: cutoff },
+            },
+            {
+                $set: {
+                    ingestionStatus: "failed",
+                    ingestionError: `Ingestion job timed out after ${maxAgeMinutes} minutes.`,
+                    ingestionStage: "failed",
+                },
+            }
+        );
+        return result.modifiedCount || 0;
+    } catch (err) {
+        console.error("[Ingestion Watchdog Error]", err.message);
+        return 0;
+    }
+}
 
 /**
  * GitHub's Contents API (used by getFileContent) does not return inline
@@ -39,7 +68,12 @@ import { getFastapiConfig } from "../config/fastapi.config.js";
  */
 export const GITHUB_INLINE_CONTENT_LIMIT_BYTES = 1_000_000;
 
-const DEFAULT_FETCH_CONCURRENCY = 5;
+const DEFAULT_FETCH_CONCURRENCY = 10;
+
+const IGNORED_PATH_PATTERNS = [
+    /(?:^|\/)(?:node_modules|\.git|\.venv|dist|build|coverage|__pycache__|\.next|\.output|vendor|target|out|scratch|tmp|\.gemini)\//i,
+    /\.(min\.js|min\.css|map|lock|lockb|bundle\.js)$/i,
+];
 
 /** Runs `fn` over `items` with at most `limit` in flight at once. */
 async function mapWithConcurrency(items, limit, fn) {
@@ -61,11 +95,8 @@ async function mapWithConcurrency(items, limit, fn) {
 
 /**
  * Classifies raw GitHub tree entries into eligible files vs. skipped
- * entries, using only the two signals that actually exist in this
- * project today: entry type (a "tree" is a directory, not a file) and
- * detectLanguage()'s existing extension map (§Task 37 instruction 6 --
- * no other unsupported/binary/generated-file rule exists anywhere in
- * this codebase; none is invented here beyond these two).
+ * entries, filtering directories, ignored paths (node_modules, dist, etc.),
+ * and unsupported languages.
  */
 export function classifyTreeEntries(treeEntries) {
     const eligible = [];
@@ -74,6 +105,12 @@ export function classifyTreeEntries(treeEntries) {
     for (const entry of treeEntries) {
         if (entry.type === "tree") {
             skipped.push({ path: entry.path, reason: "directory" });
+            continue;
+        }
+
+        const isIgnored = IGNORED_PATH_PATTERNS.some((pattern) => pattern.test(entry.path));
+        if (isIgnored) {
+            skipped.push({ path: entry.path, reason: "ignored_path" });
             continue;
         }
 

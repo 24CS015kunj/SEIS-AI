@@ -127,8 +127,9 @@ adapter in this codebase already follows.
 
 from __future__ import annotations
 
+import json
 import time
-from collections.abc import Awaitable, Callable
+from collections.abc import AsyncIterator, Awaitable, Callable
 from typing import Any, TypeVar
 
 import httpx
@@ -217,10 +218,10 @@ class NemotronGateway:
     # ------------------------------------------------------------------
     def _get_client(self) -> httpx.AsyncClient:
         if self._client is None:
-            api_key = self._settings.nvidia_api_key.get_secret_value()
+            api_key = self._settings.nvidia_chat_api_key.get_secret_value()
             if not api_key:
                 raise LLMError(
-                    "NVIDIA_API_KEY is not configured -- cannot call the NVIDIA "
+                    "NVIDIA_CHAT_API_KEY is not configured -- cannot call the NVIDIA "
                     "hosted Generation API.",
                     details={"model": self._settings.nemotron_model_name},
                 )
@@ -395,6 +396,52 @@ class NemotronGateway:
 
         response = await self._execute("generate_text", _call)
         return self._extract_text(response)
+
+    async def generate_text_stream(
+        self, prompt: str, system_instruction: str | None, temperature: float
+    ) -> AsyncIterator[str]:
+        """Executes a streaming chat-completion call, yielding string tokens as they arrive."""
+        client = self._get_client()
+        messages: list[dict[str, str]] = []
+        if system_instruction is not None:
+            messages.append({"role": "system", "content": system_instruction})
+        messages.append({"role": "user", "content": prompt})
+
+        payload: dict[str, Any] = {
+            "model": self._settings.nemotron_model_name,
+            "messages": messages,
+            "max_tokens": self._settings.nemotron_max_output_tokens,
+            "temperature": temperature,
+            "stream": True,
+            **_DISABLE_REASONING,
+        }
+
+        try:
+            async with client.stream("POST", _CHAT_COMPLETIONS_PATH, json=payload) as response:
+                response.raise_for_status()
+                async for line in response.aiter_lines():
+                    line = line.strip()
+                    if not line or line.startswith(":"):
+                        continue
+                    if line.startswith("data: "):
+                        data_str = line[6:].strip()
+                        if data_str == "[DONE]":
+                            break
+                        try:
+                            data = json.loads(data_str)
+                            choices = data.get("choices", [])
+                            if choices:
+                                delta = choices[0].get("delta", {})
+                                content = delta.get("content")
+                                if content:
+                                    yield content
+                        except Exception:
+                            continue
+        except Exception as exc:
+            self._log.warning("nemotron_gateway.stream_failed_fallback_to_sync", error=str(exc))
+            # Fallback to non-streaming generate_text if stream fails
+            full_text = await self.generate_text(prompt, system_instruction, temperature)
+            yield full_text
 
     def _extract_text(self, response: httpx.Response) -> str:
         try:

@@ -538,6 +538,23 @@ class JobSubmissionResult(BaseModel):
     submitted_at: datetime
 
 
+class CommitImpactAnalysis(BaseModel):
+    """Result of commit change impact and risk analysis (Task #4)."""
+
+    model_config = ConfigDict(frozen=True)
+
+    repository_id: str
+    commit_sha: str
+    risk_score: float = Field(ge=0.0, le=100.0)
+    risk_level: str
+    files_changed_count: int = Field(ge=0)
+    breaking_changes: list[str] = Field(default_factory=list)
+    affected_modules: list[str] = Field(default_factory=list)
+    recommendations: list[str] = Field(default_factory=list)
+    analyzed_at: datetime
+
+
+
 class ErrorDetail(BaseModel):
     """Inner payload of the JSON error envelope every exception handler
     in ``app.main`` returns (§14 Error Handling Strategy).

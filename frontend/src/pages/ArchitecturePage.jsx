@@ -1,10 +1,12 @@
 import React, { useEffect, useMemo, useState } from 'react';
-import { useParams, useSearchParams } from 'react-router-dom';
-import { AlertCircle, AlertTriangle, Boxes, SearchX } from 'lucide-react';
+import { Link, useParams, useSearchParams } from 'react-router-dom';
+import { AlertCircle, AlertTriangle, Boxes, Loader2, SearchX, Sparkles } from 'lucide-react';
 import {
   getRepositoryDashboard,
   getRepositoryFiles,
   getRepositoryAnalysis,
+  getArchitectureSummary,
+  getRepositoryDependencies,
 } from '../services/repositoryService';
 import { useRepositoryIdentity } from '../hooks/useRepositoryIdentity';
 import { useRepositoryHeader } from '../hooks/useRepositoryHeader';
@@ -12,10 +14,12 @@ import { buildRepositoryTree, findNodeByPath } from '../utils/buildRepositoryTre
 import CommandCenterSidebar from '../components/commandCenter/CommandCenterSidebar';
 import CommandCenterHeader from '../components/commandCenter/CommandCenterHeader';
 import CopilotDrawer from '../components/commandCenter/CopilotDrawer';
+import CopilotMarkdown from '../components/commandCenter/CopilotMarkdown';
 import ArchitectureOverviewCards from '../components/architecture/ArchitectureOverviewCards';
 import RepositoryTree from '../components/architecture/RepositoryTree';
 import ModuleDetailsPanel from '../components/architecture/ModuleDetailsPanel';
 import DependencyAnalysisPanel from '../components/architecture/DependencyAnalysisPanel';
+import CitationDrawer from '../components/chat/CitationDrawer';
 import EngineeringBackground from '../components/common/EngineeringBackground';
 
 const SUGGESTED_QUESTIONS = [
@@ -58,6 +62,8 @@ function ArchitecturePageContent({ repositoryId }) {
   const [mobileNavOpen, setMobileNavOpen] = useState(false);
   const [copilotOpen, setCopilotOpen] = useState(false);
   const [selectedNode, setSelectedNode] = useState(null);
+  const [citationDrawerOpen, setCitationDrawerOpen] = useState(false);
+  const [activeCitation, setActiveCitation] = useState(null);
 
   // Task 75: an optional `?file=<repo-relative path>` deep link -- set by
   // a Copilot citation click, but equally valid as a plain pasted/shared
@@ -78,6 +84,11 @@ function ArchitecturePageContent({ repositoryId }) {
 
   const [analysisStatus, setAnalysisStatus] = useState('idle');
   const [analysisData, setAnalysisData] = useState(null);
+
+  // Task 93: Architecture Summary (AI-generated)
+  const [archSummaryStatus, setArchSummaryStatus] = useState('idle'); // idle | loading | ready | error
+  const [archSummaryData, setArchSummaryData] = useState(null);  // { answer, citations }
+  const [archSummaryError, setArchSummaryError] = useState(null);
 
   // Retry button support (Task 70 audit finding: this fetch previously
   // had no recovery action besides a full page reload) -- same pattern
@@ -136,6 +147,45 @@ function ArchitecturePageContent({ repositoryId }) {
       cancelled = true;
     };
   }, [repositoryId, branchId, filesRetryNonce]);
+
+  const [dependencyStatus, setDependencyStatus] = useState('idle'); // idle | loading | ready | error
+  const [dependencyData, setDependencyData] = useState(null);
+
+  useEffect(() => {
+    if (!repositoryId || !branchId) {
+      setDependencyStatus('idle');
+      setDependencyData(null);
+      return;
+    }
+    let cancelled = false;
+    setDependencyStatus('loading');
+    getRepositoryDependencies(repositoryId, branchId)
+      .then((res) => {
+        if (cancelled) return;
+        setDependencyData(res);
+        setDependencyStatus('ready');
+      })
+      .catch(() => {
+        if (cancelled) return;
+        setDependencyStatus('error');
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [repositoryId, branchId]);
+
+  const handleRefreshDependencies = () => {
+    if (!repositoryId || !branchId) return;
+    setDependencyStatus('loading');
+    getRepositoryDependencies(repositoryId, branchId, { forceRefresh: true })
+      .then((res) => {
+        setDependencyData(res);
+        setDependencyStatus('ready');
+      })
+      .catch(() => {
+        setDependencyStatus('error');
+      });
+  };
 
   useEffect(() => {
     if (!identityReady) {
@@ -237,15 +287,99 @@ function ArchitecturePageContent({ repositoryId }) {
           ) : (
             <div className="max-w-[1240px] mx-auto flex flex-col gap-6">
               <div>
-                <div className="flex items-center gap-2 mb-1">
-                  <Boxes size={17} className="text-blue-600" aria-hidden="true" />
-                  <h1 className="text-[16px] font-bold text-slate-900 m-0">Architecture</h1>
+                <div className="flex items-center justify-between gap-3 mb-1">
+                  <div className="flex items-center gap-2">
+                    <Boxes size={17} className="text-blue-600" aria-hidden="true" />
+                    <h1 className="text-[16px] font-bold text-slate-900 m-0">Architecture</h1>
+                  </div>
+                  {/* Task 93: Summarize Architecture button */}
+                  {filesStatus === 'ready' && files.length > 0 && (
+                    <button
+                      type="button"
+                      id="summarize-architecture-btn"
+                      onClick={async () => {
+                        if (archSummaryStatus === 'loading') return;
+                        setArchSummaryStatus('loading');
+                        setArchSummaryData(null);
+                        setArchSummaryError(null);
+                        try {
+                          const data = await getArchitectureSummary(repositoryId);
+                          setArchSummaryData({ answer: data.answer, citations: data.citations ?? [] });
+                          setArchSummaryStatus('ready');
+                        } catch (err) {
+                          setArchSummaryError(err.response?.data?.message || 'Unable to generate summary. Make sure this repository has been ingested.');
+                          setArchSummaryStatus('error');
+                        }
+                      }}
+                      disabled={archSummaryStatus === 'loading'}
+                      aria-label="Summarize this repository architecture with AI"
+                      aria-busy={archSummaryStatus === 'loading'}
+                      className="inline-flex items-center gap-1.5 h-8 px-3 rounded-lg border border-blue-200 bg-blue-50 text-blue-700 hover:bg-blue-100 text-[12px] font-semibold transition-colors disabled:opacity-60 disabled:cursor-not-allowed shrink-0"
+                    >
+                      {archSummaryStatus === 'loading'
+                        ? <Loader2 size={13} className="animate-spin" aria-hidden="true" />
+                        : <Sparkles size={13} aria-hidden="true" />}
+                      <span>{archSummaryStatus === 'loading' ? 'Summarizing…' : 'Summarize Architecture'}</span>
+                    </button>
+                  )}
                 </div>
                 <p className="text-[12.5px] text-slate-500 m-0">
                   {headerRepo.owner}/{headerRepo.name} · {headerRepo.branch} — repository structure derived from the
                   latest synced source.
                 </p>
               </div>
+
+              {/* Task 93: Architecture Summary Card */}
+              {(archSummaryStatus === 'loading' || archSummaryStatus === 'ready' || archSummaryStatus === 'error') && (
+                <div
+                  role="region"
+                  aria-live="polite"
+                  aria-label="AI architecture summary"
+                  className="bg-blue-50 border border-blue-200 rounded-xl px-4 py-4 flex flex-col gap-3"
+                >
+                  <div className="flex items-center gap-2">
+                    <Sparkles size={14} className="text-blue-600 shrink-0" aria-hidden="true" />
+                    <span className="text-[13px] font-bold text-blue-800">AI Architecture Summary</span>
+                    {archSummaryStatus === 'loading' && (
+                      <Loader2 size={13} className="animate-spin text-blue-500 ml-1" aria-hidden="true" />
+                    )}
+                  </div>
+                  {archSummaryStatus === 'loading' ? (
+                    <div className="space-y-2 animate-pulse">
+                      <div className="h-3 bg-blue-100 rounded w-3/4" />
+                      <div className="h-3 bg-blue-100 rounded w-full" />
+                      <div className="h-3 bg-blue-100 rounded w-5/6" />
+                      <div className="h-3 bg-blue-100 rounded w-2/3" />
+                      <div className="h-3 bg-blue-100 rounded w-full" />
+                    </div>
+                  ) : archSummaryStatus === 'error' ? (
+                    <div className="flex items-start gap-2">
+                      <AlertCircle size={14} className="text-rose-500 shrink-0 mt-0.5" aria-hidden="true" />
+                      <p className="text-[12.5px] text-rose-600 m-0 leading-relaxed">{archSummaryError}</p>
+                    </div>
+                  ) : archSummaryData ? (
+                    <>
+                      <div className="text-[12.5px] text-slate-800 leading-relaxed prose-sm max-w-none">
+                        <CopilotMarkdown content={archSummaryData.answer} />
+                      </div>
+                      {archSummaryData.citations.length > 0 && (
+                        <div className="flex flex-wrap gap-1.5">
+                          {archSummaryData.citations.map((c, i) => (
+                            <Link
+                              key={c.chunk_id ?? i}
+                              to={`/architecture/${repositoryId}?file=${encodeURIComponent(c.file_path)}`}
+                              className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md bg-blue-100 text-blue-700 hover:bg-blue-200 text-[11px] font-mono font-semibold no-underline transition-colors"
+                              title={`${c.file_path} lines ${c.start_line}–${c.end_line}`}
+                            >
+                              [{i + 1}] {c.file_path.split('/').pop()}
+                            </Link>
+                          ))}
+                        </div>
+                      )}
+                    </>
+                  ) : null}
+                </div>
+              )}
 
               {unresolvedFilePath && (
                 <div className="flex items-start gap-2.5 rounded-xl bg-amber-50 border border-amber-200 px-3.5 py-3">
@@ -306,9 +440,20 @@ function ArchitecturePageContent({ repositoryId }) {
               </div>
 
               <DependencyAnalysisPanel
+                dependencyStatus={dependencyStatus}
+                dependencyData={dependencyData}
                 analysisStatus={analysisStatus}
                 analysis={analysisData}
                 repositoryHref={`/command-center/${repositoryId}`}
+                onRefresh={handleRefreshDependencies}
+                onSelectFile={(filePath) => {
+                  setActiveCitation({
+                    file_path: filePath,
+                    start_line: 1,
+                    end_line: 100,
+                  });
+                  setCitationDrawerOpen(true);
+                }}
               />
             </div>
           )}
@@ -323,6 +468,13 @@ function ArchitecturePageContent({ repositoryId }) {
           onClose={() => setCopilotOpen(false)}
         />
       )}
+
+      <CitationDrawer
+        repositoryId={repositoryId}
+        citation={activeCitation}
+        isOpen={citationDrawerOpen}
+        onClose={() => setCitationDrawerOpen(false)}
+      />
     </div>
   );
 }

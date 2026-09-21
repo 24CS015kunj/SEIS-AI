@@ -174,7 +174,7 @@ async function enrichCommitsWithFileChanges(commits, { repository, accessToken, 
         const filesChanged = files.map((f) => f.filename).filter(Boolean);
         const additions = files.reduce((sum, f) => sum + (f.additions || 0), 0);
         const deletions = files.reduce((sum, f) => sum + (f.deletions || 0), 0);
-        enrichedByHash.set(commit.githubSha, { filesChanged, additions, deletions });
+        enrichedByHash.set(commit.githubSha, { filesChanged, additions, deletions, hasStats: true });
 
         // Best-effort persistence -- a failure here must never fail the
         // analysis itself (the in-memory enrichment below already has
@@ -182,7 +182,7 @@ async function enrichCommitsWithFileChanges(commits, { repository, accessToken, 
         // one fetch instead of reading it back from Mongo.
         Commit.findOneAndUpdate(
             { repositoryId: repository._id, githubSha: commit.githubSha },
-            { filesChanged, changedFilesCount: filesChanged.length, additions, deletions }
+            { filesChanged, changedFilesCount: filesChanged.length, additions, deletions, hasStats: true }
         ).catch(() => {});
     }
 
@@ -318,3 +318,82 @@ export async function prepareAndSubmitAnalysis({
         result,
     };
 }
+
+/**
+ * Software Evolution evidence preparation and FastAPI submission (Task #9).
+ */
+export async function prepareAndSubmitEvolutionAnalysis({
+    repository,
+    branch,
+    accessToken,
+    githubService = githubServiceReal,
+    fastapiClient = fastapiClientReal,
+    config = getFastapiConfig(),
+    fetchConcurrency = DEFAULT_FETCH_CONCURRENCY,
+    correlationId = null,
+} = {}) {
+    const commitDocs = await ensureCommitsSynced({ repository, branch, accessToken, githubService });
+    if (commitDocs.length === 0) {
+        return {
+            blocked: true,
+            blockedReason: "No commit history is available to analyze yet.",
+        };
+    }
+
+    const sortedCommits = [...commitDocs]
+        .sort((a, b) => new Date(b.committedAt).getTime() - new Date(a.committedAt).getTime())
+        .slice(0, MAX_ANALYZED_COMMITS);
+
+    const analyzedCommits = await enrichCommitsWithFileChanges(sortedCommits, {
+        repository,
+        accessToken,
+        githubService,
+        fetchConcurrency,
+    });
+
+    const rankedPaths = rankFilesByModificationFrequency(analyzedCommits).slice(0, MAX_ANALYZED_FILES);
+
+    const currentFiles = rankedPaths.length
+        ? await File.find({ repositoryId: repository._id, branchId: branch._id, path: { $in: rankedPaths }, type: "file" })
+        : [];
+    const currentFileByPath = new Map(currentFiles.map((f) => [f.path, f]));
+    const eligiblePaths = rankedPaths.filter((path) => {
+        const file = currentFileByPath.get(path);
+        return Boolean(file) && file.size <= GITHUB_INLINE_CONTENT_LIMIT_BYTES;
+    });
+
+    const fetchResults = await mapWithConcurrency(eligiblePaths, fetchConcurrency, (path) =>
+        fetchOneFileContent(path, {
+            accessToken,
+            owner: repository.owner,
+            repo: repository.name,
+            ref: branch.name,
+            githubService,
+        })
+    );
+
+    const files = fetchResults
+        .filter((r) => r.content != null)
+        .map((r) => ({
+            file_path: r.path,
+            content: r.content,
+            language: currentFileByPath.get(r.path)?.language || null,
+        }));
+
+    const payload = {
+        analyzed_commit_sha: branch.latestCommitSha || branch.name,
+        commits: analyzedCommits.map(mapCommitForAnalysis),
+        files,
+    };
+
+    const result = await fastapiClient.submitEvolutionAnalysis(String(repository._id), payload, { config, correlationId });
+
+    return {
+        blocked: false,
+        analyzedCommitSha: branch.latestCommitSha || branch.name,
+        analyzedCommitCount: analyzedCommits.length,
+        analyzedFileCount: files.length,
+        result,
+    };
+}
+
