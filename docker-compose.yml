@@ -13,6 +13,8 @@ services:
       - ./fastapi-ai-service:/app
       # Do not override the installed node_modules/python packages in the container with the local one (if any)
       - /app/.venv
+    env_file:
+      - ./fastapi-ai-service/.env
     environment:
       - CHROMA_HOST=chromadb
       - CHROMA_PORT=8000
@@ -42,6 +44,8 @@ services:
     volumes:
       - ./fastapi-ai-service:/app
       - /app/.venv
+    env_file:
+      - ./fastapi-ai-service/.env
     environment:
       # Same Docker-service-name connectivity as `api` -- the worker
       # reads/writes the exact same Redis (status records, locks,

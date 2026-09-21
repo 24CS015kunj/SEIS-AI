@@ -28,8 +28,14 @@ __pycache__/
 .coverage
 htmlcov/
 
+# --- Environment / secrets ---
+.env
+.env.*
+!.env.example
+
 # --- OS / IDE ---
 .DS_Store
 Thumbs.db
 .idea/
 .vscode/
+

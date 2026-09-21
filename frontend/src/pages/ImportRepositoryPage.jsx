@@ -14,10 +14,14 @@ import {
   RefreshCw,
   SearchX,
   ArrowRight,
+  ChevronDown,
+  Plus,
+  LayoutGrid,
 } from 'lucide-react';
 import BrandMark from '../components/common/BrandMark';
 import FadeIn from '../components/common/FadeIn';
 import { listRepositories, syncRepositories } from '../services/repositoryService';
+import { listWorkspaces, getActiveWorkspace, setActiveWorkspace } from '../services/workspaceService';
 
 const VISIBILITY_FILTERS = [
   { value: 'all', label: 'All' },
@@ -26,18 +30,23 @@ const VISIBILITY_FILTERS = [
 ];
 
 /**
- * Task 45: repositories now come from the real
- * `GET /api/github/repositories` / `POST /api/github/repositories/sync`
- * endpoints (Task 37/39/43) instead of a hardcoded mock array. `workspaceId`
- * arrives via router state from WorkspaceCreationPage (Task 45) -- never
- * fabricated here, and never sent to the ingestion endpoint later (Task 44
- * derives it from `Repository.workspaceId`, not from any caller input).
+ * Repositories page with persistent workspace resolution and manual sync.
  */
 export default function ImportRepositoryPage() {
   const navigate = useNavigate();
   const location = useLocation();
-  const workspaceId = location.state?.workspaceId ?? null;
-  const workspaceName = location.state?.workspaceName ?? null;
+
+  const [workspaces, setWorkspaces] = useState([]);
+  const [activeWorkspace, setActiveWorkspaceState] = useState(() => {
+    if (location.state?.workspaceId) {
+      return {
+        _id: location.state.workspaceId,
+        name: location.state.workspaceName || 'My Workspace',
+      };
+    }
+    return getActiveWorkspace();
+  });
+  const [workspaceMenuOpen, setWorkspaceMenuOpen] = useState(false);
 
   const [repos, setRepos] = useState([]);
   const [loadStatus, setLoadStatus] = useState('loading'); // loading | ready | error
@@ -47,6 +56,39 @@ export default function ImportRepositoryPage() {
   const [visibility, setVisibility] = useState('all');
   const [language, setLanguage] = useState(null);
   const [selectedId, setSelectedId] = useState(null);
+
+  // Load existing workspaces to enable fast switching and auto-recovery
+  useEffect(() => {
+    let isMounted = true;
+    listWorkspaces()
+      .then((list) => {
+        if (!isMounted || !Array.isArray(list) || list.length === 0) return;
+        setWorkspaces(list);
+
+        setActiveWorkspaceState((current) => {
+          if (current?._id) {
+            const found = list.find((w) => w._id === current._id);
+            if (found) {
+              setActiveWorkspace(found);
+              return found;
+            }
+          }
+          const defaultWs = list[0];
+          setActiveWorkspace(defaultWs);
+          return defaultWs;
+        });
+      })
+      .catch(() => {});
+    return () => {
+      isMounted = false;
+    };
+  }, []);
+
+  const handleSelectWorkspace = (ws) => {
+    setActiveWorkspaceState(ws);
+    setActiveWorkspace(ws);
+    setWorkspaceMenuOpen(false);
+  };
 
   const loadRepositories = () => {
     setLoadStatus('loading');
@@ -65,7 +107,7 @@ export default function ImportRepositoryPage() {
     if (syncStatus === 'syncing') return;
     setSyncStatus('syncing');
     setSyncError(null);
-    syncRepositories(workspaceId)
+    syncRepositories(activeWorkspace?._id)
       .then(() => {
         setSyncStatus('idle');
         loadRepositories();
@@ -133,10 +175,10 @@ export default function ImportRepositoryPage() {
               <BrandMark size={36} />
               <div>
                 <h1 className="text-lg sm:text-xl font-bold text-slate-900 leading-tight">
-                  {workspaceName ? `Repositories — ${workspaceName}` : 'Import GitHub Repository'}
+                  Import GitHub Repositories
                 </h1>
                 <p className="text-[13.5px] text-slate-500 mt-1">
-                  Sync and select a repository to analyze with SEIS AI Copilot.
+                  Sync and select a repository to connect to SEIS AI Copilot.
                 </p>
               </div>
             </div>
@@ -149,15 +191,69 @@ export default function ImportRepositoryPage() {
             </Link>
           </div>
 
-          {!workspaceId && (
-            <div className="mx-6 sm:mx-8 mt-6 flex items-start gap-2.5 rounded-xl bg-amber-50 border border-amber-200 px-3.5 py-3">
-              <AlertCircle size={15} className="text-amber-600 shrink-0 mt-0.5" aria-hidden="true" />
-              <p className="text-[12.5px] text-amber-900 leading-relaxed m-0">
-                No workspace was selected. Repositories you sync now won't be associated with a
-                workspace, and ingestion will be blocked until they are. <Link to="/workspace" className="font-semibold underline">Choose a workspace</Link>.
-              </p>
+          {/* ---------- Active Workspace Selector Toolbar ---------- */}
+          <div className="bg-slate-50 border-b border-[#E2E8F0] px-6 sm:px-8 py-3 flex flex-wrap items-center justify-between gap-3">
+            <div className="flex items-center gap-2 relative">
+              <span className="text-[11px] font-bold uppercase tracking-wider text-slate-400">
+                Workspace:
+              </span>
+              <div className="relative">
+                <button
+                  type="button"
+                  onClick={() => setWorkspaceMenuOpen((v) => !v)}
+                  className="inline-flex items-center gap-2 px-3 py-1.5 rounded-lg border border-slate-200 bg-white hover:bg-slate-100 text-slate-800 text-[13px] font-semibold transition-colors shadow-2xs cursor-pointer"
+                >
+                  <LayoutGrid size={14} className="text-blue-600 shrink-0" />
+                  <span className="max-w-[200px] truncate">{activeWorkspace?.name || 'Loading workspaces…'}</span>
+                  <ChevronDown size={13} className={`text-slate-400 transition-transform ${workspaceMenuOpen ? 'rotate-180' : ''}`} />
+                </button>
+
+                {workspaceMenuOpen && (
+                  <div className="absolute left-0 top-full mt-1.5 w-64 bg-white border border-slate-200 rounded-xl shadow-lg z-30 p-1.5">
+                    <div className="text-[10.5px] font-bold uppercase tracking-wider text-slate-400 px-2.5 py-1.5">
+                      Your Workspaces ({workspaces.length})
+                    </div>
+                    <div className="max-h-48 overflow-y-auto flex flex-col gap-0.5">
+                      {workspaces.map((ws) => (
+                        <button
+                          key={ws._id}
+                          type="button"
+                          onClick={() => handleSelectWorkspace(ws)}
+                          className={`w-full flex items-center justify-between px-2.5 py-2 rounded-lg text-left text-[12.5px] transition-colors cursor-pointer ${
+                            activeWorkspace?._id === ws._id
+                              ? 'bg-blue-50 text-blue-700 font-semibold'
+                              : 'text-slate-700 hover:bg-slate-50'
+                          }`}
+                        >
+                          <span className="truncate">{ws.name}</span>
+                          {activeWorkspace?._id === ws._id && (
+                            <Check size={14} className="text-blue-600 shrink-0" />
+                          )}
+                        </button>
+                      ))}
+                    </div>
+                    <div className="border-t border-slate-100 mt-1 pt-1">
+                      <Link
+                        to="/workspace"
+                        className="flex items-center gap-2 px-2.5 py-2 text-[12.5px] font-medium text-blue-600 hover:bg-blue-50 rounded-lg transition-colors"
+                      >
+                        <Plus size={13} />
+                        Create New Workspace
+                      </Link>
+                    </div>
+                  </div>
+                )}
+              </div>
             </div>
-          )}
+
+            <Link
+              to="/workspace"
+              className="inline-flex items-center gap-1 text-[12px] font-semibold text-blue-600 hover:text-blue-700 hover:underline"
+            >
+              <Plus size={13} />
+              New Workspace
+            </Link>
+          </div>
 
           {/* ---------- Search + filters + sync ---------- */}
           <div className="px-6 sm:px-8 pt-6">

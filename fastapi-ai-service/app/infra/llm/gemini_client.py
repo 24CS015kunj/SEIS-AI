@@ -277,8 +277,8 @@ class NemotronGateway:
             try:
                 async for attempt in AsyncRetrying(
                     retry=retry_if_exception(_is_rate_limit_error),
-                    stop=stop_after_attempt(4),
-                    wait=wait_exponential(multiplier=1, max=20),
+                    stop=stop_after_attempt(2),
+                    wait=wait_exponential(multiplier=0.5, max=2),
                     reraise=True,
                 ):
                     with attempt:
@@ -331,7 +331,8 @@ class NemotronGateway:
             self._log_failure(exc, start, status_code=status_code)
             if status_code == 429:
                 raise LLMRateLimitError(
-                    f"Nemotron {operation} rate-limited", details={"operation": operation}
+                    f"Nemotron {operation} rate-limited: API quota or rate limit exceeded.",
+                    details={"operation": operation, "model": self._settings.nemotron_model_name},
                 ) from exc
             raise LLMError(
                 f"Nemotron {operation} failed",

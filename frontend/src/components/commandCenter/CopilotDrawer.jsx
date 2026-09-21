@@ -1,8 +1,61 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { Link } from 'react-router-dom';
-import { X, Sparkles, Send, Loader2, AlertCircle, ArrowUpRight } from 'lucide-react';
+import { X, Sparkles, Send, Loader2, AlertCircle, ArrowUpRight, RotateCcw } from 'lucide-react';
 import { sendChatMessage } from '../../services/repositoryService';
 import CopilotMarkdown from './CopilotMarkdown';
+
+/**
+ * Categorizes and formats errors into actionable, human-friendly messages
+ * with clear troubleshooting guidance and retry capability.
+ */
+function formatChatError(err) {
+  const status = err.response?.status;
+  const code = err.response?.data?.code;
+  const rawMsg = err.response?.data?.message || err.message || '';
+
+  if (
+    status === 429 ||
+    code === 'RATE_LIMIT_EXCEEDED' ||
+    code === 'LLM_RATE_LIMIT' ||
+    /rate[- ]limit|quota/i.test(rawMsg)
+  ) {
+    return {
+      title: 'Rate Limit / Quota Exceeded',
+      message:
+        'The AI service rate limit or API quota has been reached. Please check your API credits or try again in a few moments.',
+      canRetry: true,
+    };
+  }
+
+  if (
+    status === 503 ||
+    code === 'SERVICE_UNAVAILABLE' ||
+    code === 'SERVICE_DISCONNECTED' ||
+    /socket hang up|ECONNREFUSED|ECONNRESET|offline/i.test(rawMsg)
+  ) {
+    return {
+      title: 'AI Service Disconnected / Quota Limited',
+      message:
+        'The AI service connection was interrupted. This occurs when the AI container is restarting or when the external AI provider (NVIDIA API) is quota-limited.',
+      canRetry: true,
+    };
+  }
+
+  if (status === 504 || code === 'TIMEOUT' || /timeout|timed out/i.test(rawMsg)) {
+    return {
+      title: 'Request Timed Out',
+      message:
+        'The AI service took too long to generate a response. Please try asking again.',
+      canRetry: true,
+    };
+  }
+
+  return {
+    title: 'Assistant Error',
+    message: rawMsg || 'The AI Copilot could not answer that question. Please try again.',
+    canRetry: true,
+  };
+}
 
 /**
  * Task 75: a citation is only ever rendered as clickable when its
@@ -113,11 +166,18 @@ export default function CopilotDrawer({ repository, repositoryId, suggestedQuest
     messagesEndRef.current?.scrollIntoView({ block: 'end' });
   }, [messages, sending]);
 
-  async function submitMessage(text) {
+  async function submitMessage(text, options = {}) {
     const trimmed = text.trim();
     if (!trimmed || sending || !canChat) return;
 
-    setMessages((prev) => [...prev, { id: `u-${Date.now()}`, role: 'user', content: trimmed }]);
+    const { retryErrorId } = options;
+
+    if (retryErrorId) {
+      // Cleanly replace the prior error bubble with a fresh submission
+      setMessages((prev) => prev.filter((m) => m.id !== retryErrorId));
+    } else {
+      setMessages((prev) => [...prev, { id: `u-${Date.now()}`, role: 'user', content: trimmed }]);
+    }
     setInput('');
     setSending(true);
 
@@ -136,15 +196,17 @@ export default function CopilotDrawer({ repository, repositoryId, suggestedQuest
         },
       ]);
     } catch (err) {
+      const formatted = formatChatError(err);
       setMessages((prev) => [
         ...prev,
         {
           id: `e-${Date.now()}`,
           role: 'assistant',
           isError: true,
-          content:
-            err.response?.data?.message ||
-            'The AI Copilot could not answer that question. Please try again.',
+          errorTitle: formatted.title,
+          content: formatted.message,
+          retryPrompt: trimmed,
+          canRetry: formatted.canRetry,
         },
       ]);
     } finally {
@@ -229,20 +291,32 @@ export default function CopilotDrawer({ repository, repositoryId, suggestedQuest
                         <Sparkles size={13} className="text-blue-600" aria-hidden="true" />
                       )}
                     </span>
-                    <div className="flex flex-col gap-1.5 min-w-0">
-                      <div
-                        className={`min-w-0 rounded-[2px_12px_12px_12px] px-3.5 py-3 border ${
-                          m.isError
-                            ? 'bg-rose-50 border-rose-200 text-rose-700 text-[12.5px] leading-relaxed'
-                            : 'bg-slate-50 border-slate-200 text-slate-800'
-                        }`}
-                      >
-                        {/* Task 78: only real assistant answers go through
-                            Markdown rendering -- error bubbles are static,
-                            app-generated strings (never model output) and
-                            stay plain text exactly as before. */}
-                        {m.isError ? m.content : <CopilotMarkdown content={m.content} />}
-                      </div>
+                    <div className="flex flex-col gap-1.5 min-w-0 max-w-[85%]">
+                      {m.isError ? (
+                        <div className="min-w-0 rounded-[2px_12px_12px_12px] p-3 border bg-rose-50 border-rose-200 text-rose-800 text-[12.5px] leading-relaxed flex flex-col gap-2">
+                          <div className="flex items-center gap-1.5 font-semibold text-rose-900 text-[12.5px]">
+                            <span>{m.errorTitle || 'Assistant Error'}</span>
+                          </div>
+                          <p className="m-0 text-slate-700 text-[12px] leading-relaxed">{m.content}</p>
+                          {m.canRetry && m.retryPrompt && (
+                            <div className="pt-1 flex items-center justify-end">
+                              <button
+                                type="button"
+                                onClick={() => submitMessage(m.retryPrompt, { retryErrorId: m.id })}
+                                disabled={sending}
+                                className="inline-flex items-center gap-1.5 px-2.5 py-1 text-[11.5px] font-medium text-rose-700 bg-white border border-rose-200 rounded-md hover:bg-rose-100/70 active:scale-95 transition-all focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-rose-500/40 disabled:opacity-50 disabled:cursor-not-allowed shadow-xs"
+                              >
+                                <RotateCcw size={11} className={sending ? 'animate-spin' : ''} aria-hidden="true" />
+                                <span>Retry</span>
+                              </button>
+                            </div>
+                          )}
+                        </div>
+                      ) : (
+                        <div className="min-w-0 rounded-[2px_12px_12px_12px] px-3.5 py-3 border bg-slate-50 border-slate-200 text-slate-800">
+                          <CopilotMarkdown content={m.content} />
+                        </div>
+                      )}
                       {m.citations && m.citations.length > 0 && (
                         <div className="flex flex-wrap gap-1 px-0.5">
                           {m.citations.map((c, i) => {

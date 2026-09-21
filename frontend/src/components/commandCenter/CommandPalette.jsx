@@ -111,7 +111,7 @@ export default function CommandPalette({
         perform: () => onOpenRepoSwitcher?.(),
       },
     ];
-  }, [repositoryId, navigate, onOpenCopilot, onOpenRepoSwitcher]);
+  }, [repositoryId, navigate, onOpenCopilot, onOpenRepoSwitcher, onOpenSemanticSearch]);
 
   // Dynamic repository items
   const repoItems = useMemo(() => {

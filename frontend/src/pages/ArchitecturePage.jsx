@@ -16,6 +16,7 @@ import ArchitectureOverviewCards from '../components/architecture/ArchitectureOv
 import RepositoryTree from '../components/architecture/RepositoryTree';
 import ModuleDetailsPanel from '../components/architecture/ModuleDetailsPanel';
 import DependencyAnalysisPanel from '../components/architecture/DependencyAnalysisPanel';
+import FileCodePreviewDrawer from '../components/common/FileCodePreviewDrawer';
 import EngineeringBackground from '../components/common/EngineeringBackground';
 
 const SUGGESTED_QUESTIONS = [
@@ -57,6 +58,7 @@ function ArchitecturePageContent({ repositoryId }) {
 
   const [mobileNavOpen, setMobileNavOpen] = useState(false);
   const [copilotOpen, setCopilotOpen] = useState(false);
+  const [previewFilePath, setPreviewFilePath] = useState(null);
   const [selectedNode, setSelectedNode] = useState(null);
 
   // Task 75: an optional `?file=<repo-relative path>` deep link -- set by
@@ -323,6 +325,12 @@ function ArchitecturePageContent({ repositoryId }) {
           onClose={() => setCopilotOpen(false)}
         />
       )}
+
+      <FileCodePreviewDrawer
+        repositoryId={repositoryId}
+        filePath={previewFilePath}
+        onClose={() => setPreviewFilePath(null)}
+      />
     </div>
   );
 }

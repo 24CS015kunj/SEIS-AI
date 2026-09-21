@@ -9,7 +9,6 @@ import Analysis from "../models/analyses.model.js";
 import * as githubService from "../services/github.service.js";
 import * as emailService from "../services/email.service.js";
 import { prepareAndSubmitIngestion } from "../services/ingestionPreparation.service.js";
-import { prepareAndSubmitAnalysis } from "../services/analysisPreparation.service.js";
 import { submitChatMessage } from "../services/fastapiClient.service.js";
 
 // Analysis.analysisType this feature persists under (Task 69) -- reuses
@@ -210,6 +209,12 @@ export const syncRepositories = async (req, res, next) => {
             }
 
             resolvedWorkspaceId = workspace._id;
+        } else {
+            // Auto-assign user's most recent workspace if available so repositories are never orphaned
+            const defaultWorkspace = await Workspace.findOne({ ownerId: userId }).sort({ createdAt: -1 });
+            if (defaultWorkspace) {
+                resolvedWorkspaceId = defaultWorkspace._id;
+            }
         }
 
         // Fetch repositories from GitHub API
@@ -255,7 +260,7 @@ export const syncRepositories = async (req, res, next) => {
             const saved = await Repository.findOneAndUpdate(
                 { userId, githubRepoId: String(repo.id) },
                 mappedRepo,
-                { upsert: true, new: true, setDefaultsOnInsert: true }
+                { upsert: true, returnDocument: "after", setDefaultsOnInsert: true }
             );
 
             syncedRepositories.push(saved);
@@ -332,7 +337,7 @@ export const getBranches = async (req, res, next) => {
             const savedBranch = await Branch.findOneAndUpdate(
                 { repositoryId: repository._id, name: branch.name },
                 mappedBranch,
-                { upsert: true, new: true, setDefaultsOnInsert: true }
+                { upsert: true, returnDocument: "after", setDefaultsOnInsert: true }
             );
 
             branches.push(savedBranch);
@@ -430,7 +435,7 @@ export const getCommits = async (req, res, next) => {
             await Commit.findOneAndUpdate(
                 { repositoryId: repository._id, githubSha: item.sha },
                 mappedCommit,
-                { upsert: true, new: true, setDefaultsOnInsert: true }
+                { upsert: true, returnDocument: "after", setDefaultsOnInsert: true }
             );
         }
 
@@ -533,7 +538,7 @@ export const getFiles = async (req, res, next) => {
                 const saved = await File.findOneAndUpdate(
                     { repositoryId: repository._id, branchId: branch._id, path: item.path },
                     mappedFile,
-                    { upsert: true, new: true, setDefaultsOnInsert: true }
+                    { upsert: true, returnDocument: "after", setDefaultsOnInsert: true }
                 );
 
                 savedFiles.push(saved);
@@ -665,7 +670,7 @@ async function resolveOrSyncDefaultBranch({ repository, accessToken, getReposito
                     latestCommitSha: b.commit?.sha || null,
                     lastFetchedAt: now,
                 },
-                { upsert: true, new: true, setDefaultsOnInsert: true }
+                { upsert: true, returnDocument: "after", setDefaultsOnInsert: true }
             );
             branches.push(saved);
         }
@@ -784,7 +789,7 @@ export const makeGetDashboard = (deps = {}) => async (req, res, next) => {
                             language: fileType === "file" ? detectLanguage(item.path) : null,
                             lastFetchedAt: now,
                         },
-                        { upsert: true, new: true, setDefaultsOnInsert: true }
+                        { upsert: true, returnDocument: "after", setDefaultsOnInsert: true }
                     );
                     files.push(saved);
                 }
@@ -878,7 +883,7 @@ export const makeGetDashboard = (deps = {}) => async (req, res, next) => {
                         changedFilesCount: item.files?.length || 0,
                         filesChanged: item.files ? item.files.map((f) => f.filename) : [],
                     },
-                    { upsert: true, new: true, setDefaultsOnInsert: true }
+                    { upsert: true, returnDocument: "after", setDefaultsOnInsert: true }
                 );
                 commits.push(saved);
             }
@@ -1327,6 +1332,7 @@ export const makeChatWithRepository = (deps = {}) => async (req, res, next) => {
                     : 502;
             return res.status(statusCode).json({
                 success: false,
+                code: result.errorCode || "AI_CHAT_ERROR",
                 message: result.reason || "The AI service could not answer this question.",
             });
         }
@@ -1344,3 +1350,6 @@ export const makeChatWithRepository = (deps = {}) => async (req, res, next) => {
 };
 
 export const chatWithRepository = makeChatWithRepository();
+
+
+

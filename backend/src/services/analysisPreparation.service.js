@@ -121,7 +121,7 @@ async function ensureCommitsSynced({ repository, branch, accessToken, githubServ
                 changedFilesCount: item.files?.length || 0,
                 filesChanged: item.files ? item.files.map((f) => f.filename) : [],
             },
-            { upsert: true, new: true, setDefaultsOnInsert: true }
+            { upsert: true, returnDocument: "after", setDefaultsOnInsert: true }
         );
         commits.push(saved);
     }

@@ -1,8 +1,9 @@
 import React from 'react';
 import { useLocation, Link } from 'react-router-dom';
-import { LayoutGrid, GitBranch, Boxes, TrendingUp, Sparkles, X, LogOut } from 'lucide-react';
+import { LayoutGrid, GitBranch, Boxes, TrendingUp, Sparkles, X, LogOut, Layers } from 'lucide-react';
 import { BrandGlyph } from '../common/BrandMark';
 import { useAuth } from '../../context/AuthContext';
+import { getActiveWorkspace } from '../../services/workspaceService';
 
 /**
  * `page` distinguishes the real destinations this shared shell nav can
@@ -46,6 +47,7 @@ const NAV_ITEMS = [
 export default function CommandCenterSidebar({ repository, repositoryId, mobileOpen, onCloseMobile }) {
   const location = useLocation();
   const { user, logout } = useAuth();
+  const activeWorkspace = getActiveWorkspace();
   return (
     <>
       {mobileOpen && (
@@ -78,8 +80,27 @@ export default function CommandCenterSidebar({ repository, repositoryId, mobileO
           </button>
         </div>
 
-        <div className="px-4 py-4 border-b border-slate-200">
-          <div className="text-[10.5px] font-bold uppercase tracking-wider text-slate-400 mb-1.5">
+        {/* Active Workspace Info */}
+        <div className="px-4 py-2.5 border-b border-slate-100 bg-slate-50/70">
+          <div className="flex items-center justify-between gap-1">
+            <span className="text-[10px] font-bold uppercase tracking-wider text-slate-400">
+              Workspace
+            </span>
+            <Link
+              to="/workspace"
+              className="text-[11px] font-medium text-blue-600 hover:text-blue-700 hover:underline"
+            >
+              Switch
+            </Link>
+          </div>
+          <div className="flex items-center gap-1.5 mt-0.5 text-[12.5px] font-semibold text-slate-800 truncate" title={activeWorkspace?.name || 'My Workspace'}>
+            <Layers size={13} className="text-blue-500 shrink-0" />
+            <span className="truncate">{activeWorkspace?.name || 'My Workspace'}</span>
+          </div>
+        </div>
+
+        <div className="px-4 py-3.5 border-b border-slate-200">
+          <div className="text-[10.5px] font-bold uppercase tracking-wider text-slate-400 mb-1">
             Active Repository
           </div>
           <div className="text-[13.5px] font-semibold text-slate-900 truncate">{repository.name}</div>

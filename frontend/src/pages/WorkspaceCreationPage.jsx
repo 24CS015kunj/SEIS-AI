@@ -18,7 +18,7 @@ import {
 } from 'lucide-react';
 import BrandMark, { BrandGlyph } from '../components/common/BrandMark';
 import FadeIn from '../components/common/FadeIn';
-import { createWorkspace, listWorkspaces } from '../services/workspaceService';
+import { createWorkspace, listWorkspaces, setActiveWorkspace } from '../services/workspaceService';
 
 const STEPS = [
   { number: 1, status: 'complete' },
@@ -91,6 +91,7 @@ export default function WorkspaceCreationPage() {
   }, []);
 
   const useExistingWorkspace = (workspace) => {
+    setActiveWorkspace(workspace);
     navigate('/import-repository', {
       state: { workspaceId: workspace._id, workspaceName: workspace.name },
     });
@@ -120,6 +121,7 @@ export default function WorkspaceCreationPage() {
     setSubmitStatus('submitting');
     try {
       const workspace = await createWorkspace(name.trim());
+      setActiveWorkspace(workspace);
       setCreatedWorkspace(workspace);
       setSubmitStatus('success');
     } catch (err) {

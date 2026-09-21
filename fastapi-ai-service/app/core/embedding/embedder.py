@@ -148,8 +148,8 @@ class NemotronEmbedder:
     async def _run_with_retry(self, fn: Callable[[], Awaitable[T]]) -> T:
         async for attempt in AsyncRetrying(
             retry=retry_if_exception(_is_rate_limit_error),
-            stop=stop_after_attempt(4),
-            wait=wait_exponential(multiplier=1, max=20),
+            stop=stop_after_attempt(2),
+            wait=wait_exponential(multiplier=0.5, max=2),
             reraise=True,
         ):
             with attempt:
