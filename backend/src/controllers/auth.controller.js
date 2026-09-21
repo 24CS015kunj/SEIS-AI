@@ -112,9 +112,14 @@ export const githubCallback = async (req, res, next) => {
         delete sanitizedUser.accessToken;
         delete sanitizedUser.__v;
 
-        // If redirect query or browser navigation is preferred
+        // Remove the one-time OAuth code from the browser URL after login.
+        const acceptsJson = req.query.json === "true" || req.headers.accept?.includes("application/json");
+        if (!acceptsJson && process.env.FRONTEND_URL) {
+            return res.redirect(process.env.FRONTEND_URL);
+        }
+
         if (req.query.redirect === "true" && process.env.FRONTEND_URL) {
-            return res.redirect(`${process.env.FRONTEND_URL}?token=${token}`);
+            return res.redirect(process.env.FRONTEND_URL);
         }
 
         return res.status(isNewUser ? 201 : 200).json({
