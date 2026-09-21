@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { getRepository } from '../services/repositoryService';
 
 /**
@@ -33,6 +33,18 @@ export function useRepositoryIdentity(repositoryId) {
   const [repository, setRepository] = useState(null);
   const [error, setError] = useState(null);
 
+  // Guards `refresh()` (below) against writing a resolved response into
+  // state after this hook's owning component has unmounted -- the exact
+  // scenario the Source Control ingestion-status poll hits every time a
+  // user navigates away while a poll request is still in flight.
+  const mountedRef = useRef(true);
+  useEffect(() => {
+    mountedRef.current = true;
+    return () => {
+      mountedRef.current = false;
+    };
+  }, []);
+
   useEffect(() => {
     if (!repositoryId) {
       setStatus('idle');
@@ -64,5 +76,22 @@ export function useRepositoryIdentity(repositoryId) {
     };
   }, [repositoryId]);
 
-  return { repository, status, error };
+  // Stable across renders (memoized on `repositoryId` alone) so a caller
+  // that polls this on an interval -- Source Control's ingestion-status
+  // poll (§11) is the only current caller -- can depend on it without the
+  // interval being torn down and recreated on every tick.
+  const refresh = useCallback(async () => {
+    if (!repositoryId) return null;
+    try {
+      const repo = await getRepository(repositoryId);
+      if (!mountedRef.current) return repo;
+      setRepository(repo);
+      setStatus('ready');
+      return repo;
+    } catch (err) {
+      return null;
+    }
+  }, [repositoryId]);
+
+  return { repository, status, error, refresh };
 }

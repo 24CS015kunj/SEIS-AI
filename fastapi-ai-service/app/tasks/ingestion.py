@@ -78,6 +78,7 @@ from app.core.processing.chunker import ASTChunker
 from app.core.processing.document_processor import DocumentProcessor
 from app.core.processing.metadata_generator import MetadataGenerator
 from app.infra.cache.cache_client import RedisClient
+from app.infra.http.express_client import ExpressCallbackClient
 from app.infra.queue.task_queue import celery_app
 from app.infra.vectorstore.chroma_client import ChromaClient
 from app.services.repository_ingestion_worker_service import RepositoryIngestionWorkerService
@@ -105,6 +106,11 @@ def _get_embedding_cache() -> EmbeddingCache:
     return EmbeddingCache(redis_client=_get_cache_client(), settings=get_settings())
 
 
+@lru_cache(maxsize=1)
+def _get_express_callback_client() -> ExpressCallbackClient:
+    return ExpressCallbackClient(settings=get_settings())
+
+
 def _build_worker_service() -> RepositoryIngestionWorkerService:
     """Composition root for one task invocation's dependencies.
 
@@ -123,6 +129,7 @@ def _build_worker_service() -> RepositoryIngestionWorkerService:
         embedder=_get_embedder(),
         embedding_cache=_get_embedding_cache(),
         cache_client=_get_cache_client(),
+        express_callback_client=_get_express_callback_client(),
     )
 
 

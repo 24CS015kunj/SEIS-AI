@@ -30,12 +30,12 @@ from app.infra.vectorstore.chroma_client import _CHROMADB_AVAILABLE, ChromaClien
 _settings_for_skip_check = get_settings()
 
 pytestmark = pytest.mark.skipif(
-    not _CHROMADB_AVAILABLE or not _settings_for_skip_check.nvidia_api_key.get_secret_value(),
+    not _CHROMADB_AVAILABLE or not _settings_for_skip_check.nvidia_embedding_api_key.get_secret_value(),
     reason=(
-        "Requires both chromadb (not installed in the native Windows venv, "
-        "ADR-004) and a real NVIDIA_API_KEY (ADR-007) -- neither is "
-        "available in this environment. Run inside the Task 14 Linux/Docker "
-        "environment with NVIDIA_API_KEY set to verify against live "
+        "Requires a real ChromaDB server (CHROMA_HOST/CHROMA_PORT per "
+        "ADR-004) and a real NVIDIA_EMBEDDING_API_KEY (ADR-007) -- neither is "
+        "available in this environment. Run in a full Docker/dev "
+        "environment with NVIDIA_EMBEDDING_API_KEY set to verify against live "
         "infrastructure."
     ),
 )

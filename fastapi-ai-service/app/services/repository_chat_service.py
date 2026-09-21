@@ -50,7 +50,8 @@ accepted and echoed back on ``ChatResponse`` exactly as received, never
 generated or substituted.
 """
 
-from __future__ import annotations
+import json
+from collections.abc import AsyncIterator
 
 import structlog
 
@@ -236,6 +237,100 @@ class RepositoryChatService:
             answer=cleaned_answer,
             citations=citations,
         )
+
+    async def chat_stream(self, request: ChatRequest) -> AsyncIterator[str]:
+        """Streams answers to ``request.message`` formatted as SSE line frames.
+        
+        Yields events:
+          - data: {"type": "start", "conversation_id": "..."}
+          - data: {"type": "token", "content": "..."}
+          - data: {"type": "done", "citations": [...], "token_usage": {...}}
+        """
+        self._validate(request)
+
+        history = await self._conversation_store.load_history(
+            request.repository_id, request.conversation_id
+        )
+
+        yield f"data: {json.dumps({'type': 'start', 'conversation_id': request.conversation_id})}\n\n"
+
+        structure_intent = detect_structure_intent(request.message)
+        if structure_intent is not None:
+            response = await self._answer_structure_query(request, history, structure_intent)
+            yield f"data: {json.dumps({'type': 'token', 'content': response.answer})}\n\n"
+            citations_data = [c.model_dump(mode="json") for c in response.citations]
+            yield f"data: {json.dumps({'type': 'done', 'citations': citations_data, 'token_usage': None})}\n\n"
+            return
+
+        retrieval_query = self._query_rewriter.rewrite(request.message, history)
+
+        semantic_candidates = await self._retriever.retrieve(
+            retrieval_query.text,
+            request.repository_id,
+            top_k=_RETRIEVAL_CANDIDATE_POOL,
+            score_threshold=self.settings.retriever_similarity_threshold,
+        )
+        try:
+            lexical_candidates = await self._lexical_retriever.retrieve(
+                retrieval_query.text, request.repository_id, top_k=_LEXICAL_CANDIDATE_POOL
+            )
+        except VectorDBError as exc:
+            self._log.warning(
+                "repository_chat.lexical_retrieval_failed",
+                repository_id=request.repository_id,
+                error=str(exc),
+            )
+            lexical_candidates = []
+        candidates = _merge_candidates(
+            semantic_candidates, lexical_candidates, max_total=_MERGED_CANDIDATE_POOL
+        )
+        reranked = await self._rag_optimizer.rerank_chunks(retrieval_query.text, candidates)
+
+        context_block = await self._context_builder.build_context(reranked)
+        grounded_prompt = self._prompt_builder.build_chat_prompt(
+            context_block.text, history, request.message
+        )
+
+        full_answer_chunks: list[str] = []
+        try:
+            async for token in self._llm.generate_text_stream(
+                prompt=grounded_prompt.user_prompt,
+                system_instruction=grounded_prompt.system_instruction,
+                temperature=_CHAT_TEMPERATURE,
+            ):
+                full_answer_chunks.append(token)
+                yield f"data: {json.dumps({'type': 'token', 'content': token})}\n\n"
+        except Exception as exc:
+            self._log.warning("repository_chat.stream_failed", error=str(exc))
+            full_text = await self._llm.generate_text(
+                prompt=grounded_prompt.user_prompt,
+                system_instruction=grounded_prompt.system_instruction,
+                temperature=_CHAT_TEMPERATURE,
+            )
+            full_answer_chunks = [full_text]
+            yield f"data: {json.dumps({'type': 'token', 'content': full_text})}\n\n"
+
+        full_answer = "".join(full_answer_chunks)
+        cleaned_answer, citations = self._citation_engine.extract_citations(
+            full_answer, context_block.citation_map
+        )
+
+        prompt_tokens = await self._llm.count_tokens(
+            (grounded_prompt.system_instruction or "") + grounded_prompt.user_prompt
+        )
+        completion_tokens = await self._llm.count_tokens(full_answer)
+        token_usage = {
+            "prompt_tokens": prompt_tokens,
+            "completion_tokens": completion_tokens,
+            "total_tokens": prompt_tokens + completion_tokens,
+        }
+
+        await self._conversation_store.append_turn(
+            request.repository_id, request.conversation_id, request.message, cleaned_answer
+        )
+
+        citations_data = [c.model_dump(mode="json") for c in citations]
+        yield f"data: {json.dumps({'type': 'done', 'citations': citations_data, 'token_usage': token_usage})}\n\n"
 
     async def _answer_structure_query(
         self,

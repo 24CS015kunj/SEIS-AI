@@ -1,6 +1,7 @@
 version: '3.8'
 
 services:
+  # Python 3.13 FastAPI AI Microservice (Task #7 / Task #8)
   api:
     build:
       context: ./fastapi-ai-service
@@ -9,9 +10,7 @@ services:
     ports:
       - "8000:8000"
     volumes:
-      # Map the source code for hot-reloading
       - ./fastapi-ai-service:/app
-      # Do not override the installed node_modules/python packages in the container with the local one (if any)
       - /app/.venv
     env_file:
       - ./fastapi-ai-service/.env
@@ -19,19 +18,25 @@ services:
       - CHROMA_HOST=chromadb
       - CHROMA_PORT=8000
       - TASK_QUEUE_BROKER_URL=redis://redis:6379/0
-      # Ensure python output is visible immediately in the logs
+      - EXPRESS_BASE_URL=http://host.docker.internal:5000
       - PYTHONUNBUFFERED=1
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
     depends_on:
-      - redis
-      - chromadb
+      redis:
+        condition: service_healthy
+      chromadb:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD-SHELL", "curl -f http://localhost:8000/health/live || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
     restart: unless-stopped
 
+  # Celery Ingestion Worker
   worker:
-    # Task 40: the Celery worker that actually consumes the ingestion
-    # jobs `api` (Task 30) enqueues. Same build context/Dockerfile/image
-    # as `api` -- only the container command differs -- so the worker
-    # always ships with the exact same application code (no separate
-    # Dockerfile to keep in sync).
     build:
       context: ./fastapi-ai-service
       dockerfile: Dockerfile
@@ -47,40 +52,117 @@ services:
     env_file:
       - ./fastapi-ai-service/.env
     environment:
-      # Same Docker-service-name connectivity as `api` -- the worker
-      # reads/writes the exact same Redis (status records, locks,
-      # broker) and ChromaDB (vector upserts) `api` uses, per Task 40's
-      # "update the SAME status record" / "reuse the existing
-      # ChromaClient" requirements.
       - CHROMA_HOST=chromadb
       - CHROMA_PORT=8000
       - TASK_QUEUE_BROKER_URL=redis://redis:6379/0
+      - EXPRESS_BASE_URL=http://host.docker.internal:5000
       - PYTHONUNBUFFERED=1
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
     depends_on:
-      - redis
-      - chromadb
+      redis:
+        condition: service_healthy
+      chromadb:
+        condition: service_healthy
     restart: unless-stopped
 
+  # Node.js Express Backend Gateway (Task #8)
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: seis-backend
+    ports:
+      - "5000:5000"
+    environment:
+      - PORT=5000
+      - MONGODB_URL=${MONGODB_URL}
+      - JWT_SECRET=${JWT_SECRET:-seis_ai_jwt_secret_key_development_2026_super_secure}
+      - FASTAPI_BASE_URL=http://api:8000
+      # The Dockerized frontend is nginx on port 80 (http://localhost), not
+      # the Vite dev server on :5173 -- this value is both the CORS allowed
+      # origin (app.js) and where githubCallback redirects the browser with
+      # the token after a successful GitHub exchange (auth.controller.js).
+      # The old :5173 default pointed both of those at a port nothing in
+      # Docker listens on.
+      - FRONTEND_URL=${FRONTEND_URL:-http://localhost}
+      # GitHub OAuth (auth.controller.js) -- previously absent from this
+      # service entirely, so the containerized backend had no client
+      # id/secret and built redirect_uri="undefined". The callback URL is
+      # the same browser-facing value as local dev (backend/.env) because
+      # Express publishes port 5000 identically in both environments; only
+      # FRONTEND_URL differs between them.
+      - GITHUB_CLIENT_ID=${GITHUB_CLIENT_ID}
+      - GITHUB_CLIENT_SECRET=${GITHUB_CLIENT_SECRET}
+      - GITHUB_CALLBACK_URL=${GITHUB_CALLBACK_URL:-http://localhost:5000/api/auth/github/callback?redirect=true}
+    depends_on:
+      api:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD-SHELL", "curl -f http://localhost:5000/api/health || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
+    restart: unless-stopped
+
+  # React 19 Frontend Web Client (Task #8)
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+    container_name: seis-frontend
+    ports:
+      - "80:80"
+    depends_on:
+      backend:
+        condition: service_healthy
+    healthcheck:
+      # 127.0.0.1, not localhost: this image's /etc/hosts resolves
+      # "localhost" to ::1 first, but nginx only listens on 0.0.0.0 (IPv4) --
+      # wget then hits a real IPv6 connection-refused, permanently failing
+      # the healthcheck despite nginx serving real traffic correctly over
+      # IPv4 the whole time. This compose-level healthcheck overrides the
+      # Dockerfile's own HEALTHCHECK instruction, so both were fixed.
+      test: ["CMD-SHELL", "wget --quiet --tries=1 --spider http://127.0.0.1/ || exit 1"]
+      interval: 15s
+      timeout: 5s
+      retries: 3
+      start_period: 5s
+    restart: unless-stopped
+
+  # Redis Cache & Celery Broker
   redis:
     image: redis:7-alpine
     container_name: fastapi-redis
+    command: redis-server --appendonly yes
     ports:
       - "6379:6379"
+    volumes:
+      - redisdata:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 5
     restart: unless-stopped
 
+  # Chroma Vector Database
   chromadb:
-    # Pinned to match ADR-004/06_DEPLOYMENT_GUIDE.md exactly. `:latest`
-    # previously resolved to server v1.0.0, incompatible with the pinned
-    # `chromadb==0.6.2` Python client (requirements-vectorstore.txt) --
-    # confirmed via a real `KeyError: '_type'` on collection creation in
-    # the prior infrastructure audit. 0.6.3 matches the client.
     image: chromadb/chroma:0.6.3
     container_name: fastapi-chromadb
     ports:
       - "8001:8000"
     volumes:
       - chromadata:/chroma/chroma
+    healthcheck:
+      test: ["CMD-SHELL", "curl -f http://localhost:8000/api/v1/heartbeat || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
     restart: unless-stopped
 
 volumes:
   chromadata:
+  redisdata:

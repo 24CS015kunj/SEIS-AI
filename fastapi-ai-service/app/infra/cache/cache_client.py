@@ -42,6 +42,7 @@ environment variable) is the documented architecture, not a shortcut.
 
 from __future__ import annotations
 
+import asyncio
 import time
 from collections.abc import AsyncIterator, Awaitable, Callable
 from contextlib import asynccontextmanager
@@ -91,19 +92,27 @@ class RedisClient:
     # SDK client construction (lazy, async connection pool)
     # ------------------------------------------------------------------
     def _get_client(self) -> redis.Redis:
+        try:
+            current_loop = asyncio.get_running_loop()
+        except RuntimeError:
+            current_loop = None
+
+        if self._client is not None:
+            client_loop = getattr(self, "_created_loop", None)
+            if client_loop is not None and (
+                client_loop.is_closed()
+                or (current_loop is not None and client_loop is not current_loop)
+            ):
+                self._client = None
+
         if self._client is None:
-            # `decode_responses=True`: every method here works in `str`,
-            # matching the frozen `get_cache`/`set_cache` signatures --
-            # never leaking raw `bytes` to callers. Explicit socket
-            # timeouts so a hung TCP connection can't block a request
-            # indefinitely; `health_check` adds its own outer timeout
-            # as a second line of defense.
             self._client = redis.Redis.from_url(
                 self._settings.task_queue_broker_url,
                 decode_responses=True,
                 socket_connect_timeout=5,
                 socket_timeout=5,
             )
+            self._created_loop = current_loop
         return self._client
 
     # ------------------------------------------------------------------

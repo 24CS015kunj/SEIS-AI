@@ -9,7 +9,10 @@ import Analysis from "../models/analyses.model.js";
 import * as githubService from "../services/github.service.js";
 import * as emailService from "../services/email.service.js";
 import { prepareAndSubmitIngestion } from "../services/ingestionPreparation.service.js";
-import { submitChatMessage } from "../services/fastapiClient.service.js";
+import { prepareAndSubmitAnalysis, prepareAndSubmitEvolutionAnalysis } from "../services/analysisPreparation.service.js";
+import { submitChatMessage, streamChatMessage, submitCommitImpactAnalysis } from "../services/fastapiClient.service.js";
+import { submitExplanation } from "../services/fastapiClient.service.js";
+import { buildDependencyGraph } from "../services/dependencyAnalyzer.service.js";
 
 // Analysis.analysisType this feature persists under (Task 69) -- reuses
 // the existing enum value exactly (no schema change needed): commit
@@ -76,6 +79,12 @@ function serializeRepositoryIdentity(repository) {
         htmlUrl: repository.htmlUrl,
         lastFetchedAt: repository.lastFetchedAt,
         workspaceId: repository.workspaceId,
+        ingestionStatus: repository.ingestionStatus || "pending",
+        ingestionStage: repository.ingestionStage || null,
+        chunkCount: repository.chunkCount || 0,
+        lastIngestedAt: repository.lastIngestedAt || null,
+        ingestionError: repository.ingestionError || null,
+        lastIngestedCommitSha: repository.lastIngestedCommitSha || null,
     };
 }
 
@@ -289,8 +298,16 @@ export const syncRepositories = async (req, res, next) => {
 /**
  * Fetch and synchronize branches for a given repository
  * GET /api/github/repositories/:repositoryId/branches
+ *
+ * Wrapped in the same injectable-`deps` factory shape as `makeGetDashboard`
+ * (below) -- previously a plain export, which meant it had no seam a test
+ * could use to substitute a fake GitHub response, and this file had zero
+ * test coverage for GitHub-credential failures on this endpoint as a
+ * result. `getBranches` (the real, default-wired export routes actually
+ * use) is unchanged in behavior.
  */
-export const getBranches = async (req, res, next) => {
+export const makeGetBranches = (deps = {}) => async (req, res, next) => {
+    const { getRepositoryBranches: getBranchesImpl = githubService.getRepositoryBranches } = deps;
     try {
         const { repositoryId } = req.params;
 
@@ -315,7 +332,7 @@ export const getBranches = async (req, res, next) => {
         }
 
         // Fetch branches from GitHub
-        const githubBranches = await githubService.getRepositoryBranches(
+        const githubBranches = await getBranchesImpl(
             req.user.accessToken,
             repository.owner,
             repository.name
@@ -353,11 +370,22 @@ export const getBranches = async (req, res, next) => {
     }
 };
 
+export const getBranches = makeGetBranches();
+
 /**
  * Fetch and synchronize commits for a given repository and branch
  * GET /api/github/repositories/:repositoryId/branches/:branchId/commits
+ *
+ * Same injectable-`deps` factory shape as `makeGetBranches` above, for the
+ * same reason -- no prior test seam existed for this endpoint's GitHub-
+ * credential-failure path. `getCommits` (the real, default-wired export
+ * routes actually use) is unchanged in behavior.
  */
-export const getCommits = async (req, res, next) => {
+export const makeGetCommits = (deps = {}) => async (req, res, next) => {
+    const {
+        getBranchCommits: getBranchCommitsImpl = githubService.getBranchCommits,
+        getCommitDetail: getCommitDetailImpl = githubService.getCommitDetail,
+    } = deps;
     try {
         const { repositoryId, branchId } = req.params;
         const page = Math.max(1, parseInt(req.query.page, 10) || 1);
@@ -397,14 +425,69 @@ export const getCommits = async (req, res, next) => {
         }
 
         // Fetch commits from GitHub using branch name
-        const githubCommits = await githubService.getBranchCommits(
+        const githubCommits = await getBranchCommitsImpl(
             req.user.accessToken,
             repository.owner,
             repository.name,
             { sha: branch.name, page, perPage: limit }
         );
 
+        // Query existing commits to preserve already-enriched stats
+        const shas = githubCommits.map((item) => item.sha);
+        const existingCommits = await Commit.find({
+            repositoryId: repository._id,
+            githubSha: { $in: shas },
+        });
+        const existingMap = new Map(existingCommits.map((c) => [c.githubSha, c]));
+
+        // Determine which commits in this page need detail enrichment
+        const needsEnrichment = [];
         for (const item of githubCommits) {
+            const existing = existingMap.get(item.sha);
+            if (!item.stats && (!existing || !existing.hasStats)) {
+                needsEnrichment.push(item.sha);
+            }
+        }
+
+        // Enrich missing commits in parallel batches (concurrency: 5)
+        const enrichedDetails = new Map();
+        if (needsEnrichment.length > 0) {
+            const batchSize = 5;
+            for (let i = 0; i < needsEnrichment.length; i += batchSize) {
+                const chunk = needsEnrichment.slice(i, i + batchSize);
+                await Promise.all(
+                    chunk.map(async (sha) => {
+                        try {
+                            const detail = await getCommitDetailImpl(
+                                req.user.accessToken,
+                                repository.owner,
+                                repository.name,
+                                sha
+                            );
+                            if (detail) {
+                                const additions = detail.stats?.additions ?? (detail.files ? detail.files.reduce((s, f) => s + (f.additions || 0), 0) : null);
+                                const deletions = detail.stats?.deletions ?? (detail.files ? detail.files.reduce((s, f) => s + (f.deletions || 0), 0) : null);
+                                const filesChanged = detail.files ? detail.files.map((f) => f.filename).filter(Boolean) : [];
+                                enrichedDetails.set(sha, {
+                                    additions,
+                                    deletions,
+                                    changedFilesCount: detail.files?.length ?? filesChanged.length,
+                                    filesChanged,
+                                    hasStats: additions !== null && deletions !== null,
+                                });
+                            }
+                        } catch (err) {
+                            // Non-fatal if single commit detail call fails
+                        }
+                    })
+                );
+            }
+        }
+
+        for (const item of githubCommits) {
+            const existing = existingMap.get(item.sha);
+            const detail = enrichedDetails.get(item.sha);
+
             const mappedCommit = {
                 repositoryId: repository._id,
                 branchId: branch._id,
@@ -426,11 +509,30 @@ export const getCommits = async (req, res, next) => {
                 committedAt: item.commit?.author?.date
                     ? new Date(item.commit.author.date)
                     : (item.commit?.committer?.date ? new Date(item.commit.committer.date) : new Date()),
-                additions: item.stats?.additions || 0,
-                deletions: item.stats?.deletions || 0,
-                changedFilesCount: item.files?.length || 0,
-                filesChanged: item.files ? item.files.map((f) => f.filename) : [],
             };
+
+            if (item.stats) {
+                mappedCommit.additions = item.stats.additions;
+                mappedCommit.deletions = item.stats.deletions;
+                mappedCommit.hasStats = true;
+            } else if (detail) {
+                mappedCommit.additions = detail.additions;
+                mappedCommit.deletions = detail.deletions;
+                mappedCommit.changedFilesCount = detail.changedFilesCount;
+                mappedCommit.filesChanged = detail.filesChanged;
+                mappedCommit.hasStats = detail.hasStats;
+            } else if (existing && existing.hasStats) {
+                mappedCommit.additions = existing.additions;
+                mappedCommit.deletions = existing.deletions;
+                mappedCommit.changedFilesCount = existing.changedFilesCount;
+                mappedCommit.filesChanged = existing.filesChanged;
+                mappedCommit.hasStats = existing.hasStats;
+            }
+
+            if (item.files) {
+                mappedCommit.changedFilesCount = item.files.length;
+                mappedCommit.filesChanged = item.files.map((f) => f.filename);
+            }
 
             await Commit.findOneAndUpdate(
                 { repositoryId: repository._id, githubSha: item.sha },
@@ -458,6 +560,8 @@ export const getCommits = async (req, res, next) => {
         next(error);
     }
 };
+
+export const getCommits = makeGetCommits();
 
 /**
  * Fetch and synchronize repository file tree metadata
@@ -857,33 +961,41 @@ export const makeGetDashboard = (deps = {}) => async (req, res, next) => {
         if (commits.length === 0) {
             const githubCommits = await getCommitsImpl(accessToken, repository.owner, repository.name, { sha: branch.name, page: 1, perPage: 15 });
             for (const item of githubCommits) {
+                const mappedCommit = {
+                    repositoryId: repository._id,
+                    branchId: branch._id,
+                    githubSha: item.sha,
+                    message: item.commit?.message || "No commit message",
+                    author: {
+                        githubId: item.author?.id ? String(item.author.id) : null,
+                        username: item.author?.login || item.commit?.author?.name || null,
+                        name: item.commit?.author?.name || null,
+                        email: item.commit?.author?.email || null,
+                    },
+                    committer: {
+                        githubId: item.committer?.id ? String(item.committer.id) : null,
+                        username: item.committer?.login || item.commit?.committer?.name || null,
+                        name: item.commit?.committer?.name || null,
+                        email: item.commit?.committer?.email || null,
+                    },
+                    commitUrl: item.html_url,
+                    committedAt: item.commit?.author?.date ? new Date(item.commit.author.date) : new Date(),
+                };
+
+                if (item.stats) {
+                    mappedCommit.additions = item.stats.additions;
+                    mappedCommit.deletions = item.stats.deletions;
+                    mappedCommit.hasStats = true;
+                }
+                if (item.files) {
+                    mappedCommit.changedFilesCount = item.files.length;
+                    mappedCommit.filesChanged = item.files.map((f) => f.filename);
+                }
+
                 const saved = await Commit.findOneAndUpdate(
                     { repositoryId: repository._id, githubSha: item.sha },
-                    {
-                        repositoryId: repository._id,
-                        branchId: branch._id,
-                        githubSha: item.sha,
-                        message: item.commit?.message || "No commit message",
-                        author: {
-                            githubId: item.author?.id ? String(item.author.id) : null,
-                            username: item.author?.login || item.commit?.author?.name || null,
-                            name: item.commit?.author?.name || null,
-                            email: item.commit?.author?.email || null,
-                        },
-                        committer: {
-                            githubId: item.committer?.id ? String(item.committer.id) : null,
-                            username: item.committer?.login || item.commit?.committer?.name || null,
-                            name: item.commit?.committer?.name || null,
-                            email: item.commit?.committer?.email || null,
-                        },
-                        commitUrl: item.html_url,
-                        committedAt: item.commit?.author?.date ? new Date(item.commit.author.date) : new Date(),
-                        additions: item.stats?.additions || 0,
-                        deletions: item.stats?.deletions || 0,
-                        changedFilesCount: item.files?.length || 0,
-                        filesChanged: item.files ? item.files.map((f) => f.filename) : [],
-                    },
-                    { upsert: true, returnDocument: "after", setDefaultsOnInsert: true }
+                    mappedCommit,
+                    { upsert: true, new: true, setDefaultsOnInsert: true }
                 );
                 commits.push(saved);
             }
@@ -1224,6 +1336,43 @@ export const makeIngestRepository = (deps = {}) => async (req, res, next) => {
             });
         }
 
+        const forceReingest = Boolean(req.body?.force);
+
+        // Check if repository is stuck in processing for > 5 minutes
+        const isStuckProcessing =
+            repository.ingestionStatus === "processing" &&
+            repository.updatedAt &&
+            Date.now() - new Date(repository.updatedAt).getTime() > 5 * 60 * 1000;
+
+        // Idempotency Check 1: If repository is currently processing (and not stuck/forced), do not spawn duplicate jobs
+        if (!forceReingest && !isStuckProcessing && repository.ingestionStatus === "processing") {
+            return res.status(200).json({
+                success: true,
+                alreadyProcessing: true,
+                ingestionStatus: "processing",
+                ingestionStage: repository.ingestionStage || "processing",
+                message: "Ingestion is already processing for this repository.",
+            });
+        }
+
+        // Idempotency Check 2: If repository is already completed for the current commit SHA, reuse existing ingestion
+        if (
+            !forceReingest &&
+            repository.ingestionStatus === "completed" &&
+            branch.latestCommitSha &&
+            repository.lastIngestedCommitSha === branch.latestCommitSha
+        ) {
+            return res.status(200).json({
+                success: true,
+                alreadyCompleted: true,
+                ingestionStatus: "completed",
+                chunkCount: repository.chunkCount || 0,
+                lastIngestedAt: repository.lastIngestedAt,
+                lastIngestedCommitSha: repository.lastIngestedCommitSha,
+                message: `Repository is already fully ingested for commit ${branch.latestCommitSha.slice(0, 7)}.`,
+            });
+        }
+
         const result = await prepareAndSubmitIngestionImpl({
             repository,
             branch,
@@ -1239,11 +1388,36 @@ export const makeIngestRepository = (deps = {}) => async (req, res, next) => {
         }
 
         if (result.submittedJob) {
-            return res.status(202).json({ success: true, ...result });
+            repository.ingestionStatus = "processing";
+            repository.ingestionStage = "queued";
+            repository.lastIngestedCommitSha = branch.latestCommitSha;
+            repository.ingestionError = null;
+            if (typeof repository.save === "function") {
+                await repository.save();
+            }
+
+            return res.status(202).json({
+                success: true,
+                ...result,
+                ingestionStatus: "processing",
+                lastIngestedCommitSha: branch.latestCommitSha,
+            });
         }
 
         if (result.filesEligible === 0) {
-            return res.status(200).json({ success: true, ...result });
+            repository.ingestionStatus = "completed";
+            repository.ingestionStage = "completed";
+            repository.lastIngestedCommitSha = branch.latestCommitSha;
+            repository.lastIngestedAt = new Date();
+            if (typeof repository.save === "function") {
+                await repository.save();
+            }
+
+            return res.status(200).json({
+                success: true,
+                ...result,
+                ingestionStatus: "completed",
+            });
         }
 
         // Eligible files existed but the FastAPI submission itself failed
@@ -1351,5 +1525,384 @@ export const makeChatWithRepository = (deps = {}) => async (req, res, next) => {
 
 export const chatWithRepository = makeChatWithRepository();
 
+/**
+ * POST /api/github/repositories/:repositoryId/chat/stream
+ * Streams AI Copilot repository chat tokens from FastAPI via Server-Sent Events (SSE).
+ */
+export const streamChatWithRepository = async (req, res, next) => {
+    try {
+        const { repositoryId } = req.params;
+        const { message, conversation_id: conversationId } = req.body ?? {};
+
+        if (!mongoose.Types.ObjectId.isValid(repositoryId)) {
+            return res.status(400).json({
+                success: false,
+                message: "Invalid repository ID format.",
+            });
+        }
+
+        if (typeof message !== "string" || message.trim().length === 0) {
+            return res.status(400).json({
+                success: false,
+                message: "A non-empty message is required.",
+            });
+        }
+
+        if (typeof conversationId !== "string" || conversationId.trim().length === 0) {
+            return res.status(400).json({
+                success: false,
+                message: "A non-empty conversation_id is required.",
+            });
+        }
+
+        const repository = await Repository.findOne({
+            _id: repositoryId,
+            userId: req.user._id,
+        });
+
+        if (!repository) {
+            return res.status(404).json({
+                success: false,
+                message: "Repository not found or access denied.",
+            });
+        }
+
+        await streamChatMessage(repositoryId, { message, conversation_id: conversationId }, res);
+    } catch (error) {
+        next(error);
+    }
+};
+
+/**
+ * POST /api/github/repositories/:repositoryId/explain
+ *
+ * Proxies to RepositoryExplainService (FastAPI, Task 93) which runs the
+ * same RAG/LLM pipeline as chat but with task-scoped prompt templates:
+ *  - task_type='code_explanation' explains a specific file (file_path required)
+ *  - task_type='architecture_summary' summarises the whole repository
+ */
+export const explainRepository = async (req, res, next) => {
+    try {
+        const { repositoryId } = req.params;
+        const { task_type: taskType, file_path: filePath } = req.body ?? {};
+
+        if (!mongoose.Types.ObjectId.isValid(repositoryId)) {
+            return res.status(400).json({
+                success: false,
+                message: "Invalid repository ID format.",
+            });
+        }
+
+        if (taskType !== "code_explanation" && taskType !== "architecture_summary") {
+            return res.status(400).json({
+                success: false,
+                message: "task_type must be 'code_explanation' or 'architecture_summary'.",
+            });
+        }
+
+        if (taskType === "code_explanation") {
+            if (typeof filePath !== "string" || filePath.trim().length === 0) {
+                return res.status(400).json({
+                    success: false,
+                    message: "file_path is required when task_type is 'code_explanation'.",
+                });
+            }
+            if (filePath.includes("..")) {
+                return res.status(400).json({
+                    success: false,
+                    message: "Directory traversal sequences (..) are not allowed in file_path.",
+                });
+            }
+        }
+
+        const repository = await Repository.findOne({
+            _id: repositoryId,
+            userId: req.user._id,
+        });
+
+        if (!repository) {
+            return res.status(404).json({
+                success: false,
+                message: "Repository not found or access denied.",
+            });
+        }
+
+        const payload = {
+            task_type: taskType,
+            ...(taskType === "code_explanation" ? { file_path: filePath.trim() } : {}),
+        };
+
+        const result = await submitExplanation(repositoryId, payload);
+
+        if (!result.success) {
+            return res.status(result.statusCode || 502).json({
+                success: false,
+                errorCode: result.errorCode || "FASTAPI_EXPLAIN_ERROR",
+                message: result.reason || "FastAPI repository explanation service failed.",
+            });
+        }
+
+        return res.json({
+            success: true,
+            taskType: result.taskType,
+            filePath: result.filePath,
+            answer: result.answer,
+            citations: result.citations,
+        });
+    } catch (error) {
+        next(error);
+    }
+};
+
+            return res.status(404).json({
+                success: false,
+                message: "Branch not found for this repository.",
+            });
+        }
+
+        const cacheKey = `${repository._id}:${branch._id}:${branch.latestCommitSha || branch.name}`;
+        if (req.query.forceRefresh !== "true" && _depGraphCache.has(cacheKey)) {
+            return res.json({
+                success: true,
+                cached: true,
+                ..._depGraphCache.get(cacheKey),
+            });
+        }
+
+        // Fetch all files in branch
+        let files = await File.find({ repositoryId: repository._id, branchId: branch._id });
+        if (files.length === 0) {
+            const treeSha = branch.latestCommitSha || branch.name;
+            const treeData = await getTreeImpl(req.user.accessToken, repository.owner, repository.name, treeSha, { recursive: true });
+            if (treeData && Array.isArray(treeData.tree)) {
+                const now = new Date();
+                for (const item of treeData.tree) {
+                    const ext = path.extname(item.path);
+                    const fileType = item.type === "tree" ? "directory" : "file";
+                    const saved = await File.findOneAndUpdate(
+                        { repositoryId: repository._id, branchId: branch._id, path: item.path },
+                        {
+                            repositoryId: repository._id,
+                            branchId: branch._id,
+                            path: item.path,
+                            name: path.basename(item.path),
+                            extension: ext ? ext.replace(".", "") : null,
+                            type: fileType,
+                            size: item.size || 0,
+                            sha: item.sha,
+                            language: fileType === "file" ? detectLanguage(item.path) : null,
+                            lastFetchedAt: now,
+                        },
+                        { upsert: true, new: true, setDefaultsOnInsert: true }
+                    );
+                    files.push(saved);
+                }
+            }
+        }
+
+        const codeExtensions = new Set([".js", ".jsx", ".ts", ".tsx", ".py", ".css", ".json"]);
+        const ignoredDirs = ["node_modules/", ".git/", "dist/", "build/", ".venv/", "venv/"];
+
+        const codeFiles = files.filter((f) => {
+            if (f.type !== "file") return false;
+            if (ignoredDirs.some((d) => f.path.startsWith(d))) return false;
+            const ext = path.extname(f.path).toLowerCase();
+            return codeExtensions.has(ext);
+        });
+
+        const filesToParse = codeFiles.slice(0, 150);
+        const fileContents = [];
+
+        const batchSize = 10;
+        for (let i = 0; i < filesToParse.length; i += batchSize) {
+            const batch = filesToParse.slice(i, i + batchSize);
+            const results = await Promise.all(
+                batch.map(async (f) => {
+                    try {
+                        const contentObj = await getFileContentImpl(
+                            req.user.accessToken,
+                            repository.owner,
+                            repository.name,
+                            f.path,
+                            branch.latestCommitSha || branch.name
+                        );
+                        return { path: f.path, language: f.language, content: contentObj?.content || "" };
+                    } catch (err) {
+                        return { path: f.path, language: f.language, content: "" };
+                    }
+                })
+            );
+            results.forEach((r) => {
+                if (r.content) fileContents.push(r);
+            });
+        }
+
+        const graphResult = buildDependencyGraph(fileContents, files);
+        _depGraphCache.set(cacheKey, graphResult);
+
+        return res.json({
+            success: true,
+            cached: false,
+            ...graphResult,
+        });
+    } catch (error) {
+        next(error);
+    }
+};
+
+export const getDependencyGraph = makeGetDependencyGraph();
+
+/**
+ * Evaluates architectural change risk score, breaking API modifications, and commit impact (Task #4).
+ * POST /api/github/repositories/:repositoryId/commits/:commitSha/impact
+ */
+export const makeAnalyzeCommitImpact = (deps = {}) => async (req, res, next) => {
+    const { submitCommitImpactAnalysis: submitImpactImpl = submitCommitImpactAnalysis } = deps;
+
+    try {
+        const { repositoryId, commitSha } = req.params;
+
+        if (!mongoose.Types.ObjectId.isValid(repositoryId)) {
+            return res.status(400).json({
+                success: false,
+                message: "Invalid repository ID format.",
+            });
+        }
+
+        const repository = await Repository.findOne({
+            _id: repositoryId,
+            userId: req.user._id,
+        });
+
+        if (!repository) {
+            return res.status(404).json({
+                success: false,
+                message: "Repository not found or access denied.",
+            });
+        }
+
+        const commitDoc = await Commit.findOne({
+            repositoryId: repository._id,
+            sha: commitSha,
+        });
+
+        const commitPayload = commitDoc
+            ? {
+                  commit_sha: commitDoc.sha,
+                  message: commitDoc.message || "",
+                  files_changed: commitDoc.filesChanged || [],
+                  author_name: commitDoc.authorName,
+                  author_email: commitDoc.authorEmail,
+                  committed_at: commitDoc.committedAt,
+              }
+            : {
+                  commit_sha: commitSha,
+                  message: req.body.message || "Commit impact analysis",
+                  files_changed: req.body.filesChanged || [],
+              };
+
+        const result = await submitImpactImpl(String(repository._id), {
+            commit: commitPayload,
+            files: req.body.files || [],
+        });
+
+        if (!result.success) {
+            return res.status(result.statusCode || 502).json({
+                success: false,
+                errorCode: result.errorCode || "FASTAPI_ERROR",
+                message: result.reason || "FastAPI commit impact analysis failed",
+            });
+        }
+
+        return res.json(result);
+    } catch (error) {
+        next(error);
+    }
+};
+
+export const analyzeCommitImpact = makeAnalyzeCommitImpact();
+
+/**
+ * Software Evolution & Code Churn Analytics Controller (Task #9).
+ * POST /api/github/repositories/:repositoryId/evolution
+ */
+export const makeGenerateEvolutionAnalysis = (deps = {}) => async (req, res, next) => {
+    const { prepareAndSubmit = prepareAndSubmitEvolutionAnalysis } = deps;
+
+    try {
+        const { repositoryId } = req.params;
+
+        if (!mongoose.Types.ObjectId.isValid(repositoryId)) {
+            return res.status(400).json({
+                success: false,
+                message: "Invalid repository ID format.",
+            });
+        }
+
+        const repository = await Repository.findOne({
+            _id: repositoryId,
+            userId: req.user._id,
+        });
+
+        if (!repository) {
+            return res.status(404).json({
+                success: false,
+                message: "Repository not found or access denied.",
+            });
+        }
+
+        const branch = await resolveOrSyncDefaultBranch({
+            repository,
+            accessToken: req.user.accessToken,
+            getRepositoryBranches: deps.getRepositoryBranches || githubService.getRepositoryBranches,
+        });
+
+        if (!branch) {
+            return res.status(409).json({
+                success: false,
+                errorCode: "NO_RESOLVABLE_BRANCH",
+                message: "No default or active branch could be resolved for this repository.",
+            });
+        }
+
+        const prepResult = await prepareAndSubmit({
+            repository,
+            branch,
+            accessToken: req.user.accessToken,
+            correlationId: req.correlationId,
+        });
+
+        if (prepResult.blocked) {
+            return res.status(422).json({
+                success: false,
+                errorCode: "EVOLUTION_ANALYSIS_BLOCKED",
+                message: prepResult.blockedReason,
+            });
+        }
+
+        if (!prepResult.result?.success) {
+            return res.status(prepResult.result?.statusCode || 502).json({
+                success: false,
+                errorCode: prepResult.result?.errorCode || "FASTAPI_ERROR",
+                message: prepResult.result?.reason || "FastAPI software evolution analysis failed",
+            });
+        }
+
+        return res.json({
+            success: true,
+            repositoryId: String(repository._id),
+            analyzedCommitSha: prepResult.analyzedCommitSha,
+            analyzedCommitCount: prepResult.analyzedCommitCount,
+            analyzedFileCount: prepResult.analyzedFileCount,
+            ...prepResult.result,
+        });
+    } catch (error) {
+        next(error);
+    }
+};
+
+export const generateEvolutionAnalysis = makeGenerateEvolutionAnalysis();
+
+>>>>>>> 900a3b785a2a496bcc35854b185a7a172b97dfb0
 
 

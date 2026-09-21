@@ -48,12 +48,17 @@ const CommitSchema = new mongoose.Schema(
 
         additions: {
             type: Number,
-            default: 0
+            default: null
         },
 
         deletions: {
             type: Number,
-            default: 0
+            default: null
+        },
+
+        hasStats: {
+            type: Boolean,
+            default: false
         },
 
         changedFilesCount: {

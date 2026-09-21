@@ -149,3 +149,28 @@ async def test_blank_query_raises_domain_validation_error() -> None:
         await service.search(repository_id="repo-1", query="   ")
 
     assert retriever.calls == []
+
+
+class _StubLexicalRetriever:
+    def __init__(self, results: list[SearchResultItem]) -> None:
+        self._results = results
+
+    async def retrieve(self, query: str, repository_id: str, top_k: int = 10) -> list[SearchResultItem]:
+        return self._results
+
+
+async def test_hybrid_search_merges_semantic_and_lexical_results() -> None:
+    semantic_retriever = _StubRetriever(results=[_result("c1", 0.9)])
+    lexical_retriever = _StubLexicalRetriever(results=[_result("c2", 0.95)])
+
+    service = SemanticSearchService(
+        retriever=semantic_retriever,  # type: ignore[arg-type]
+        lexical_retriever=lexical_retriever,  # type: ignore[arg-type]
+        settings=Settings(),
+    )
+
+    response = await service.search(repository_id="repo-1", query="solveMaze()")
+
+    assert len(response.results) == 2
+    assert [r.chunk_id for r in response.results] == ["c1", "c2"]
+

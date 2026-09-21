@@ -12,6 +12,7 @@ NVIDIA Nemotron 3 Ultra as of Task 60/ADR-008).
 from __future__ import annotations
 
 from fastapi import APIRouter, Depends, Path, status
+from fastapi.responses import StreamingResponse
 
 from app.api.deps import get_repository_chat_service, verify_service_token
 from app.api.schemas.chat_schema import ChatMessageRequest
@@ -37,17 +38,6 @@ async def chat_with_repository(
     """Delegates to ``RepositoryChatService`` for the full
     retrieve -> rerank -> build context -> prompt -> generate -> cite
     pipeline (Task 54).
-
-    ``history`` is always empty here -- no conversation-history
-    persistence mechanism exists yet (see the service module's own
-    docstring). ``conversation_id`` is passed through exactly as
-    received, never generated or substituted.
-
-    Raises:
-        DomainValidationError: ``repository_id``, ``conversation_id``,
-            or ``message`` is blank/whitespace-only (422).
-        EmbeddingError / VectorDBError / RerankError / LLMError:
-            propagated from the pipeline (502/503).
     """
     request = ChatRequest(
         repository_id=repository_id,
@@ -56,3 +46,26 @@ async def chat_with_repository(
         history=[],
     )
     return await service.chat(request)
+
+
+@router.post(
+    "/{repository_id}/chat/stream",
+    status_code=status.HTTP_200_OK,
+    summary="Stream grounded repository chat response as Server-Sent Events (SSE)",
+)
+async def stream_chat_with_repository(
+    payload: ChatMessageRequest,
+    repository_id: str = Path(min_length=1, description="Repository identifier."),
+    _service_token: str = Depends(verify_service_token),
+    service: RepositoryChatService = Depends(get_repository_chat_service),
+) -> StreamingResponse:
+    """Streams SSE events as tokens arrive from Nemotron Gateway."""
+    request = ChatRequest(
+        repository_id=repository_id,
+        conversation_id=payload.conversation_id,
+        message=payload.message,
+        history=[],
+    )
+    generator = service.chat_stream(request)
+    return StreamingResponse(generator, media_type="text/event-stream")
+

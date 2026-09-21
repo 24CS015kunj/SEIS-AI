@@ -38,10 +38,12 @@ import structlog
 
 from app.core.evolution.churn_calculator import ChurnCalculator
 from app.core.evolution.commit_analyzer import CommitAnalyzer
+from app.core.evolution.commit_impact_analyzer import CommitImpactAnalyzer
 from app.core.intelligence.insights_generator import InsightsGenerator
 from app.core.intelligence.trend_detector import TrendDetector
 from app.domain.exceptions import DomainValidationError
 from app.domain.models import (
+    CommitImpactAnalysis,
     CommitInfo,
     Document,
     EngineeringInsight,
@@ -75,7 +77,7 @@ class RepositoryAnalysisResult:
 
 class RepositoryAnalysisService:
     """Orchestrates commit analysis, churn/hotspot scoring, structural
-    trend detection, and insight generation for one repository (Task 69).
+    trend detection, insight generation, and commit impact scoring for one repository (Task 69 / Task #4).
     """
 
     def __init__(
@@ -84,12 +86,29 @@ class RepositoryAnalysisService:
         churn_calculator: ChurnCalculator,
         trend_detector: TrendDetector,
         insights_generator: InsightsGenerator,
+        commit_impact_analyzer: CommitImpactAnalyzer | None = None,
     ) -> None:
         self._commit_analyzer = commit_analyzer
         self._churn_calculator = churn_calculator
         self._trend_detector = trend_detector
         self._insights_generator = insights_generator
+        self._commit_impact_analyzer = commit_impact_analyzer or CommitImpactAnalyzer()
         self._log = logger.bind(component="repository_analysis_service")
+
+    async def analyze_commit_impact(
+        self,
+        repository_id: str,
+        commit: CommitInfo,
+        files: list[Document] | None = None,
+    ) -> CommitImpactAnalysis:
+        """Evaluates commit impact, breaking API changes, and architectural risk."""
+        if not repository_id.strip():
+            raise DomainValidationError(
+                "repository_id must not be blank.", details={"repository_id": repository_id}
+            )
+        return self._commit_impact_analyzer.analyze_commit_impact(
+            repository_id=repository_id, commit=commit, files=files
+        )
 
     async def analyze(
         self,

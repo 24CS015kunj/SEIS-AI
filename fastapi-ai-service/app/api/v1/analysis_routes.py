@@ -26,10 +26,15 @@ from __future__ import annotations
 
 from fastapi import APIRouter, Depends, Path, status
 
-from app.api.deps import get_repository_analysis_service, verify_service_token
+from app.api.deps import (
+    get_evolution_analysis_service,
+    get_repository_analysis_service,
+    verify_service_token,
+)
 from app.api.schemas.analysis_schema import RepositoryAnalysisRequest, RepositoryAnalysisResponse
 from app.domain.enums import DocumentType
-from app.domain.models import CommitInfo, Document
+from app.domain.models import CommitInfo, Document, EvolutionReport
+from app.services.evolution_analysis_service import EvolutionAnalysisService
 from app.services.repository_analysis_service import RepositoryAnalysisService
 
 router = APIRouter(prefix="/repositories", tags=["analysis"])
@@ -88,3 +93,82 @@ async def analyze_repository(
         trends=result.trends,
         insights=result.insights,
     )
+
+
+@router.post(
+    "/{repository_id}/commit-impact",
+    status_code=status.HTTP_200_OK,
+    summary="Analyze architectural change risk, breaking API modifications, and commit impact",
+)
+async def analyze_commit_impact(
+    payload: dict,
+    repository_id: str = Path(min_length=1, description="Repository identifier."),
+    _service_token: str = Depends(verify_service_token),
+    service: RepositoryAnalysisService = Depends(get_repository_analysis_service),
+):
+    """Evaluates commit impact, breaking API changes, and architectural risk."""
+    commit_raw = payload.get("commit", {})
+    files_raw = payload.get("files", [])
+
+    commit = CommitInfo(
+        commit_sha=commit_raw.get("commit_sha", "unknown"),
+        message=commit_raw.get("message", ""),
+        files_changed=commit_raw.get("files_changed", []),
+        author_name=commit_raw.get("author_name"),
+        author_email=commit_raw.get("author_email"),
+        committed_at=commit_raw.get("committed_at"),
+    )
+    files = [
+        Document(
+            repository_id=repository_id,
+            commit_sha=commit.commit_sha,
+            file_path=f.get("file_path", ""),
+            content=f.get("content"),
+            language=f.get("language", "unknown"),
+            document_type=DocumentType.SOURCE_CODE,
+        )
+        for f in files_raw
+    ]
+
+    return await service.analyze_commit_impact(repository_id, commit, files)
+
+
+@router.post(
+    "/{repository_id}/evolution",
+    response_model=EvolutionReport,
+    status_code=status.HTTP_200_OK,
+    summary="Generate software evolution and historical code churn analytics report",
+)
+async def analyze_software_evolution(
+    payload: RepositoryAnalysisRequest,
+    repository_id: str = Path(min_length=1, description="Repository identifier."),
+    _service_token: str = Depends(verify_service_token),
+    service: EvolutionAnalysisService = Depends(get_evolution_analysis_service),
+) -> EvolutionReport:
+    """Executes EvolutionAnalysisService to compute commit churn, module evolution
+    trends, hotspot scores, code age distribution, and AI insights with Redis caching."""
+    commits = [
+        CommitInfo(
+            commit_sha=c.commit_sha,
+            message=c.message,
+            files_changed=c.files_changed,
+            author_name=c.author_name,
+            author_email=c.author_email,
+            committed_at=c.committed_at,
+        )
+        for c in payload.commits
+    ]
+    files = [
+        Document(
+            repository_id=repository_id,
+            commit_sha=payload.analyzed_commit_sha,
+            file_path=f.file_path,
+            content=f.content,
+            language=f.language or "unknown",
+            document_type=DocumentType.SOURCE_CODE,
+        )
+        for f in payload.files
+    ]
+
+    return await service.analyze_evolution(repository_id, commits, files=files)
+

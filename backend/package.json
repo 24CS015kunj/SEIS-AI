@@ -6,7 +6,7 @@
   "scripts": {
     "dev": "nodemon src/server.js",
     "start": "node src/server.js",
-    "test": "node tests/verify.test.js && node tests/ingestion.test.js && node tests/workspace.test.js && node tests/ingestionWiring.test.js && node tests/chat.test.js && node tests/dashboard.test.js && node tests/analysisPreparation.test.js && node tests/analysis.test.js && node tests/repository.test.js"
+    "test": "node tests/verify.test.js && node tests/ingestion.test.js && node tests/workspace.test.js && node tests/ingestionWiring.test.js && node tests/chat.test.js && node tests/dashboard.test.js && node tests/analysisPreparation.test.js && node tests/analysis.test.js && node tests/repository.test.js && node tests/commitImpact.test.js && node tests/rateLimiter.test.js && node tests/tokenRefresh.test.js && node tests/observability.test.js && node tests/evolution.test.js && node tests/ingestionLifecycle.test.js && node tests/githubCommits.test.js"
   },
   "keywords": [],
   "author": "",

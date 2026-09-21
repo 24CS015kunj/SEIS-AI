@@ -67,14 +67,28 @@ apiClient.interceptors.request.use((config) => {
   return config;
 });
 
-// A 401 means the stored token (if any) is dead -- drop it so the next
-// request doesn't keep resending a token Express already rejected, and so
-// `AuthContext`'s next `/api/auth/me` call correctly resolves to
-// unauthenticated instead of retrying forever.
+// A 401 usually means the stored SEIS-AI token (if any) is dead -- drop it
+// so the next request doesn't keep resending a token Express already
+// rejected, and so `AuthContext`'s next `/api/auth/me` call correctly
+// resolves to unauthenticated instead of retrying forever.
+//
+// One real exception: `github.controller.js`'s GitHub-facing endpoints
+// (branches/commits/files/...) also return 401 when the *stored GitHub
+// OAuth access token* is invalid/revoked (`github.service.js`'s
+// `handleGitHubError`, message "GitHub Authentication failed: ...") -- a
+// completely different failure from the caller's own SEIS-AI session being
+// invalid. `auth.middleware.js`'s own 401s never start with "GitHub", so
+// this is a safe, existing-message-shape way to tell them apart without a
+// new response field. Treating a bad *GitHub* token as a dead *app* session
+// was clearing a perfectly valid seis_auth_token and silently logging the
+// user out on their next reload -- confirmed live: a GitHub token revoked
+// on GitHub's side (real 401 "Bad credentials" from api.github.com) was
+// triggering this exact mismatch.
 apiClient.interceptors.response.use(
   (response) => response,
   (error) => {
-    if (error.response?.status === 401) {
+    const isGithubUpstreamFailure = String(error.response?.data?.message || '').startsWith('GitHub');
+    if (error.response?.status === 401 && !isGithubUpstreamFailure) {
       clearAuthToken();
     }
     return Promise.reject(error);

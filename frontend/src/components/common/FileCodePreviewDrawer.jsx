@@ -1,13 +1,19 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import { Link } from 'react-router-dom';
-import { X, FileCode, ArrowUpRight, Loader2, AlertCircle, RefreshCw } from 'lucide-react';
-import { getRepositoryFileContent } from '../../services/repositoryService';
+import { X, FileCode, ArrowUpRight, Loader2, AlertCircle, RefreshCw, Sparkles, ChevronDown, ChevronUp } from 'lucide-react';
+import { getRepositoryFileContent, explainFile } from '../../services/repositoryService';
+import CopilotMarkdown from '../commandCenter/CopilotMarkdown';
 
 /**
  * Task 83: Lightweight, read-only Quick File Code Preview Drawer.
  * Fetches real file content on demand via `GET /api/github/repositories/:repositoryId/files/content?path=...`.
  * Features zero mock code, race-condition cancellation safety, accessible dialog semantics,
  * and an "Open in Architecture" deep link.
+ *
+ * Task 93: "Explain with AI" button triggers CODE_EXPLANATION via the existing
+ * RAG/LLM pipeline (RepositoryExplainService). The explanation is shown in a
+ * collapsible ExplanationCard below the code view. Citations render as
+ * Architecture deep-links (same pattern as CopilotDrawer).
  */
 export default function FileCodePreviewDrawer({ repositoryId, filePath, onClose }) {
   const [status, setStatus] = useState('idle'); // idle | loading | ready | error | empty
@@ -15,8 +21,15 @@ export default function FileCodePreviewDrawer({ repositoryId, filePath, onClose 
   const [error, setError] = useState(null);
   const [retryNonce, setRetryNonce] = useState(0);
 
+  // Task 93: explanation state
+  const [explainStatus, setExplainStatus] = useState('idle'); // idle | loading | ready | error
+  const [explanation, setExplanation] = useState(null); // { answer, citations }
+  const [explainError, setExplainError] = useState(null);
+  const [explainOpen, setExplainOpen] = useState(true);
+
   const isOpen = Boolean(filePath);
 
+  // Reset all state when the target file changes
   useEffect(() => {
     if (!isOpen || !repositoryId || !filePath) {
       setStatus('idle');
@@ -28,6 +41,11 @@ export default function FileCodePreviewDrawer({ repositoryId, filePath, onClose 
     let cancelled = false;
     setStatus('loading');
     setError(null);
+    // Reset explanation when a new file is opened
+    setExplainStatus('idle');
+    setExplanation(null);
+    setExplainError(null);
+    setExplainOpen(true);
 
     getRepositoryFileContent(repositoryId, filePath)
       .then((data) => {
@@ -68,6 +86,23 @@ export default function FileCodePreviewDrawer({ repositoryId, filePath, onClose 
     return fileData.content.split('\n');
   }, [fileData]);
 
+  // Task 93: trigger explanation
+  const handleExplain = async () => {
+    if (!repositoryId || !filePath || explainStatus === 'loading') return;
+    setExplainStatus('loading');
+    setExplanation(null);
+    setExplainError(null);
+    setExplainOpen(true);
+    try {
+      const data = await explainFile(repositoryId, filePath);
+      setExplanation({ answer: data.answer, citations: data.citations ?? [] });
+      setExplainStatus('ready');
+    } catch (err) {
+      setExplainStatus('error');
+      setExplainError(err.response?.data?.message || 'Unable to generate explanation. Make sure this repository has been ingested.');
+    }
+  };
+
   if (!isOpen) return null;
 
   const fileName = filePath ? filePath.split('/').pop() : 'File Preview';
@@ -102,6 +137,26 @@ export default function FileCodePreviewDrawer({ repositoryId, filePath, onClose 
           </div>
 
           <div className="flex items-center gap-2 shrink-0">
+            {/* Task 93: Explain with AI button */}
+            {repositoryId && filePath && status === 'ready' && (
+              <button
+                type="button"
+                id="explain-with-ai-btn"
+                onClick={handleExplain}
+                disabled={explainStatus === 'loading'}
+                aria-label="Explain this file with AI"
+                aria-busy={explainStatus === 'loading'}
+                className="inline-flex items-center gap-1.5 h-8 px-2.5 rounded-lg border border-blue-200 bg-blue-50 text-blue-700 hover:bg-blue-100 text-[12px] font-semibold transition-colors disabled:opacity-60 disabled:cursor-not-allowed"
+              >
+                {explainStatus === 'loading' ? (
+                  <Loader2 size={12} className="animate-spin" aria-hidden="true" />
+                ) : (
+                  <Sparkles size={12} aria-hidden="true" />
+                )}
+                <span>{explainStatus === 'loading' ? 'Explaining…' : 'Explain with AI'}</span>
+              </button>
+            )}
+
             {repositoryId && filePath && (
               <Link
                 to={`/architecture/${repositoryId}?file=${encodeURIComponent(filePath)}`}
@@ -133,6 +188,76 @@ export default function FileCodePreviewDrawer({ repositoryId, filePath, onClose 
               {fileData.size != null && ` · ${(fileData.size / 1024).toFixed(1)} KB`}
             </span>
             <span className="text-slate-400">Read-only real preview</span>
+          </div>
+        )}
+
+        {/* Task 93: AI Explanation Card */}
+        {(explainStatus === 'loading' || explainStatus === 'ready' || explainStatus === 'error') && (
+          <div
+            role="region"
+            aria-live="polite"
+            aria-label="AI file explanation"
+            className="shrink-0 border-b border-blue-100 bg-blue-50/50"
+          >
+            {/* Collapsible header */}
+            <button
+              type="button"
+              onClick={() => setExplainOpen((o) => !o)}
+              className="w-full flex items-center justify-between px-4 py-2.5 text-left"
+              aria-expanded={explainOpen}
+            >
+              <div className="flex items-center gap-2">
+                <Sparkles size={13} className="text-blue-600" aria-hidden="true" />
+                <span className="text-[12.5px] font-semibold text-blue-800">AI Explanation</span>
+                {explainStatus === 'loading' && (
+                  <Loader2 size={12} className="animate-spin text-blue-500 ml-1" aria-hidden="true" />
+                )}
+              </div>
+              {explainStatus !== 'loading' && (
+                explainOpen
+                  ? <ChevronUp size={14} className="text-blue-500 shrink-0" aria-hidden="true" />
+                  : <ChevronDown size={14} className="text-blue-500 shrink-0" aria-hidden="true" />
+              )}
+            </button>
+
+            {explainOpen && (
+              <div className="px-4 pb-4">
+                {explainStatus === 'loading' ? (
+                  <div className="space-y-2 animate-pulse">
+                    <div className="h-3 bg-blue-100 rounded w-3/4" />
+                    <div className="h-3 bg-blue-100 rounded w-full" />
+                    <div className="h-3 bg-blue-100 rounded w-5/6" />
+                    <div className="h-3 bg-blue-100 rounded w-2/3" />
+                  </div>
+                ) : explainStatus === 'error' ? (
+                  <div className="flex items-start gap-2">
+                    <AlertCircle size={14} className="text-rose-500 shrink-0 mt-0.5" aria-hidden="true" />
+                    <p className="text-[12px] text-rose-600 m-0 leading-relaxed">{explainError}</p>
+                  </div>
+                ) : explanation ? (
+                  <>
+                    <div className="text-[12.5px] text-slate-800 leading-relaxed prose-sm max-w-none">
+                      <CopilotMarkdown content={explanation.answer} />
+                    </div>
+                    {explanation.citations.length > 0 && (
+                      <div className="mt-3 flex flex-wrap gap-1.5">
+                        {explanation.citations.map((c, i) => (
+                          <Link
+                            key={c.chunk_id ?? i}
+                            to={`/architecture/${repositoryId}?file=${encodeURIComponent(c.file_path)}`}
+                            onClick={onClose}
+                            className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md bg-blue-100 text-blue-700 hover:bg-blue-200 text-[11px] font-mono font-semibold no-underline transition-colors"
+                            title={`${c.file_path} lines ${c.start_line}–${c.end_line}`}
+                          >
+                            [{i + 1}] {c.file_path.split('/').pop()}
+                          </Link>
+                        ))}
+                      </div>
+                    )}
+                  </>
+                ) : null}
+              </div>
+            )}
           </div>
         )}
 
