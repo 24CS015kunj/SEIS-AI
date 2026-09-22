@@ -20,6 +20,8 @@ import {
 } from 'lucide-react';
 import BrandMark from '../components/common/BrandMark';
 import FadeIn from '../components/common/FadeIn';
+import OnboardingStepper from '../components/onboarding/OnboardingStepper';
+import AiIngestionWizardModal from '../components/onboarding/AiIngestionWizardModal';
 import { listRepositories, syncRepositories } from '../services/repositoryService';
 import { listWorkspaces, getActiveWorkspace, setActiveWorkspace } from '../services/workspaceService';
 
@@ -56,6 +58,7 @@ export default function ImportRepositoryPage() {
   const [visibility, setVisibility] = useState('all');
   const [language, setLanguage] = useState(null);
   const [selectedId, setSelectedId] = useState(null);
+  const [ingestionModalOpen, setIngestionModalOpen] = useState(false);
 
   // Load existing workspaces to enable fast switching and auto-recovery
   useEffect(() => {
@@ -159,13 +162,25 @@ export default function ImportRepositoryPage() {
 
   const openSelectedRepository = () => {
     if (!selectedRepo) return;
-    // Task 71: the repository's real Mongo `_id` now lives in the URL
-    // itself (survives refresh/direct link), not in router `state`.
-    navigate(`/source-control/${selectedRepo._id}`);
+    setIngestionModalOpen(true);
+  };
+
+  const handleDirectCommandCenter = () => {
+    if (!selectedRepo) return;
+    navigate(`/command-center/${selectedRepo._id}`);
   };
 
   return (
-    <div className="min-h-screen w-full bg-[#F5F6FA] flex items-start lg:items-center justify-center px-4 sm:px-6 py-10 lg:py-12">
+    <div className="min-h-screen w-full bg-[#F5F6FA] flex flex-col items-center justify-start px-4 sm:px-6 py-8 lg:py-12">
+      <div className="w-full max-w-[1024px] mb-4">
+        <OnboardingStepper
+          currentStep={2}
+          onStepClick={(step) => {
+            if (step === 1) navigate('/workspace');
+          }}
+        />
+      </div>
+
       <FadeIn direction="scale" className="w-full max-w-[1024px]">
         <div className="bg-white border border-[#E2E8F0] rounded-2xl shadow-[0_8px_30px_rgba(15,23,42,0.08)] overflow-hidden">
 
@@ -381,25 +396,45 @@ export default function ImportRepositoryPage() {
           </div>
 
           {/* ---------- Footer actions ---------- */}
-          <div className="flex flex-col-reverse sm:flex-row sm:items-center sm:justify-end gap-3 px-6 sm:px-8 py-5 border-t border-[#E2E8F0] bg-slate-50/60">
+          <div className="flex flex-col-reverse sm:flex-row sm:items-center sm:justify-between gap-3 px-6 sm:px-8 py-5 border-t border-[#E2E8F0] bg-slate-50/60">
             <Link
               to="/workspace"
               className="inline-flex items-center justify-center h-11 px-5 rounded-lg border border-[#E2E8F0] bg-white text-slate-700 text-[14px] font-semibold no-underline transition-colors hover:bg-slate-50 w-full sm:w-auto"
             >
-              Cancel
+              Back to Workspace
             </Link>
-            <button
-              type="button"
-              onClick={openSelectedRepository}
-              disabled={!selectedRepo}
-              className="inline-flex items-center justify-center gap-2 h-11 px-6 rounded-lg bg-gradient-to-r from-blue-600 to-indigo-600 text-white text-[14px] font-semibold border-0 cursor-pointer transition-opacity hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-50 w-full sm:w-auto whitespace-nowrap"
-            >
-              Open Repository
-              <ArrowRight size={16} aria-hidden="true" />
-            </button>
+
+            <div className="flex flex-wrap items-center gap-2.5 w-full sm:w-auto justify-end">
+              {selectedRepo && (
+                <button
+                  type="button"
+                  onClick={handleDirectCommandCenter}
+                  className="inline-flex items-center justify-center gap-1.5 h-11 px-4 rounded-xl border border-slate-300 bg-white hover:bg-slate-50 text-slate-700 text-[13.5px] font-semibold transition-colors cursor-pointer w-full sm:w-auto"
+                >
+                  Direct to Dashboard
+                </button>
+              )}
+
+              <button
+                type="button"
+                onClick={openSelectedRepository}
+                disabled={!selectedRepo}
+                className="inline-flex items-center justify-center gap-2 h-11 px-6 rounded-xl bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 text-white text-[14px] font-semibold border-0 cursor-pointer transition-all shadow-md shadow-blue-500/25 disabled:cursor-not-allowed disabled:opacity-50 w-full sm:w-auto whitespace-nowrap"
+              >
+                <Sparkles size={16} />
+                Connect & Activate AI Ingestion
+                <ArrowRight size={16} aria-hidden="true" />
+              </button>
+            </div>
           </div>
         </div>
       </FadeIn>
+
+      <AiIngestionWizardModal
+        isOpen={ingestionModalOpen}
+        repository={selectedRepo}
+        onClose={() => setIngestionModalOpen(false)}
+      />
     </div>
   );
 }
@@ -577,6 +612,25 @@ function SidebarPanel({ repo }) {
             <StatRow icon={Star} label="Stars" value={repo.stars ?? 0} />
             <StatRow icon={GitFork} label="Forks" value={repo.forks ?? 0} />
             <StatRow icon={repo.visibility === 'private' ? Lock : Globe} label="Visibility" value={repo.visibility ?? 'unknown'} />
+            <div className="flex items-center justify-between px-3.5 py-2.5">
+              <span className="inline-flex items-center gap-2 text-[12.5px] text-slate-500">
+                <Sparkles size={14} className="text-blue-500" aria-hidden="true" />
+                AI Indexing
+              </span>
+              <span className={`text-[12px] font-bold px-2 py-0.5 rounded-full ${
+                repo.ingestionStatus === 'completed'
+                  ? 'bg-emerald-50 text-emerald-700'
+                  : repo.ingestionStatus === 'processing'
+                    ? 'bg-blue-50 text-blue-700'
+                    : 'bg-slate-100 text-slate-600'
+              }`}>
+                {repo.ingestionStatus === 'completed'
+                  ? 'Active & Indexed'
+                  : repo.ingestionStatus === 'processing'
+                    ? 'Processing…'
+                    : 'Ready to Activate'}
+              </span>
+            </div>
           </div>
         </>
       )}

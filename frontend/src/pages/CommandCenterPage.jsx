@@ -17,6 +17,7 @@ import ActivitySection from '../components/commandCenter/ActivitySection';
 import CopilotDrawer from '../components/commandCenter/CopilotDrawer';
 import FileCodePreviewDrawer from '../components/common/FileCodePreviewDrawer';
 import EngineeringBackground from '../components/common/EngineeringBackground';
+import EmptyRepositoryState from '../components/common/EmptyRepositoryState';
 
 /** No repository-specific suggested-question generation exists anywhere in
  * this codebase (confirmed by inspection) -- this is a fixed set of
@@ -363,12 +364,11 @@ function CommandCenterPageContent({ repositoryId }) {
 
 function NoRepositoryState() {
   return (
-    <div className="max-w-[560px] mx-auto mt-16 text-center">
-      <p className="text-[13.5px] text-slate-500 leading-relaxed">
-        Open this page from a real, synced repository (via Source Control or Import Repository) to see its
-        dashboard.
-      </p>
-    </div>
+    <EmptyRepositoryState
+      pageTitle="Command Center"
+      pageDescription="Select an active repository from your workspace or import a new one from GitHub to activate health scoring, engineering hotspots, and AI Copilot."
+      destinationPrefix="/command-center"
+    />
   );
 }
 

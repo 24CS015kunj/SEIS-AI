@@ -22,6 +22,7 @@ import DependencyAnalysisPanel from '../components/architecture/DependencyAnalys
 import FileCodePreviewDrawer from '../components/common/FileCodePreviewDrawer';
 import CitationDrawer from '../components/chat/CitationDrawer';
 import EngineeringBackground from '../components/common/EngineeringBackground';
+import EmptyRepositoryState from '../components/common/EmptyRepositoryState';
 
 const SUGGESTED_QUESTIONS = [
   'What does this repository do?',
@@ -488,11 +489,11 @@ function ArchitecturePageContent({ repositoryId }) {
 
 function NoRepositoryState() {
   return (
-    <div className="max-w-[560px] mx-auto mt-16 text-center">
-      <p className="text-[13.5px] text-slate-500 leading-relaxed">
-        Open this page from a real, synced repository (via Source Control or the Dashboard) to see its architecture.
-      </p>
-    </div>
+    <EmptyRepositoryState
+      pageTitle="Architecture Map"
+      pageDescription="Select an active repository from your workspace or import a new one from GitHub to explore directed module dependency graphs, circular loops, and file tree models."
+      destinationPrefix="/architecture"
+    />
   );
 }
 
