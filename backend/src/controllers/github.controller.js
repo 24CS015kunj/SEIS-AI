@@ -1654,6 +1654,49 @@ export const explainRepository = async (req, res, next) => {
     }
 };
 
+// In-memory dependency graph cache
+const _depGraphCache = new Map();
+
+/**
+ * Real directed Dependency Graph endpoint for Architecture Page (Task: Dependency Graph Analysis).
+ * Fetches repository branch files, parses internal source imports/requires, resolves relative paths,
+ * detects circular dependencies, and builds graph model.
+ * GET /api/github/repositories/:repositoryId/branches/:branchId/dependencies
+ */
+export const makeGetDependencyGraph = (deps = {}) => async (req, res, next) => {
+    const {
+        getFileContentImpl = githubService.getFileContent,
+        getTreeImpl = githubService.getRepositoryTree,
+    } = deps;
+
+    try {
+        const { repositoryId, branchId } = req.params;
+
+        if (!mongoose.Types.ObjectId.isValid(repositoryId) || !mongoose.Types.ObjectId.isValid(branchId)) {
+            return res.status(400).json({
+                success: false,
+                message: "Invalid repository or branch ID format.",
+            });
+        }
+
+        const repository = await Repository.findOne({
+            _id: repositoryId,
+            userId: req.user._id,
+        });
+
+        if (!repository) {
+            return res.status(404).json({
+                success: false,
+                message: "Repository not found or access denied.",
+            });
+        }
+
+        const branch = await Branch.findOne({
+            _id: branchId,
+            repositoryId: repository._id,
+        });
+
+        if (!branch) {
             return res.status(404).json({
                 success: false,
                 message: "Branch not found for this repository.",
@@ -1902,7 +1945,5 @@ export const makeGenerateEvolutionAnalysis = (deps = {}) => async (req, res, nex
 };
 
 export const generateEvolutionAnalysis = makeGenerateEvolutionAnalysis();
-
->>>>>>> 900a3b785a2a496bcc35854b185a7a172b97dfb0
 
 
