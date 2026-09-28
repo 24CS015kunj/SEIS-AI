@@ -23,24 +23,24 @@ export default function ArchitectureSection({ available, directories, rootFileCo
   return (
     <section id="architecture" className="scroll-mt-20">
       <div className="flex items-center gap-2 mb-3">
-        <Boxes size={15} className="text-blue-600" aria-hidden="true" />
-        <h2 className="text-[13.5px] font-bold text-slate-900">Repository Structure</h2>
+        <Boxes size={16} className="text-[#0071E3]" aria-hidden="true" />
+        <h2 className="text-[14px] font-semibold text-[#1D1D1F]">Repository Structure</h2>
       </div>
 
-      <div className="bg-white border border-slate-200 rounded-xl shadow-sm p-4">
+      <div className="apple-card p-5 rounded-[20px]">
         {!available || (directories.length === 0 && rootFileCount === 0) ? (
           <div className="py-6 text-center">
-            <FolderTree size={20} className="text-slate-300 mx-auto mb-2" aria-hidden="true" />
-            <p className="text-[13px] text-slate-400 m-0">
+            <FolderTree size={20} className="text-[#86868B] mx-auto mb-2" aria-hidden="true" />
+            <p className="text-[13px] text-[#86868B] m-0">
               Repository structure is not available yet — sync files from Source Control to see it here.
             </p>
           </div>
         ) : (
           <>
-            <p className="text-[11px] text-slate-400 mb-3 m-0">
+            <p className="text-[12px] text-[#86868B] mb-4 m-0">
               Real top-level directories, sized by number of files actually synced from GitHub.
             </p>
-            <ul className="flex flex-col gap-2 max-h-[360px] overflow-y-auto pr-1">
+            <ul className="flex flex-col gap-2.5 max-h-[360px] overflow-y-auto pr-1">
               {rootFileCount > 0 && (
                 <DirectoryRow label="(repository root)" count={rootFileCount} max={maxCount} muted />
               )}
@@ -60,18 +60,18 @@ function DirectoryRow({ label, count, max, muted = false }) {
   return (
     <li className="flex items-center gap-3">
       <span
-        className={`w-[168px] shrink-0 text-[12px] font-mono truncate ${muted ? 'text-slate-400 italic' : 'text-slate-600'}`}
+        className={`w-[168px] shrink-0 text-[12.5px] font-mono truncate ${muted ? 'text-[#86868B] italic' : 'text-[#1D1D1F] font-medium'}`}
         title={label}
       >
         {label}
       </span>
-      <div className="flex-1 h-5 rounded bg-slate-100 overflow-hidden min-w-[60px]">
+      <div className="flex-1 h-2.5 rounded-full bg-black/[0.04] overflow-hidden min-w-[60px]">
         <div
-          className={`h-full rounded ${muted ? 'bg-slate-300' : 'bg-blue-600'}`}
+          className={`h-full rounded-full transition-all duration-300 ${muted ? 'bg-black/20' : 'bg-[#0071E3]'}`}
           style={{ width: `${widthPercent}%` }}
         />
       </div>
-      <span className="w-16 shrink-0 text-right text-[11px] font-mono text-slate-400 tabular-nums">
+      <span className="w-16 shrink-0 text-right text-[12px] font-mono text-[#86868B] tabular-nums">
         {count} file{count === 1 ? '' : 's'}
       </span>
     </li>

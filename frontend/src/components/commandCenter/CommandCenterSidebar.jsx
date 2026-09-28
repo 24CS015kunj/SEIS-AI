@@ -58,58 +58,61 @@ export default function CommandCenterSidebar({ repository, repositoryId, mobileO
         />
       )}
       <aside
-        className={`fixed inset-y-0 left-0 z-50 w-[248px] shrink-0 bg-white border-r border-slate-200 flex flex-col transition-transform duration-200 lg:static lg:translate-x-0 ${
+        className={`fixed inset-y-0 left-0 z-50 w-[244px] shrink-0 bg-[#FBFBFD]/80 border-r border-black/[0.06] backdrop-blur-2xl flex flex-col transition-transform duration-200 lg:static lg:translate-x-0 ${
           mobileOpen ? 'translate-x-0' : '-translate-x-full'
         }`}
         aria-label="Application navigation"
       >
-        <div className="flex items-center justify-between gap-2 px-4 h-14 border-b border-slate-200 shrink-0">
+        <div className="flex items-center justify-between gap-2 px-4 h-14 border-b border-black/[0.06] shrink-0">
           <div className="flex items-center gap-2 min-w-0">
-            <div className="w-7 h-7 rounded-lg bg-blue-50 flex items-center justify-center shrink-0">
-              <BrandGlyph size={16} tone="onLight" />
+            <div className="w-7 h-7 rounded-xl bg-[#0071E3]/10 flex items-center justify-center shrink-0">
+              <BrandGlyph size={15} tone="onLight" />
             </div>
-            <span className="text-[13px] font-bold text-slate-900 truncate">SEIS AI Copilot</span>
+            <span className="text-[13.5px] font-semibold text-[#1D1D1F] truncate">SEIS AI Copilot</span>
           </div>
           <button
             type="button"
             onClick={onCloseMobile}
             aria-label="Close navigation"
-            className="lg:hidden w-7 h-7 rounded-md flex items-center justify-center text-slate-400 hover:text-slate-900 hover:bg-slate-50"
+            className="lg:hidden w-7 h-7 rounded-full flex items-center justify-center text-[#86868B] hover:text-[#1D1D1F] hover:bg-black/[0.05] transition-colors"
           >
-            <X size={16} aria-hidden="true" />
+            <X size={15} aria-hidden="true" />
           </button>
         </div>
 
         {/* Active Workspace Info */}
-        <div className="px-4 py-2.5 border-b border-slate-100 bg-slate-50/70">
+        <div className="px-3.5 py-2.5 border-b border-black/[0.04]">
           <div className="flex items-center justify-between gap-1">
-            <span className="text-[10px] font-bold uppercase tracking-wider text-slate-400">
+            <span className="text-[11px] font-medium text-[#86868B]">
               Workspace
             </span>
             <Link
               to="/workspace"
-              className="text-[11px] font-medium text-blue-600 hover:text-blue-700 hover:underline"
+              className="text-[11.5px] font-medium text-[#0071E3] hover:underline"
             >
               Switch
             </Link>
           </div>
-          <div className="flex items-center gap-1.5 mt-0.5 text-[12.5px] font-semibold text-slate-800 truncate" title={activeWorkspace?.name || 'My Workspace'}>
-            <Layers size={13} className="text-blue-500 shrink-0" />
+          <div className="flex items-center gap-1.5 mt-0.5 text-[13px] font-medium text-[#1D1D1F] truncate" title={activeWorkspace?.name || 'My Workspace'}>
+            <Layers size={13} className="text-[#0071E3] shrink-0" />
             <span className="truncate">{activeWorkspace?.name || 'My Workspace'}</span>
           </div>
         </div>
 
-        <div className="px-4 py-3.5 border-b border-slate-200">
-          <div className="text-[10.5px] font-bold uppercase tracking-wider text-slate-400 mb-1">
+        <div className="px-3.5 py-2.5 border-b border-black/[0.04]">
+          <div className="text-[11px] font-medium text-[#86868B] mb-0.5">
             Active Repository
           </div>
-          <div className="text-[13.5px] font-semibold text-slate-900 truncate">{repository.name}</div>
-          <div className="text-[11.5px] font-mono text-slate-500 mt-0.5 truncate">
-            {repository.branch} · {repository.owner}
+          <div className="text-[13px] font-semibold text-[#1D1D1F] truncate">{repository.name}</div>
+          <div className="flex items-center gap-1.5 text-[11.5px] text-[#86868B] mt-0.5 truncate">
+            <GitBranch size={10} className="text-[#86868B] shrink-0" />
+            <span className="font-mono text-[11px]">{repository.branch}</span>
+            <span className="text-black/20">·</span>
+            <span className="truncate">{repository.owner}</span>
           </div>
         </div>
 
-        <nav className="flex-1 py-2 overflow-y-auto">
+        <nav className="flex-1 py-3 px-2 space-y-0.5 overflow-y-auto">
           {NAV_ITEMS.map((item) => (
             <NavRow
               key={item.label}
@@ -121,15 +124,15 @@ export default function CommandCenterSidebar({ repository, repositoryId, mobileO
           ))}
         </nav>
 
-        <div className="px-4 py-3 border-t border-slate-200 shrink-0 flex items-center justify-between gap-2">
+        <div className="px-3.5 py-3 border-t border-black/[0.06] shrink-0 flex items-center justify-between gap-2">
           <div className="min-w-0">
-            <span className="inline-flex items-center gap-1.5 text-[11px] font-mono text-emerald-600">
-              <span className="w-1.5 h-1.5 rounded-full bg-emerald-500" aria-hidden="true" />
-              AST Index Ready
+            <span className="inline-flex items-center gap-1.5 text-[11.5px] text-[#34C759] font-medium">
+              <span className="w-1.5 h-1.5 rounded-full bg-[#34C759] animate-pulse" aria-hidden="true" />
+              AST Index Active
             </span>
             {user && (
-              <div className="text-[11px] text-slate-500 truncate mt-1" title={user.githubUsername}>
-                {user.githubUsername}
+              <div className="text-[11.5px] text-[#86868B] truncate mt-0.5" title={user.githubUsername}>
+                @{user.githubUsername}
               </div>
             )}
           </div>
@@ -138,9 +141,9 @@ export default function CommandCenterSidebar({ repository, repositoryId, mobileO
             onClick={logout}
             aria-label="Sign out"
             title="Sign out"
-            className="shrink-0 w-7 h-7 rounded-md flex items-center justify-center text-slate-400 hover:text-slate-900 hover:bg-slate-50"
+            className="shrink-0 w-7 h-7 rounded-full flex items-center justify-center text-[#86868B] hover:text-[#1D1D1F] hover:bg-black/[0.05] transition-colors"
           >
-            <LogOut size={14} aria-hidden="true" />
+            <LogOut size={13} aria-hidden="true" />
           </button>
         </div>
       </aside>
@@ -153,24 +156,18 @@ function NavRow({ item, currentPath, repositoryId, onNavigate }) {
 
   if (item.kind === 'soon') {
     return (
-      <div className="flex items-center gap-2.5 px-4 py-2.5 text-[13px] text-slate-400 cursor-not-allowed">
-        <Icon size={15} className="text-slate-400 shrink-0" aria-hidden="true" />
+      <div className="flex items-center gap-2.5 px-3 py-2 rounded-xl text-[13px] text-[#86868B] cursor-not-allowed opacity-60">
+        <Icon size={15} className="text-[#86868B] shrink-0" aria-hidden="true" />
         <span className="truncate">{item.label}</span>
-        <span className="ml-auto text-[10px] font-semibold uppercase tracking-wide text-slate-400 bg-slate-100 rounded-full px-1.5 py-0.5 shrink-0">
+        <span className="ml-auto text-[10px] font-medium uppercase tracking-wide text-[#86868B] bg-black/[0.05] rounded-full px-2 py-0.5 shrink-0">
           Soon
         </span>
       </div>
     );
   }
 
-  // A route now optionally carries `/<repositoryId>` on the end -- "on
-  // this page" means the current path is either the bare page route or
-  // that route plus any repository id, not an exact string match.
   const onCurrentPage = currentPath === item.page || currentPath.startsWith(`${item.page}/`);
   const target = repositoryId ? `${item.page}/${repositoryId}` : item.page;
-  // An anchor only behaves like an in-page anchor while already on its
-  // page (native browser hash-scroll, zero JS); from elsewhere it's a
-  // real cross-page navigation to that page (+ repository id) + hash.
   const href = item.anchor && onCurrentPage ? `#${item.id}` : `${target}${item.anchor ? `#${item.id}` : ''}`;
   const isActive = onCurrentPage && item.primary;
   const Tag = item.anchor && onCurrentPage ? 'a' : Link;
@@ -181,15 +178,15 @@ function NavRow({ item, currentPath, repositoryId, onNavigate }) {
       {...linkProp}
       onClick={onNavigate}
       aria-current={isActive ? 'page' : undefined}
-      className={`flex items-center gap-2.5 px-4 py-2.5 text-[13px] transition-colors ${
+      className={`flex items-center gap-2.5 px-3 py-2 rounded-xl text-[13px] font-medium transition-all ${
         isActive
-          ? 'bg-blue-50 text-blue-700 font-semibold'
-          : 'text-slate-600 hover:bg-slate-50 hover:text-slate-900'
+          ? 'bg-[#0071E3]/10 text-[#0071E3] font-semibold'
+          : 'text-[#86868B] hover:bg-black/[0.04] hover:text-[#1D1D1F]'
       }`}
     >
-      <Icon size={15} className={isActive ? 'text-blue-600' : 'text-slate-400'} aria-hidden="true" />
+      <Icon size={15} className={isActive ? 'text-[#0071E3]' : 'text-[#86868B]'} aria-hidden="true" />
       <span className="truncate">{item.label}</span>
-      {isActive && <span className="ml-auto w-1.5 h-1.5 rounded-full bg-blue-600 shrink-0" aria-hidden="true" />}
+      {isActive && <span className="ml-auto w-1.5 h-1.5 rounded-full bg-[#0071E3] shrink-0" aria-hidden="true" />}
     </Tag>
   );
 }

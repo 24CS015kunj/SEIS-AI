@@ -35,18 +35,18 @@ export default function EngineeringHotspotsSection({
     <section
       role="region"
       aria-label="Engineering Hotspots and Risk Areas"
-      className="bg-white border border-slate-200 rounded-xl shadow-sm p-5 flex flex-col gap-5"
+      className="apple-card p-6 flex flex-col gap-5"
     >
       {/* Header & Controls */}
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-slate-100 pb-4">
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-black/[0.04] pb-4">
         <div>
           <div className="flex items-center gap-2">
-            <Flame size={18} className="text-amber-600 shrink-0" aria-hidden="true" />
-            <h2 className="text-[15px] font-bold text-slate-900 m-0 leading-tight">
+            <Flame size={18} className="text-[#FF9500] shrink-0" aria-hidden="true" />
+            <h2 className="text-[15px] font-semibold text-[#1D1D1F] m-0 leading-tight">
               Engineering Hotspots &amp; Risk Areas
             </h2>
           </div>
-          <p className="text-[12px] text-slate-500 m-0 mt-0.5">
+          <p className="text-[12.5px] text-[#86868B] m-0 mt-0.5">
             Areas receiving the most engineering activity and technical attention.
           </p>
         </div>
@@ -55,17 +55,17 @@ export default function EngineeringHotspotsSection({
         <div
           role="group"
           aria-label="Select hotspot aggregation mode"
-          className="inline-flex items-center rounded-lg bg-slate-100 p-1 self-start sm:self-auto shrink-0"
+          className="inline-flex items-center rounded-full bg-black/[0.05] p-1 self-start sm:self-auto shrink-0"
         >
           <button
             type="button"
             id="hotspot-mode-files"
             onClick={() => setViewMode('files')}
             aria-pressed={viewMode === 'files'}
-            className={`px-3 py-1 text-[12px] font-semibold rounded-md transition-colors ${
+            className={`px-3.5 py-1 text-[12px] font-medium rounded-full transition-all duration-200 cursor-pointer ${
               viewMode === 'files'
-                ? 'bg-blue-600 text-white shadow-xs'
-                : 'text-slate-600 hover:text-slate-900 hover:bg-slate-200/60'
+                ? 'bg-white text-[#1D1D1F] shadow-[0_1px_3px_rgba(0,0,0,0.1)] font-semibold'
+                : 'text-[#86868B] hover:text-[#1D1D1F]'
             }`}
           >
             Hotspot Files
@@ -75,10 +75,10 @@ export default function EngineeringHotspotsSection({
             id="hotspot-mode-directories"
             onClick={() => setViewMode('directories')}
             aria-pressed={viewMode === 'directories'}
-            className={`px-3 py-1 text-[12px] font-semibold rounded-md transition-colors ${
+            className={`px-3.5 py-1 text-[12px] font-medium rounded-full transition-all duration-200 cursor-pointer ${
               viewMode === 'directories'
-                ? 'bg-blue-600 text-white shadow-xs'
-                : 'text-slate-600 hover:text-slate-900 hover:bg-slate-200/60'
+                ? 'bg-white text-[#1D1D1F] shadow-[0_1px_3px_rgba(0,0,0,0.1)] font-semibold'
+                : 'text-[#86868B] hover:text-[#1D1D1F]'
             }`}
           >
             Hotspot Directories

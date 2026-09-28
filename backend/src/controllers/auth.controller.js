@@ -121,7 +121,7 @@ export const githubCallback = async (req, res, next) => {
 
         // If redirect query or browser navigation is preferred
         if (req.query.redirect === "true" && process.env.FRONTEND_URL) {
-            return res.redirect(`${process.env.FRONTEND_URL}?token=${token}`);
+            return res.redirect(`${process.env.FRONTEND_URL}/login?token=${token}`);
         }
 
         return res.status(isNewUser ? 201 : 200).json({

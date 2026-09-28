@@ -74,27 +74,12 @@ services:
     container_name: seis-backend
     ports:
       - "5000:5000"
+    env_file:
+      - ./backend/.env
     environment:
       - PORT=5000
-      - MONGODB_URL=${MONGODB_URL}
-      - JWT_SECRET=${JWT_SECRET:-seis_ai_jwt_secret_key_development_2026_super_secure}
       - FASTAPI_BASE_URL=http://api:8000
-      # The Dockerized frontend is nginx on port 80 (http://localhost), not
-      # the Vite dev server on :5173 -- this value is both the CORS allowed
-      # origin (app.js) and where githubCallback redirects the browser with
-      # the token after a successful GitHub exchange (auth.controller.js).
-      # The old :5173 default pointed both of those at a port nothing in
-      # Docker listens on.
       - FRONTEND_URL=${FRONTEND_URL:-http://localhost}
-      # GitHub OAuth (auth.controller.js) -- previously absent from this
-      # service entirely, so the containerized backend had no client
-      # id/secret and built redirect_uri="undefined". The callback URL is
-      # the same browser-facing value as local dev (backend/.env) because
-      # Express publishes port 5000 identically in both environments; only
-      # FRONTEND_URL differs between them.
-      - GITHUB_CLIENT_ID=${GITHUB_CLIENT_ID}
-      - GITHUB_CLIENT_SECRET=${GITHUB_CLIENT_SECRET}
-      - GITHUB_CALLBACK_URL=${GITHUB_CALLBACK_URL:-http://localhost:5000/api/auth/github/callback?redirect=true}
     depends_on:
       api:
         condition: service_healthy

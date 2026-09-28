@@ -15,6 +15,7 @@
 .windsurf/
 .continue/
 .aider*
+apple-design-skill/
 
 # --- Internal working documentation (not part of the shipped codebase) ---
 docs/

@@ -17,6 +17,7 @@ import {
   ChevronDown,
   Plus,
   LayoutGrid,
+  Sparkles,
 } from 'lucide-react';
 import BrandMark from '../components/common/BrandMark';
 import FadeIn from '../components/common/FadeIn';
@@ -97,11 +98,15 @@ export default function ImportRepositoryPage() {
     setLoadStatus('loading');
     listRepositories()
       .then((data) => {
-        setRepos(data);
+        const safeRepos = Array.isArray(data) ? data : [];
+        setRepos(safeRepos);
         setLoadStatus('ready');
-        setSelectedId((current) => current ?? data[0]?._id ?? null);
+        setSelectedId((current) => current ?? safeRepos[0]?._id ?? null);
       })
-      .catch(() => setLoadStatus('error'));
+      .catch(() => {
+        setRepos([]);
+        setLoadStatus('error');
+      });
   };
 
   useEffect(loadRepositories, []);
@@ -125,21 +130,22 @@ export default function ImportRepositoryPage() {
 
   const languageOptions = useMemo(() => {
     const seen = new Map();
-    for (const repo of repos) {
-      if (repo.language && !seen.has(repo.language)) seen.set(repo.language, true);
+    for (const repo of (repos || [])) {
+      if (repo?.language && !seen.has(repo.language)) seen.set(repo.language, true);
     }
     return [...seen.keys()];
   }, [repos]);
 
   const filteredRepos = useMemo(() => {
     const q = query.trim().toLowerCase();
-    return repos.filter((repo) => {
+    return (repos || []).filter((repo) => {
+      if (!repo) return false;
       if (visibility !== 'all' && repo.visibility !== visibility) return false;
       if (language && repo.language !== language) return false;
       if (
         q &&
-        !repo.name.toLowerCase().includes(q) &&
-        !(repo.description ?? '').toLowerCase().includes(q)
+        !(repo.name || '').toLowerCase().includes(q) &&
+        !(repo.description || '').toLowerCase().includes(q)
       ) {
         return false;
       }
@@ -148,7 +154,7 @@ export default function ImportRepositoryPage() {
   }, [repos, query, visibility, language]);
 
   const selectedRepo = useMemo(
-    () => repos.find((r) => r._id === selectedId) ?? null,
+    () => (repos || []).find((r) => r?._id === selectedId) ?? null,
     [repos, selectedId]
   );
 
@@ -585,7 +591,9 @@ function SidebarPanel({ repo }) {
                 </div>
                 <div className="min-w-0">
                   <div className="text-[13.5px] font-bold text-slate-900 truncate">{repo.name}</div>
-                  <div className="text-[11.5px] text-slate-400 truncate">{repo.owner}</div>
+                  <div className="text-[11.5px] text-slate-400 truncate">
+                    {typeof repo.owner === 'object' ? repo.owner?.login || 'Repository' : repo.owner}
+                  </div>
                 </div>
               </div>
               <div

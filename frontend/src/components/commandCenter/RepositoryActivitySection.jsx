@@ -88,13 +88,13 @@ export default function RepositoryActivitySection({ commits, dashboardData, load
     <section
       role="region"
       aria-label="Repository Activity and Contribution Insights"
-      className="bg-white border border-slate-200 rounded-xl shadow-sm p-5 flex flex-col gap-5"
+      className="apple-card p-6 flex flex-col gap-5"
     >
       {/* Header & Date Range Controls */}
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-slate-100 pb-4">
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-black/[0.04] pb-4">
         <div className="flex items-center gap-2">
-          <Activity size={18} className="text-blue-600 shrink-0" aria-hidden="true" />
-          <h2 className="text-[15px] font-bold text-slate-900 m-0 leading-tight">
+          <Activity size={18} className="text-[#0071E3] shrink-0" aria-hidden="true" />
+          <h2 className="text-[15px] font-semibold text-[#1D1D1F] m-0 leading-tight">
             Repository Activity &amp; Contribution Insights
           </h2>
         </div>
@@ -103,7 +103,7 @@ export default function RepositoryActivitySection({ commits, dashboardData, load
         <div
           role="group"
           aria-label="Select date range for activity analytics"
-          className="inline-flex items-center rounded-lg bg-slate-100 p-1 self-start sm:self-auto shrink-0"
+          className="inline-flex items-center rounded-full bg-black/[0.05] p-1 self-start sm:self-auto shrink-0"
         >
           {[7, 30, 90].map((days) => {
             const isSelected = rangeDays === days;
@@ -114,10 +114,10 @@ export default function RepositoryActivitySection({ commits, dashboardData, load
                 id={`activity-range-${days}d`}
                 onClick={() => setRangeDays(days)}
                 aria-pressed={isSelected}
-                className={`px-3 py-1 text-[12px] font-semibold rounded-md transition-colors ${
+                className={`px-3.5 py-1 text-[12px] font-medium rounded-full transition-all duration-200 cursor-pointer ${
                   isSelected
-                    ? 'bg-blue-600 text-white shadow-xs'
-                    : 'text-slate-600 hover:text-slate-900 hover:bg-slate-200/60'
+                    ? 'bg-white text-[#1D1D1F] shadow-[0_1px_3px_rgba(0,0,0,0.1)] font-semibold'
+                    : 'text-[#86868B] hover:text-[#1D1D1F]'
                 }`}
               >
                 {days}D
@@ -130,14 +130,14 @@ export default function RepositoryActivitySection({ commits, dashboardData, load
       {loading ? (
         <ActivitySkeleton />
       ) : !analytics.available ? (
-        <div className="p-8 text-center bg-slate-50 border border-slate-200 rounded-xl">
-          <p className="text-[13px] text-slate-500 m-0 font-medium">{analytics.reason}</p>
+        <div className="p-8 text-center bg-black/[0.02] border border-black/[0.06] rounded-2xl">
+          <p className="text-[13px] text-[#86868B] m-0 font-medium">{analytics.reason}</p>
         </div>
       ) : (
         <div className="flex flex-col gap-5">
           {analytics.isLimitedHistory && (
-            <div className="flex items-center gap-2 px-3.5 py-2 rounded-lg bg-blue-50/70 border border-blue-100 text-[12px] text-blue-800">
-              <Info size={14} className="text-blue-600 shrink-0" aria-hidden="true" />
+            <div className="flex items-center gap-2 px-3.5 py-2 rounded-xl bg-[#0071E3]/10 text-[12px] text-[#0071E3]">
+              <Info size={14} className="text-[#0071E3] shrink-0" aria-hidden="true" />
               <span>{analytics.historyBannerMessage}</span>
             </div>
           )}
@@ -145,18 +145,18 @@ export default function RepositoryActivitySection({ commits, dashboardData, load
           {/* Top Row: Chart Card + Activity Health Card */}
           <div className="grid grid-cols-1 lg:grid-cols-[1fr_300px] gap-4 items-stretch">
             {/* Advanced Engineering Chart Card */}
-            <div className="bg-slate-50/50 border border-slate-200 rounded-xl p-4 flex flex-col justify-between">
+            <div className="bg-[#FBFBFD] border border-black/[0.06] rounded-2xl p-4.5 flex flex-col justify-between">
               {/* Metric Mode Switcher Header */}
               <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 mb-3">
                 <div>
-                  <span className="text-[10.5px] font-bold uppercase tracking-wider text-slate-400 block mb-0.5">
+                  <span className="text-[11px] font-medium text-[#86868B] block mb-0.5">
                     {activeMetricDisplay.label}
                   </span>
                   <div className="flex items-baseline gap-2">
-                    <span className={`text-[20px] font-bold font-mono ${activeMetricDisplay.colorClass}`}>
+                    <span className={`text-[22px] font-bold tracking-tight ${activeMetricDisplay.colorClass}`}>
                       {activeMetricDisplay.value}
                     </span>
-                    <span className="text-[12px] text-slate-500">{activeMetricDisplay.unit}</span>
+                    <span className="text-[12px] text-[#86868B]">{activeMetricDisplay.unit}</span>
                   </div>
                 </div>
 
@@ -165,7 +165,7 @@ export default function RepositoryActivitySection({ commits, dashboardData, load
                   <div
                     role="group"
                     aria-label="Select chart mode"
-                    className="inline-flex items-center rounded-lg bg-slate-200/70 p-0.5 flex-wrap gap-0.5"
+                    className="inline-flex items-center rounded-full bg-black/[0.05] p-1 flex-wrap gap-1"
                   >
                     {[
                       { key: 'activity', label: 'Activity' },
@@ -182,10 +182,10 @@ export default function RepositoryActivitySection({ commits, dashboardData, load
                           id={`metric-toggle-${m.key}`}
                           onClick={() => setMetric(m.key)}
                           aria-pressed={isSelected}
-                          className={`px-2.5 py-1 text-[11px] font-semibold rounded-md transition-colors ${
+                          className={`px-3 py-1 text-[11.5px] font-medium rounded-full transition-all duration-200 cursor-pointer ${
                             isSelected
-                              ? 'bg-white text-blue-700 shadow-xs'
-                              : 'text-slate-600 hover:text-slate-900'
+                              ? 'bg-white text-[#1D1D1F] shadow-xs font-semibold'
+                              : 'text-[#86868B] hover:text-[#1D1D1F]'
                           }`}
                         >
                           {m.label}
@@ -196,16 +196,16 @@ export default function RepositoryActivitySection({ commits, dashboardData, load
 
                   {/* Trend Indicator Badge */}
                   <div
-                    className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-[11px] font-semibold ${
+                    className={`inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[11.5px] font-medium ${
                       analytics.trendState === 'up'
-                        ? 'bg-emerald-50 text-emerald-700 border border-emerald-200'
+                        ? 'bg-[#34C759]/10 text-[#34C759]'
                         : analytics.trendState === 'down'
-                        ? 'bg-rose-50 text-rose-700 border border-rose-200'
+                        ? 'bg-[#FF3B30]/10 text-[#FF3B30]'
                         : analytics.trendState === 'new_activity'
-                        ? 'bg-blue-50 text-blue-700 border border-blue-200'
+                        ? 'bg-[#0071E3]/10 text-[#0071E3]'
                         : analytics.trendState === 'limited'
-                        ? 'bg-amber-50 text-amber-700 border border-amber-200'
-                        : 'bg-slate-100 text-slate-600 border border-slate-200'
+                        ? 'bg-[#FF9500]/10 text-[#FF9500]'
+                        : 'bg-black/[0.05] text-[#86868B]'
                     }`}
                     title={analytics.trendDescription}
                   >

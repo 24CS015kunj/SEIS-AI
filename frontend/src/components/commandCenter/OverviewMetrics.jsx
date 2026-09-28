@@ -18,27 +18,52 @@ function formatCompact(n) {
  * Dependencies when no root manifest exists) and renders "Not available"
  * plus its `hint` explaining why, instead of a fabricated placeholder.
  */
+const ACCENTS = {
+  files: {
+    bg: 'bg-[#0071E3]/10',
+    text: 'text-[#0071E3]',
+  },
+  linesOfCode: {
+    bg: 'bg-[#AF52DE]/10',
+    text: 'text-[#AF52DE]',
+  },
+  dependencies: {
+    bg: 'bg-[#34C759]/10',
+    text: 'text-[#34C759]',
+  },
+  contributors: {
+    bg: 'bg-[#FF9500]/10',
+    text: 'text-[#FF9500]',
+  },
+};
+
 export default function OverviewMetrics({ metrics }) {
   return (
-    <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
+    <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
       {metrics.map((m) => {
         const Icon = ICONS[m.key];
+        const accent = ACCENTS[m.key] || ACCENTS.files;
         return (
-          <div key={m.key} className="bg-white border border-slate-200 rounded-xl shadow-sm p-4">
-            <div className="flex items-center gap-2 mb-2.5">
-              <span className="w-6 h-6 rounded-md bg-blue-50 flex items-center justify-center shrink-0">
-                <Icon size={13} className="text-blue-600" aria-hidden="true" />
-              </span>
-              <span className="text-[10.5px] font-bold uppercase tracking-wider text-slate-400">{m.label}</span>
+          <div 
+            key={m.key} 
+            className="apple-card p-5 rounded-[20px] transition-all duration-200 group relative flex flex-col justify-between"
+          >
+            <div>
+              <div className="flex items-center gap-2.5 mb-3">
+                <span className={`w-8 h-8 rounded-xl ${accent.bg} flex items-center justify-center shrink-0`}>
+                  <Icon size={16} className={accent.text} aria-hidden="true" />
+                </span>
+                <span className="text-[13px] font-medium text-[#86868B]">{m.label}</span>
+              </div>
+              <div
+                className={`tabular-nums ${
+                  m.value == null ? 'text-[14px] font-medium text-[#86868B]' : 'text-[26px] font-bold tracking-tight text-[#1D1D1F]'
+                }`}
+              >
+                {m.value == null ? 'Not available' : typeof m.value === 'number' ? formatCompact(m.value) : m.value}
+              </div>
             </div>
-            <div
-              className={`font-mono tabular-nums ${
-                m.value == null ? 'text-[14px] font-semibold text-slate-400' : 'text-[22px] font-bold text-slate-900'
-              }`}
-            >
-              {m.value == null ? 'Not available' : typeof m.value === 'number' ? formatCompact(m.value) : m.value}
-            </div>
-            {m.hint && <p className="text-[11px] text-slate-400 mt-1 m-0 leading-snug">{m.hint}</p>}
+            {m.hint && <p className="text-[12px] text-[#86868B] mt-2 m-0 leading-snug font-sans">{m.hint}</p>}
           </div>
         );
       })}

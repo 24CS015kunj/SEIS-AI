@@ -256,7 +256,7 @@ function CommandCenterPageContent({ repositoryId }) {
   const showSkeleton = identity.status === 'loading' || dashboardStatus === 'loading';
 
   return (
-    <div className="relative min-h-screen w-full bg-[#F5F6FA] flex">
+    <div className="relative min-h-screen w-full bg-[#F5F5F7] text-[#1D1D1F] flex">
       <EngineeringBackground />
       <CommandCenterSidebar
         repository={headerRepo}

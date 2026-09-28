@@ -20,6 +20,7 @@ export default function CommandPalette({
   onClose,
   onOpenCopilot,
   onOpenRepoSwitcher,
+  onOpenSemanticSearch,
 }) {
   const navigate = useNavigate();
   const location = useLocation();
@@ -110,6 +111,17 @@ export default function CommandPalette({
         icon: FolderGit2,
         perform: () => onOpenRepoSwitcher?.(),
       },
+      ...(onOpenSemanticSearch
+        ? [
+            {
+              id: 'action-semantic-search',
+              category: 'Actions',
+              label: 'Semantic Code Search',
+              icon: Search,
+              perform: () => onOpenSemanticSearch?.(),
+            },
+          ]
+        : []),
     ];
   }, [repositoryId, navigate, onOpenCopilot, onOpenRepoSwitcher, onOpenSemanticSearch]);
 
