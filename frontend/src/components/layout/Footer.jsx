@@ -30,6 +30,15 @@ export default function Footer({ onOpenDocs }) {
             <div>
               <h4 className="text-[13px] font-bold text-slate-900 tracking-widest uppercase mb-4">RESOURCES</h4>
               <ul className="flex flex-col gap-3 m-0 p-0 list-none">
+                <li>
+                  <button
+                    type="button"
+                    onClick={onOpenDocs}
+                    className="text-sm text-slate-500 hover:text-slate-900 transition-colors bg-transparent border-0 p-0 cursor-pointer"
+                  >
+                    Documentation
+                  </button>
+                </li>
                 <li><a href="https://github.com" target="_blank" rel="noreferrer" className="text-sm text-slate-500 hover:text-slate-900 transition-colors no-underline">GitHub</a></li>
               </ul>
             </div>

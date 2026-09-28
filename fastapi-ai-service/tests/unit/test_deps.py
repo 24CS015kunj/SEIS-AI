@@ -11,8 +11,8 @@ from app.api.deps import (
     get_correlation_id_dep,
     get_evaluation_service,
     get_evolution_analysis_service,
-    get_gemini_gateway,
     get_logger_dep,
+    get_nemotron_gateway,
     get_repository_chat_service,
     get_repository_processing_service,
     get_semantic_search_service,
@@ -24,7 +24,7 @@ from app.api.v1 import health_routes
 from app.config.settings import Settings
 from app.domain.exceptions import SEISAuthorizationError
 from app.infra.cache.cache_client import RedisClient
-from app.infra.llm.gemini_client import GeminiGateway
+from app.infra.llm.gemini_client import NemotronGateway
 from app.infra.queue.task_queue import celery_app
 from app.infra.vectorstore.chroma_client import ChromaClient
 from app.services.evaluation_service import EvaluationService
@@ -178,14 +178,14 @@ def test_get_task_queue_returns_the_process_singleton() -> None:
     assert first is celery_app
 
 
-def test_get_gemini_gateway_returns_gemini_gateway_instance() -> None:
-    gateway = get_gemini_gateway()
-    assert isinstance(gateway, GeminiGateway)
+def test_get_nemotron_gateway_returns_nemotron_gateway_instance() -> None:
+    gateway = get_nemotron_gateway()
+    assert isinstance(gateway, NemotronGateway)
 
 
-def test_get_gemini_gateway_is_a_process_lifetime_singleton() -> None:
+def test_get_nemotron_gateway_is_a_process_lifetime_singleton() -> None:
     """`lru_cache` must yield the same instance across calls (Task 12 §Client Lifetime) --
-    a new genai.Client per request/operation would defeat the point of a shared gateway."""
-    first = get_gemini_gateway()
-    second = get_gemini_gateway()
+    a new httpx.AsyncClient per request/operation would defeat the point of a shared gateway."""
+    first = get_nemotron_gateway()
+    second = get_nemotron_gateway()
     assert first is second

@@ -76,12 +76,20 @@ class FakeCollection:
             return self.next_query_result
         return {"ids": [[]], "documents": [[]], "metadatas": [[]], "distances": [[]]}
 
-    def get(self, ids: list[str], include: list[str]) -> dict[str, Any]:
-        self.get_calls.append({"ids": ids, "include": include})
+    def get(
+        self,
+        ids: list[str] | None = None,
+        include: list[str] | None = None,
+        limit: int | None = None,
+    ) -> dict[str, Any]:
+        self.get_calls.append({"ids": ids, "include": include, "limit": limit})
+        target_ids = ids if ids is not None else list(self._store.keys())
+        if limit is not None:
+            target_ids = target_ids[:limit]
         found_ids: list[str] = []
         docs: list[str] = []
         metas: list[dict[str, Any]] = []
-        for chunk_id in ids:
+        for chunk_id in target_ids:
             if chunk_id in self._store:
                 found_ids.append(chunk_id)
                 doc, meta = self._store[chunk_id]
@@ -315,6 +323,61 @@ async def test_query_similarity_builds_and_where_clause_for_multiple_filters(
     assert "$and" in where
     assert {"language": "python"} in where["$and"]
     assert {"file_path": "src/foo.py"} in where["$and"]
+
+
+# ---------------------------------------------------------------------------
+# get_all_chunks (Task 63 -- lexical retriever's full-collection scan)
+# ---------------------------------------------------------------------------
+async def test_get_all_chunks_returns_every_chunk_in_the_collection(
+    fake_chromadb: dict[str, FakeChromaSDKClient],
+) -> None:
+    client = ChromaClient(settings=Settings())
+    await client.upsert_chunks(
+        "repo-x",
+        [_make_chunk("a"), _make_chunk("b"), _make_chunk("c")],
+        [_make_embedding("a"), _make_embedding("b"), _make_embedding("c")],
+    )
+
+    result = await client.get_all_chunks("repo-x")
+
+    assert {c.chunk_id for c in result} == {"a", "b", "c"}
+
+
+async def test_get_all_chunks_is_scoped_to_the_owning_repository(
+    fake_chromadb: dict[str, FakeChromaSDKClient],
+) -> None:
+    client = ChromaClient(settings=Settings())
+    await client.upsert_chunks(
+        "alpha", [_make_chunk("only-in-alpha")], [_make_embedding("only-in-alpha")]
+    )
+    await client.upsert_chunks(
+        "beta", [_make_chunk("only-in-beta")], [_make_embedding("only-in-beta")]
+    )
+
+    alpha_chunks = await client.get_all_chunks("alpha")
+    beta_chunks = await client.get_all_chunks("beta")
+
+    assert [c.chunk_id for c in alpha_chunks] == ["only-in-alpha"]
+    assert [c.chunk_id for c in beta_chunks] == ["only-in-beta"]
+
+
+async def test_get_all_chunks_on_empty_repository_returns_empty_list(
+    fake_chromadb: dict[str, FakeChromaSDKClient],
+) -> None:
+    client = ChromaClient(settings=Settings())
+    assert await client.get_all_chunks("empty-repo") == []
+
+
+async def test_get_all_chunks_passes_the_limit_through_to_the_sdk(
+    fake_chromadb: dict[str, FakeChromaSDKClient],
+) -> None:
+    client = ChromaClient(settings=Settings())
+    await client.upsert_chunks("repo-x", [_make_chunk()], [_make_embedding()])
+
+    await client.get_all_chunks("repo-x", limit=500)
+
+    collection = fake_chromadb["client"].collections["repo_repo-x"]
+    assert collection.get_calls[0]["limit"] == 500
 
 
 # ---------------------------------------------------------------------------

@@ -1,33 +1,92 @@
 import React, { useEffect, useRef, useState } from 'react';
-import { X, Sparkles, Send } from 'lucide-react';
-
-const MOCK_ANSWERS = {
-  'How does authentication work in this project?':
-    'Authentication starts at the GitHub OAuth route and passes through the authentication controller. The callback generates a session token used to access protected routes.',
-  'Which module changes most often?':
-    'auth/ is the most frequently modified module this month — 34 commits in the last 30 days, largely around session and token handling.',
-  'Where are the highest-risk dependencies?':
-    '3 direct dependencies have not been updated in over a year. They sit in the services/ layer, which also has the highest fan-in in the codebase.',
-  'Summarize the architecture in plain English.':
-    'Requests flow from the interface layer through the API, into services and domain logic, and finally down to infrastructure. The dependency graph is mostly one-directional with 0 circular dependencies.',
-};
+import { Link } from 'react-router-dom';
+import { X, Sparkles, Send, Loader2, AlertCircle, ArrowUpRight, RotateCcw, Eye } from 'lucide-react';
+import { sendChatMessage, streamRepositoryChat } from '../../services/repositoryService';
+import CopilotMarkdown from './CopilotMarkdown';
+import CitationDrawer from '../chat/CitationDrawer';
 
 /**
- * MOCK ONLY — no LLM call. A fixed lookup table stands in for what would
- * later be a real Copilot response stream; the panel shape (question in,
- * answer + related files out) is what should carry over to a real
- * implementation, not this lookup table itself.
+ * Categorizes and formats errors into actionable, human-friendly messages
+ * with clear troubleshooting guidance and retry capability.
  */
-export default function CopilotDrawer({ repository, suggestedQuestions, onClose }) {
-  const [activeQuestion, setActiveQuestion] = useState(null);
+function formatChatError(err) {
+  const status = err.response?.status;
+  const code = err.response?.data?.code;
+  const rawMsg = err.response?.data?.message || err.message || '';
+
+  if (
+    status === 429 ||
+    code === 'RATE_LIMIT_EXCEEDED' ||
+    code === 'LLM_RATE_LIMIT' ||
+    /rate[- ]limit|quota/i.test(rawMsg)
+  ) {
+    return {
+      title: 'Rate Limit / Quota Exceeded',
+      message:
+        'The AI service rate limit or API quota has been reached. Please check your API credits or try again in a few moments.',
+      canRetry: true,
+    };
+  }
+
+  if (
+    status === 503 ||
+    code === 'SERVICE_UNAVAILABLE' ||
+    code === 'SERVICE_DISCONNECTED' ||
+    /socket hang up|ECONNREFUSED|ECONNRESET|offline/i.test(rawMsg)
+  ) {
+    return {
+      title: 'AI Service Disconnected / Quota Limited',
+      message:
+        'The AI service connection was interrupted. This occurs when the AI container is restarting or when the external AI provider (NVIDIA API) is quota-limited.',
+      canRetry: true,
+    };
+  }
+
+  if (status === 504 || code === 'TIMEOUT' || /timeout|timed out/i.test(rawMsg)) {
+    return {
+      title: 'Request Timed Out',
+      message:
+        'The AI service took too long to generate a response. Please try asking again.',
+      canRetry: true,
+    };
+  }
+
+  return {
+    title: 'Assistant Error',
+    message: rawMsg || 'The AI Copilot could not answer that question. Please try again.',
+    canRetry: true,
+  };
+}
+
+/**
+ * Task 75: a citation is only ever rendered as clickable when its
+ * `file_path` looks like a real repository-relative path.
+ */
+function isRepositoryRelativePath(filePath) {
+  if (typeof filePath !== 'string') return false;
+  const trimmed = filePath.trim();
+  if (!trimmed) return false;
+  if (/^([a-z][a-z0-9+.-]*:)?\/\//i.test(trimmed)) return false; // absolute URL
+  if (trimmed.startsWith('/')) return false; // rooted filesystem path, not repo-relative
+  return true;
+}
+export default function CopilotDrawer({ repository, repositoryId, suggestedQuestions, onClose }) {
+  const [messages, setMessages] = useState([]);
+  const [input, setInput] = useState('');
+  const [sending, setSending] = useState(false);
+  const [activeCitation, setActiveCitation] = useState(null);
   const panelRef = useRef(null);
   const closeRef = useRef(null);
+  const messagesEndRef = useRef(null);
+  const hadMessagesRef = useRef(false);
+  const conversationIdRef = useRef(
+    typeof crypto !== 'undefined' && crypto.randomUUID
+      ? crypto.randomUUID()
+      : `conv-${Date.now()}-${Math.random().toString(16).slice(2)}`
+  );
 
-  // Independent of focus: if the answer swap unmounts whatever the user had
-  // focused (e.g. the suggested-question button they just clicked), focus
-  // silently falls back to <body>, which is outside `panelRef` and would
-  // otherwise stop Escape/Tab from reaching the handlers below. A
-  // document-level listener keeps Escape working regardless of focus state.
+  const canChat = Boolean(repositoryId);
+
   useEffect(() => {
     const onKeyDown = (e) => {
       if (e.key === 'Escape') {
@@ -39,120 +98,293 @@ export default function CopilotDrawer({ repository, suggestedQuestions, onClose 
     return () => document.removeEventListener('keydown', onKeyDown);
   }, [onClose]);
 
-  // Re-anchor focus inside the dialog whenever the visible content swaps
-  // (question list <-> answer), so keyboard users are never dropped back to
-  // the page body.
   useEffect(() => {
-    closeRef.current?.focus();
-  }, [activeQuestion]);
-
-  const handleKeyDown = (e) => {
-    if (e.key !== 'Tab' || !panelRef.current) return;
-    const focusables = panelRef.current.querySelectorAll(
-      'button, [href], input, [tabindex]:not([tabindex="-1"])'
-    );
-    if (focusables.length === 0) return;
-    const first = focusables[0];
-    const last = focusables[focusables.length - 1];
-    if (e.shiftKey && document.activeElement === first) {
-      e.preventDefault();
-      last.focus();
-    } else if (!e.shiftKey && document.activeElement === last) {
-      e.preventDefault();
-      first.focus();
+    const hasMessages = messages.length > 0;
+    if (hasMessages && !hadMessagesRef.current) {
+      closeRef.current?.focus();
     }
+    hadMessagesRef.current = hasMessages;
+  }, [messages.length]);
+
+  useEffect(() => {
+    messagesEndRef.current?.scrollIntoView({ block: 'end' });
+  }, [messages, sending]);
+
+  async function submitMessage(text, options = {}) {
+    const trimmed = text.trim();
+    if (!trimmed || sending || !canChat) return;
+
+    const { retryErrorId } = options;
+    const assistantId = `a-${Date.now()}`;
+
+    if (retryErrorId) {
+      setMessages((prev) => [
+        ...prev.filter((m) => m.id !== retryErrorId),
+        { id: assistantId, role: 'assistant', content: '', citations: [], isStreaming: true }
+      ]);
+    } else {
+      setMessages((prev) => [
+        ...prev,
+        { id: `u-${Date.now()}`, role: 'user', content: trimmed },
+        { id: assistantId, role: 'assistant', content: '', citations: [], isStreaming: true }
+      ]);
+    }
+    setInput('');
+    setSending(true);
+
+    try {
+      await streamRepositoryChat(
+        repositoryId,
+        trimmed,
+        conversationIdRef.current,
+        {
+          onToken: (token) => {
+            setMessages((prev) =>
+              prev.map((msg) =>
+                msg.id === assistantId
+                  ? { ...msg, content: msg.content + token }
+                  : msg
+              )
+            );
+          },
+          onDone: (data) => {
+            setMessages((prev) =>
+              prev.map((msg) =>
+                msg.id === assistantId
+                  ? {
+                      ...msg,
+                      citations: Array.isArray(data.citations) ? data.citations : [],
+                      isStreaming: false,
+                    }
+                  : msg
+              )
+            );
+          },
+          onError: (errMsg) => {
+            setMessages((prev) =>
+              prev.map((msg) =>
+                msg.id === assistantId
+                  ? { ...msg, isError: true, content: errMsg || 'Error streaming response.', isStreaming: false }
+                  : msg
+              )
+            );
+          },
+        }
+      );
+    } catch (err) {
+      // Fallback to non-streaming sendChatMessage if streaming connection fails
+      try {
+        const result = await sendChatMessage(repositoryId, trimmed, conversationIdRef.current);
+        setMessages((prev) =>
+          prev.map((msg) =>
+            msg.id === assistantId
+              ? {
+                  ...msg,
+                  content: result.answer,
+                  citations: Array.isArray(result.citations) ? result.citations : [],
+                  isStreaming: false,
+                }
+              : msg
+          )
+        );
+      } catch (fallbackErr) {
+        const formatted = formatChatError(fallbackErr);
+        setMessages((prev) =>
+          prev.map((msg) =>
+            msg.id === assistantId
+              ? {
+                  ...msg,
+                  isError: true,
+                  errorTitle: formatted.title,
+                  content: formatted.message,
+                  retryPrompt: trimmed,
+                  canRetry: formatted.canRetry,
+                  isStreaming: false,
+                }
+              : msg
+          )
+        );
+      }
+    } finally {
+      setSending(false);
+    }
+  }
+
+  const handleFormSubmit = (e) => {
+    e.preventDefault();
+    submitMessage(input);
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex justify-end">
-      <div className="absolute inset-0 bg-slate-900/50" onClick={onClose} aria-hidden="true" />
-      <div
-        ref={panelRef}
-        role="dialog"
-        aria-modal="true"
-        aria-labelledby="copilot-drawer-title"
-        onKeyDown={handleKeyDown}
-        className="relative w-full max-w-[400px] h-full bg-[#0B1220] border-l border-[#1E293B] flex flex-col"
-      >
-        <div className="flex items-center justify-between gap-3 h-14 px-5 border-b border-[#1E293B] shrink-0">
-          <div className="flex items-center gap-2 min-w-0">
-            <span className="w-7 h-7 rounded-lg bg-blue-500/10 flex items-center justify-center shrink-0">
-              <Sparkles size={14} className="text-blue-400" aria-hidden="true" />
-            </span>
-            <h2 id="copilot-drawer-title" className="text-[13.5px] font-bold text-slate-100 truncate">
-              AI Copilot — {repository.owner}/{repository.name}
-            </h2>
-          </div>
-          <button
-            ref={closeRef}
-            type="button"
-            onClick={onClose}
-            aria-label="Close AI Copilot"
-            className="w-8 h-8 rounded-md flex items-center justify-center text-slate-400 hover:text-slate-100 hover:bg-white/5 shrink-0"
-          >
-            <X size={16} aria-hidden="true" />
-          </button>
+    <aside
+      ref={panelRef}
+      role="region"
+      aria-label={`AI Copilot for ${repository.owner}/${repository.name}`}
+      className="fixed bottom-0 right-0 sm:bottom-4 sm:right-4 z-40 w-full sm:w-[380px] h-[calc(100vh-3.5rem)] sm:h-[580px] max-h-[90vh] bg-white border border-slate-200 shadow-xl rounded-t-2xl sm:rounded-2xl flex flex-col overflow-hidden transition-all duration-200"
+    >
+      <div className="flex items-center justify-between gap-3 h-13 px-4 border-b border-slate-200 shrink-0 bg-slate-50/70">
+        <div className="flex items-center gap-2 min-w-0">
+          <span className="w-6 h-6 rounded-lg bg-blue-50 flex items-center justify-center shrink-0">
+            <Sparkles size={13} className="text-blue-600" aria-hidden="true" />
+          </span>
+          <h2 id="copilot-drawer-title" className="text-[13px] font-bold text-slate-900 truncate">
+            AI Copilot — {repository.owner}/{repository.name}
+          </h2>
         </div>
+        <button
+          ref={closeRef}
+          type="button"
+          onClick={onClose}
+          aria-label="Close AI Copilot"
+          className="w-7 h-7 rounded-md flex items-center justify-center text-slate-400 hover:text-slate-900 hover:bg-slate-100 shrink-0 transition-colors"
+        >
+          <X size={15} aria-hidden="true" />
+        </button>
+      </div>
 
         <div className="flex-1 overflow-y-auto px-5 py-5 flex flex-col gap-4">
-          {!activeQuestion ? (
-            <>
+          {!canChat ? (
+            <div className="flex-1 flex items-center justify-center text-center">
               <p className="text-[12.5px] text-slate-500 leading-relaxed m-0">
-                Ask a question about this repository, or try one of the suggestions below.
+                Open this page from a real, synced repository to use AI Copilot.
               </p>
-              <div className="flex flex-col gap-2">
-                {suggestedQuestions.map((q) => (
-                  <button
-                    key={q}
-                    type="button"
-                    onClick={() => setActiveQuestion(q)}
-                    className="text-left text-[12.5px] text-slate-300 bg-white/[0.03] border border-[#1E293B] rounded-lg px-3.5 py-2.5 hover:bg-white/[0.06] hover:text-slate-100 transition-colors"
-                  >
-                    {q}
-                  </button>
-                ))}
-              </div>
-            </>
+            </div>
           ) : (
             <>
-              <div className="flex justify-end">
-                <div className="max-w-[85%] bg-blue-600/20 border border-blue-500/30 rounded-[12px_12px_2px_12px] px-3.5 py-2.5 text-[12.5px] text-blue-100">
-                  {activeQuestion}
+              {messages.length === 0 && (
+                <>
+                  <p className="text-[12.5px] text-slate-500 leading-relaxed m-0">
+                    Ask a question about this repository, or try one of the suggestions below.
+                  </p>
+                  <div className="flex flex-col gap-2">
+                    {suggestedQuestions.map((q) => (
+                      <button
+                        key={q}
+                        type="button"
+                        onClick={() => submitMessage(q)}
+                        className="text-left text-[12.5px] text-slate-600 bg-white border border-slate-200 rounded-lg px-3.5 py-2.5 hover:bg-slate-50 hover:border-blue-300 transition-colors"
+                      >
+                        {q}
+                      </button>
+                    ))}
+                  </div>
+                </>
+              )}
+
+              {messages.map((m) =>
+                m.role === 'user' ? (
+                  <div key={m.id} className="flex justify-end">
+                    <div className="max-w-[85%] bg-blue-600 border border-blue-600 rounded-[12px_12px_2px_12px] px-3.5 py-2.5 text-[12.5px] text-white">
+                      {m.content}
+                    </div>
+                  </div>
+                ) : (
+                  <div key={m.id} className="flex gap-2.5 items-start">
+                    <span className="w-7 h-7 rounded-lg bg-blue-50 flex items-center justify-center shrink-0">
+                      {m.isError ? (
+                        <AlertCircle size={13} className="text-rose-600" aria-hidden="true" />
+                      ) : (
+                        <Sparkles size={13} className="text-blue-600" aria-hidden="true" />
+                      )}
+                    </span>
+                    <div className="flex flex-col gap-1.5 min-w-0 max-w-[85%]">
+                      {m.isError ? (
+                        <div className="min-w-0 rounded-[2px_12px_12px_12px] p-3 border bg-rose-50 border-rose-200 text-rose-800 text-[12.5px] leading-relaxed flex flex-col gap-2">
+                          <div className="flex items-center gap-1.5 font-semibold text-rose-900 text-[12.5px]">
+                            <span>{m.errorTitle || 'Assistant Error'}</span>
+                          </div>
+                          <p className="m-0 text-slate-700 text-[12px] leading-relaxed">{m.content}</p>
+                          {m.canRetry && m.retryPrompt && (
+                            <div className="pt-1 flex items-center justify-end">
+                              <button
+                                type="button"
+                                onClick={() => submitMessage(m.retryPrompt, { retryErrorId: m.id })}
+                                disabled={sending}
+                                className="inline-flex items-center gap-1.5 px-2.5 py-1 text-[11.5px] font-medium text-rose-700 bg-white border border-rose-200 rounded-md hover:bg-rose-100/70 active:scale-95 transition-all focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-rose-500/40 disabled:opacity-50 disabled:cursor-not-allowed shadow-xs"
+                              >
+                                <RotateCcw size={11} className={sending ? 'animate-spin' : ''} aria-hidden="true" />
+                                <span>Retry</span>
+                              </button>
+                            </div>
+                          )}
+                        </div>
+                      ) : (
+                        <div className="min-w-0 rounded-[2px_12px_12px_12px] px-3.5 py-3 border bg-slate-50 border-slate-200 text-slate-800">
+                          <CopilotMarkdown content={m.content} />
+                        </div>
+                      )}
+                      {m.citations && m.citations.length > 0 && (
+                        <div className="flex flex-wrap gap-1 px-0.5">
+                          {m.citations.map((c, i) => {
+                            const label = `${c.file_path}${c.start_line != null ? `:${c.start_line}-${c.end_line}` : ''}`;
+                            return (
+                              <button
+                                key={`${m.id}-cite-${i}`}
+                                type="button"
+                                onClick={() => setActiveCitation(c)}
+                                aria-label={`Inspect citation ${c.file_path}`}
+                                className="inline-flex items-center gap-1 max-w-full text-[11px] font-mono text-blue-700 bg-blue-50 border border-blue-100 rounded-full pl-2 pr-2 py-0.5 cursor-pointer transition-colors hover:bg-blue-100 hover:border-blue-300 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500/40"
+                              >
+                                <Eye size={10} className="shrink-0 text-blue-500" aria-hidden="true" />
+                                <span className="truncate">{label}</span>
+                              </button>
+                            );
+                          })}
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                )
+              )}
+
+              {sending && (
+                <div className="flex gap-2.5 items-start">
+                  <span className="w-7 h-7 rounded-lg bg-blue-50 flex items-center justify-center shrink-0">
+                    <Loader2
+                      size={13}
+                      className="text-blue-600 animate-spin motion-reduce:animate-none"
+                      aria-hidden="true"
+                    />
+                  </span>
+                  <div className="bg-slate-50 border border-slate-200 rounded-[2px_12px_12px_12px] px-3.5 py-3 text-[12.5px] text-slate-500">
+                    Thinking…
+                  </div>
                 </div>
-              </div>
-              <div className="flex gap-2.5 items-start">
-                <span className="w-7 h-7 rounded-lg bg-white/5 flex items-center justify-center shrink-0">
-                  <Sparkles size={13} className="text-indigo-400" aria-hidden="true" />
-                </span>
-                <div className="bg-[#111A2C] border border-[#1E293B] rounded-[2px_12px_12px_12px] px-3.5 py-3 text-[12.5px] text-slate-300 leading-relaxed">
-                  {MOCK_ANSWERS[activeQuestion] ?? 'This is a mock response — real answers will be generated once AI analysis is connected.'}
-                </div>
-              </div>
-              <button
-                type="button"
-                onClick={() => setActiveQuestion(null)}
-                className="self-start text-[12px] font-semibold text-blue-400 hover:text-blue-300 mt-1"
-              >
-                ← Ask something else
-              </button>
+              )}
+              <div ref={messagesEndRef} />
             </>
           )}
         </div>
 
-        <div className="px-5 py-4 border-t border-[#1E293B] shrink-0">
+        <form onSubmit={handleFormSubmit} className="px-5 py-4 border-t border-slate-200 shrink-0">
           <label htmlFor="copilot-input" className="sr-only">Ask about this repository</label>
-          <div className="flex items-center gap-2 h-11 px-3.5 rounded-lg border border-[#1E293B] bg-white/[0.02]">
+          <div className="flex items-center gap-2 h-11 px-3.5 rounded-lg border border-slate-200 bg-white focus-within:border-blue-500 transition-colors">
             <input
               id="copilot-input"
               type="text"
-              disabled
-              placeholder="Ask about the repository… (coming soon)"
-              className="flex-1 bg-transparent text-[12.5px] text-slate-500 placeholder:text-slate-600 border-0 outline-none cursor-not-allowed"
+              value={input}
+              onChange={(e) => setInput(e.target.value)}
+              disabled={!canChat || sending}
+              placeholder={canChat ? 'Ask about the repository…' : 'Ask about the repository… (unavailable)'}
+              className="flex-1 bg-transparent text-[12.5px] text-slate-900 placeholder:text-slate-400 border-0 outline-none disabled:cursor-not-allowed disabled:text-slate-400"
             />
-            <Send size={15} className="text-slate-700 shrink-0" aria-hidden="true" />
+            <button
+              type="submit"
+              disabled={!canChat || sending || input.trim().length === 0}
+              aria-label="Send"
+              className="shrink-0 w-7 h-7 rounded-md flex items-center justify-center bg-blue-600 text-white enabled:hover:bg-blue-700 disabled:cursor-not-allowed disabled:opacity-50 transition-colors"
+            >
+              <Send size={14} aria-hidden="true" />
+            </button>
           </div>
-        </div>
-      </div>
-    </div>
+        </form>
+
+        <CitationDrawer
+          repositoryId={repositoryId}
+          citation={activeCitation}
+          isOpen={Boolean(activeCitation)}
+          onClose={() => setActiveCitation(null)}
+        />
+      </aside>
   );
 }

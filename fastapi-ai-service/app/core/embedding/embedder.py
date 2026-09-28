@@ -9,7 +9,10 @@ throughput and checked against the Embedding Cache before recomputing
 Gemini API (confirmed live: ``404 models/text-embedding-004 is not
 found``). ADR-003's embedding clause is superseded by ADR-007 for this
 reason; ADR-003's answer-generation half (Gemini 2.5 via
-``app.infra.llm.gemini_client.GeminiGateway``) is untouched. The FINAL
+``app.infra.llm.gemini_client.GeminiGateway``) was untouched at the
+time -- that half was later superseded too, by ADR-008 (Task 60), which
+moved answer generation to NVIDIA Nemotron 3 Ultra via the same module
+(class renamed ``GeminiGateway`` -> ``NemotronGateway``). The FINAL
 embedding provider is now NVIDIA's **hosted** inference API serving
 **Nemotron-3-Embed-1B** (``nvidia/nemotron-3-embed-1b``) -- the model is
 never downloaded or loaded inside this process; every embedding call is
@@ -54,6 +57,7 @@ HTTP details").
 
 from __future__ import annotations
 
+import asyncio
 import math
 import time
 from collections.abc import Awaitable, Callable
@@ -125,10 +129,10 @@ class NemotronEmbedder:
     # ------------------------------------------------------------------
     def _get_client(self) -> httpx.AsyncClient:
         if self._client is None:
-            api_key = self._settings.nvidia_api_key.get_secret_value()
+            api_key = self._settings.nvidia_embedding_api_key.get_secret_value()
             if not api_key:
                 raise EmbeddingError(
-                    "NVIDIA_API_KEY is not configured -- cannot call the NVIDIA "
+                    "NVIDIA_EMBEDDING_API_KEY is not configured -- cannot call the NVIDIA "
                     "hosted Embeddings API.",
                     details={"model": EMBEDDING_MODEL_NAME},
                 )
@@ -145,8 +149,8 @@ class NemotronEmbedder:
     async def _run_with_retry(self, fn: Callable[[], Awaitable[T]]) -> T:
         async for attempt in AsyncRetrying(
             retry=retry_if_exception(_is_rate_limit_error),
-            stop=stop_after_attempt(4),
-            wait=wait_exponential(multiplier=1, max=20),
+            stop=stop_after_attempt(2),
+            wait=wait_exponential(multiplier=0.5, max=2),
             reraise=True,
         ):
             with attempt:
@@ -249,26 +253,37 @@ class NemotronEmbedder:
         return [vector for vector in vectors if vector is not None]
 
     async def embed_chunks(
-        self, chunks: list[Chunk], batch_size: int = _DEFAULT_BATCH_SIZE
+        self, chunks: list[Chunk], batch_size: int = _DEFAULT_BATCH_SIZE, max_concurrency: int = 5
     ) -> list[list[float]]:
-        """Embed every chunk's content, batched for throughput, using
-        ``input_type="passage"`` (document/indexing mode). Returns
-        vectors in the same order as ``chunks`` -- ``result[i]`` is
-        ``chunks[i]``'s vector, regardless of the order NVIDIA's
-        response arrives in.
+        """Embed every chunk's content, batched for throughput with bounded
+        concurrency, using ``input_type="passage"`` (document/indexing mode).
+        Returns vectors in the same order as ``chunks``.
         """
         if not chunks:
             return []
         if batch_size <= 0:
             raise ValueError("batch_size must be positive")
 
-        vectors: list[list[float]] = []
-        for start in range(0, len(chunks), batch_size):
-            batch = chunks[start : start + batch_size]
-            texts = [chunk.content for chunk in batch]
-            vectors.extend(await self._call_api(texts, _INPUT_TYPE_DOCUMENT))
+        batches = [chunks[i : i + batch_size] for i in range(0, len(chunks), batch_size)]
+        sem = asyncio.Semaphore(max_concurrency)
 
-        self._log.info("chunks_embedded", chunk_count=len(chunks), batch_size=batch_size)
+        async def _embed_batch(batch: list[Chunk]) -> list[list[float]]:
+            async with sem:
+                texts = [chunk.content for chunk in batch]
+                return await self._call_api(texts, _INPUT_TYPE_DOCUMENT)
+
+        results = await asyncio.gather(*[_embed_batch(b) for b in batches])
+        vectors: list[list[float]] = []
+        for batch_vectors in results:
+            vectors.extend(batch_vectors)
+
+        self._log.info(
+            "chunks_embedded",
+            chunk_count=len(chunks),
+            batch_count=len(batches),
+            batch_size=batch_size,
+            max_concurrency=max_concurrency,
+        )
         return vectors
 
     async def embed_query(self, query: str) -> list[float]:

@@ -1,76 +1,174 @@
-"""Software evolution analysis endpoints.
+"""Repository analysis endpoints (Task 69).
 
-Exposes evolution reports and hotspot calculation produced by the
-Software Evolution Analysis Engine (§5.2, §7) for consumption by Express/React dashboards.
+Exposes ``RepositoryAnalysisService`` (Tasks 25-28's Core Intelligence
+engines -- commit analysis, churn/hotspot scoring, structural trend
+detection, insight generation) to Express, for the Command Center
+Dashboard's AI Insights panel.
+
+Thin by design, same posture as ``chat_routes.py``: adapts the HTTP
+request into the engines' domain models and returns the service's result
+as ``RepositoryAnalysisResponse``, unchanged. No commit-history or file-
+content fetching happens here -- Express already owns that (it is the
+side with a real GitHub token and the synced ``Commit``/``File`` Mongo
+collections, see ``backend/src/services/analysisEvidence.service.js``)
+and sends a bounded, pre-collected payload.
+
+Was previously an empty stub reserved for a "GET /repositories/{id}/evolution"
+endpoint that Task 31 never actually built a route for -- that's a
+different, larger feature (a full indexed Software Evolution report,
+searchable via chat) than this task's narrower scope (Dashboard
+insights). This module's own tag stays ``analysis`` rather than
+``evolution-analysis`` to keep the two conceptually distinct in the
+OpenAPI docs.
 """
 
+from __future__ import annotations
+
 from fastapi import APIRouter, Depends, Path, status
-import structlog
 
-from app.api.deps import get_evolution_analysis_service, verify_service_token
-from app.api.schemas.analysis_schema import (
-    EvolutionAnalysisRequest,
-    EvolutionAnalysisResponse,
+from app.api.deps import (
+    get_evolution_analysis_service,
+    get_repository_analysis_service,
+    verify_service_token,
 )
-from app.core.evolution.churn_calculator import ChurnCalculator
-from app.core.evolution.commit_analyzer import CommitAnalyzer
-from app.core.intelligence.insights_generator import InsightsGenerator
-from app.core.intelligence.trend_detector import TrendDetector
-from app.domain.models import EvolutionReport
+from app.api.schemas.analysis_schema import RepositoryAnalysisRequest, RepositoryAnalysisResponse
+from app.domain.enums import DocumentType
+from app.domain.models import CommitInfo, Document, EvolutionReport
 from app.services.evolution_analysis_service import EvolutionAnalysisService
+from app.services.repository_analysis_service import RepositoryAnalysisService
 
-logger = structlog.get_logger("seis.api.evolution")
+router = APIRouter(prefix="/repositories", tags=["analysis"])
 
-router = APIRouter(prefix="/repositories", tags=["evolution-analysis"])
+
+@router.post(
+    "/{repository_id}/analyze",
+    response_model=RepositoryAnalysisResponse,
+    status_code=status.HTTP_200_OK,
+    summary="Generate deterministic repository analysis findings from real commit/file evidence",
+)
+async def analyze_repository(
+    payload: RepositoryAnalysisRequest,
+    repository_id: str = Path(min_length=1, description="Repository identifier."),
+    _service_token: str = Depends(verify_service_token),
+    service: RepositoryAnalysisService = Depends(get_repository_analysis_service),
+) -> RepositoryAnalysisResponse:
+    """Runs the deterministic analysis pipeline over exactly the
+    ``commits``/``files`` supplied in ``payload`` -- never anything else,
+    never a cross-repository lookup (Task 69 §7: repository isolation is
+    structural here, not a filter applied after the fact).
+
+    Raises:
+        DomainValidationError: ``payload.commits`` is empty (422).
+    """
+    commits = [
+        CommitInfo(
+            commit_sha=c.commit_sha,
+            message=c.message,
+            files_changed=c.files_changed,
+            author_name=c.author_name,
+            author_email=c.author_email,
+            committed_at=c.committed_at,
+        )
+        for c in payload.commits
+    ]
+    files = [
+        Document(
+            repository_id=repository_id,
+            commit_sha=payload.analyzed_commit_sha,
+            file_path=f.file_path,
+            content=f.content,
+            language=f.language or "unknown",
+            document_type=DocumentType.SOURCE_CODE,
+        )
+        for f in payload.files
+    ]
+
+    result = await service.analyze(repository_id, commits, files)
+    return RepositoryAnalysisResponse(
+        repository_id=repository_id,
+        generated_at=result.generated_at,
+        analyzed_commit_count=len(commits),
+        analyzed_file_count=len(files),
+        hotspots=result.hotspots,
+        trends=result.trends,
+        insights=result.insights,
+    )
+
+
+@router.post(
+    "/{repository_id}/commit-impact",
+    status_code=status.HTTP_200_OK,
+    summary="Analyze architectural change risk, breaking API modifications, and commit impact",
+)
+async def analyze_commit_impact(
+    payload: dict,
+    repository_id: str = Path(min_length=1, description="Repository identifier."),
+    _service_token: str = Depends(verify_service_token),
+    service: RepositoryAnalysisService = Depends(get_repository_analysis_service),
+):
+    """Evaluates commit impact, breaking API changes, and architectural risk."""
+    commit_raw = payload.get("commit", {})
+    files_raw = payload.get("files", [])
+
+    commit = CommitInfo(
+        commit_sha=commit_raw.get("commit_sha", "unknown"),
+        message=commit_raw.get("message", ""),
+        files_changed=commit_raw.get("files_changed", []),
+        author_name=commit_raw.get("author_name"),
+        author_email=commit_raw.get("author_email"),
+        committed_at=commit_raw.get("committed_at"),
+    )
+    files = [
+        Document(
+            repository_id=repository_id,
+            commit_sha=commit.commit_sha,
+            file_path=f.get("file_path", ""),
+            content=f.get("content"),
+            language=f.get("language", "unknown"),
+            document_type=DocumentType.SOURCE_CODE,
+        )
+        for f in files_raw
+    ]
+
+    return await service.analyze_commit_impact(repository_id, commit, files)
 
 
 @router.post(
     "/{repository_id}/evolution",
-    response_model=EvolutionAnalysisResponse,
+    response_model=EvolutionReport,
     status_code=status.HTTP_200_OK,
-    summary="Compute and return software evolution and hotspot analysis",
+    summary="Generate software evolution and historical code churn analytics report",
 )
-async def analyze_repository_evolution(
-    repository_id: str = Path(..., description="The repository ID"),
-    payload: EvolutionAnalysisRequest = ...,
-    evolution_service: EvolutionAnalysisService = Depends(get_evolution_analysis_service),
-    _token: str = Depends(verify_service_token),
-) -> EvolutionAnalysisResponse:
-    """Calculates code churn, Hotspot Risk = (Change Frequency x Line Count),
-    detects structural module trends, generates actionable engineering insights,
-    and indexes the resulting report into ChromaDB.
-    """
-    logger.info(
-        "evolution_analysis.request_received",
-        repository_id=repository_id,
-        commit_count=len(payload.commit_history),
-        file_count=len(payload.files),
-    )
+async def analyze_software_evolution(
+    payload: RepositoryAnalysisRequest,
+    repository_id: str = Path(min_length=1, description="Repository identifier."),
+    _service_token: str = Depends(verify_service_token),
+    service: EvolutionAnalysisService = Depends(get_evolution_analysis_service),
+) -> EvolutionReport:
+    """Executes EvolutionAnalysisService to compute commit churn, module evolution
+    trends, hotspot scores, code age distribution, and AI insights with Redis caching."""
+    commits = [
+        CommitInfo(
+            commit_sha=c.commit_sha,
+            message=c.message,
+            files_changed=c.files_changed,
+            author_name=c.author_name,
+            author_email=c.author_email,
+            committed_at=c.committed_at,
+        )
+        for c in payload.commits
+    ]
+    files = [
+        Document(
+            repository_id=repository_id,
+            commit_sha=payload.analyzed_commit_sha,
+            file_path=f.file_path,
+            content=f.content,
+            language=f.language or "unknown",
+            document_type=DocumentType.SOURCE_CODE,
+        )
+        for f in payload.files
+    ]
 
-    # 1. Run evolution pipeline and index report into ChromaDB / Redis cache
-    report: EvolutionReport = await evolution_service.analyze_evolution(
-        repository_id=repository_id,
-        commit_history=payload.commit_history,
-        files=payload.files,
-    )
+    return await service.analyze_evolution(repository_id, commits, files=files)
 
-    # 2. Extract direct granular models for frontend visualization
-    commit_analyzer = CommitAnalyzer()
-    churn_calculator = ChurnCalculator()
-    trend_detector = TrendDetector()
-    insights_generator = InsightsGenerator()
-
-    commit_analysis = commit_analyzer.analyze_commits(payload.commit_history)
-    hotspots = churn_calculator.calculate_hotspots(commit_analysis, payload.files)
-    trends = trend_detector.detect_trends(hotspots)
-    insights = insights_generator.generate_insights(hotspots, trends)
-
-    return EvolutionAnalysisResponse(
-        repository_id=repository_id,
-        markdown=report.markdown,
-        generated_at=report.generated_at,
-        indexed_chunk_count=report.indexed_chunk_count,
-        hotspots=hotspots,
-        trends=trends,
-        insights=insights,
-    )

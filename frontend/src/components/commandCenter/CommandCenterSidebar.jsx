@@ -1,24 +1,53 @@
 import React from 'react';
-import { LayoutGrid, GitBranch, Boxes, TrendingUp, Sparkles, X } from 'lucide-react';
+import { useLocation, Link } from 'react-router-dom';
+import { LayoutGrid, GitBranch, Boxes, TrendingUp, Sparkles, X, LogOut, Layers } from 'lucide-react';
 import { BrandGlyph } from '../common/BrandMark';
+import { useAuth } from '../../context/AuthContext';
+import { getActiveWorkspace } from '../../services/workspaceService';
 
+/**
+ * `page` distinguishes the real destinations this shared shell nav can
+ * point at; `anchor` items only make sense once on the Command Center
+ * page itself. Task 69: "Architecture" used to be an anchor into a small
+ * Dashboard section, which live testing found read as "an effectively
+ * empty page" -- it now points at its own real, dedicated route
+ * (`/architecture`), same `primary` treatment as Dashboard/Source
+ * Control. "Insights" stays an anchor -- AI Insights (Task 69's real
+ * analysis) genuinely lives on the Dashboard, not a separate page.
+ * Task 79: "Software Evolution" now points at its own real, dedicated
+ * route the same way -- the "Soon" placeholder is retired now that a
+ * real page exists behind it.
+ */
 const NAV_ITEMS = [
-  { id: 'overview', label: 'Dashboard', icon: LayoutGrid, kind: 'active' },
-  { id: 'hotspots', label: 'Software Evolution', icon: TrendingUp, kind: 'anchor' },
-  { id: 'insights', label: 'Insights', icon: Sparkles, kind: 'anchor' },
-  { id: 'architecture', label: 'Architecture', icon: Boxes, kind: 'anchor' },
-  { label: 'Source Control', icon: GitBranch, kind: 'soon' },
+  { id: 'overview', label: 'Dashboard', icon: LayoutGrid, page: '/command-center', anchor: true, primary: true },
+  { label: 'Architecture', icon: Boxes, page: '/architecture', primary: true },
+  { id: 'insights', label: 'Insights', icon: Sparkles, page: '/command-center', anchor: true },
+  { label: 'Software Evolution', icon: TrendingUp, page: '/software-evolution', primary: true },
+  { label: 'Source Control', icon: GitBranch, page: '/source-control', primary: true },
 ];
 
 /**
- * A single nav list, not two competing ones — this directly addresses the
- * Figma audit's "duplicate nav systems" finding. Only Dashboard (this page)
- * and the two in-page anchors (Architecture / Insights) are real
- * destinations; Software Evolution and Source Control have no page yet
- * (Source Control is explicitly out of scope for this task) and are shown
- * as inert, clearly-labeled future destinations rather than dead links.
+ * Shared app-shell navigation used by both Command Center and Source
+ * Control — a single nav list, not two competing ones, which directly
+ * addresses the Figma audit's "duplicate nav systems" finding. Active state
+ * is derived from the current route rather than hardcoded, so the same
+ * component works correctly on either page. Software Evolution has no page
+ * yet and stays inert with a "Soon" tag rather than a dead link.
+ *
+ * Task 71: navigation is now driven entirely by `repositoryId` (the real
+ * Mongo `_id`, resolved from the URL by the page via `useRepositoryIdentity`)
+ * instead of React Router `location.state`. Every link this component
+ * builds appends `repositoryId` onto the target path itself
+ * (`/architecture/<id>`), so the selected repository survives every
+ * in-app navigation, a refresh, and a direct/pasted link -- state never
+ * enters the picture. `repositoryId` is `null`/`undefined` exactly when no
+ * repository is selected (the honest state), and every link then points
+ * at the bare, repository-less route.
  */
-export default function CommandCenterSidebar({ repository, mobileOpen, onCloseMobile }) {
+export default function CommandCenterSidebar({ repository, repositoryId, mobileOpen, onCloseMobile }) {
+  const location = useLocation();
+  const { user, logout } = useAuth();
+  const activeWorkspace = getActiveWorkspace();
   return (
     <>
       {mobileOpen && (
@@ -29,84 +58,135 @@ export default function CommandCenterSidebar({ repository, mobileOpen, onCloseMo
         />
       )}
       <aside
-        className={`fixed inset-y-0 left-0 z-50 w-[248px] shrink-0 bg-[#0B1220] border-r border-[#1E293B] flex flex-col transition-transform duration-200 lg:static lg:translate-x-0 ${
+        className={`fixed inset-y-0 left-0 z-50 w-[244px] shrink-0 bg-[#FBFBFD]/80 border-r border-black/[0.06] backdrop-blur-2xl flex flex-col transition-transform duration-200 lg:static lg:translate-x-0 ${
           mobileOpen ? 'translate-x-0' : '-translate-x-full'
         }`}
-        aria-label="Command Center navigation"
+        aria-label="Application navigation"
       >
-        <div className="flex items-center justify-between gap-2 px-4 h-14 border-b border-[#1E293B] shrink-0">
+        <div className="flex items-center justify-between gap-2 px-4 h-14 border-b border-black/[0.06] shrink-0">
           <div className="flex items-center gap-2 min-w-0">
-            <div className="w-7 h-7 rounded-lg bg-white/5 flex items-center justify-center shrink-0">
-              <BrandGlyph size={16} tone="onDark" />
+            <div className="w-7 h-7 rounded-xl bg-[#0071E3]/10 flex items-center justify-center shrink-0">
+              <BrandGlyph size={15} tone="onLight" />
             </div>
-            <span className="text-[13px] font-bold text-slate-100 truncate">SEIS AI Copilot</span>
+            <span className="text-[13.5px] font-semibold text-[#1D1D1F] truncate">SEIS AI Copilot</span>
           </div>
           <button
             type="button"
             onClick={onCloseMobile}
             aria-label="Close navigation"
-            className="lg:hidden w-7 h-7 rounded-md flex items-center justify-center text-slate-400 hover:text-slate-100 hover:bg-white/5"
+            className="lg:hidden w-7 h-7 rounded-full flex items-center justify-center text-[#86868B] hover:text-[#1D1D1F] hover:bg-black/[0.05] transition-colors"
           >
-            <X size={16} aria-hidden="true" />
+            <X size={15} aria-hidden="true" />
           </button>
         </div>
 
-        <div className="px-4 py-4 border-b border-[#1E293B]">
-          <div className="text-[10.5px] font-bold uppercase tracking-wider text-slate-500 mb-1.5">
-            Active Repository
+        {/* Active Workspace Info */}
+        <div className="px-3.5 py-2.5 border-b border-black/[0.04]">
+          <div className="flex items-center justify-between gap-1">
+            <span className="text-[11px] font-medium text-[#86868B]">
+              Workspace
+            </span>
+            <Link
+              to="/workspace"
+              className="text-[11.5px] font-medium text-[#0071E3] hover:underline"
+            >
+              Switch
+            </Link>
           </div>
-          <div className="text-[13.5px] font-semibold text-slate-100 truncate">{repository.name}</div>
-          <div className="text-[11.5px] font-mono text-slate-500 mt-0.5 truncate">
-            {repository.branch} · {repository.owner}
+          <div className="flex items-center gap-1.5 mt-0.5 text-[13px] font-medium text-[#1D1D1F] truncate" title={activeWorkspace?.name || 'My Workspace'}>
+            <Layers size={13} className="text-[#0071E3] shrink-0" />
+            <span className="truncate">{activeWorkspace?.name || 'My Workspace'}</span>
           </div>
         </div>
 
-        <nav className="flex-1 py-2 overflow-y-auto">
+        <div className="px-3.5 py-2.5 border-b border-black/[0.04]">
+          <div className="text-[11px] font-medium text-[#86868B] mb-0.5">
+            Active Repository
+          </div>
+          <div className="text-[13px] font-semibold text-[#1D1D1F] truncate">{repository.name}</div>
+          <div className="flex items-center gap-1.5 text-[11.5px] text-[#86868B] mt-0.5 truncate">
+            <GitBranch size={10} className="text-[#86868B] shrink-0" />
+            <span className="font-mono text-[11px]">{repository.branch}</span>
+            <span className="text-black/20">·</span>
+            <span className="truncate">{repository.owner}</span>
+          </div>
+        </div>
+
+        <nav className="flex-1 py-3 px-2 space-y-0.5 overflow-y-auto">
           {NAV_ITEMS.map((item) => (
-            <NavRow key={item.label} item={item} onNavigate={onCloseMobile} />
+            <NavRow
+              key={item.label}
+              item={item}
+              currentPath={location.pathname}
+              repositoryId={repositoryId}
+              onNavigate={onCloseMobile}
+            />
           ))}
         </nav>
 
-        <div className="px-4 py-3 border-t border-[#1E293B] shrink-0">
-          <span className="inline-flex items-center gap-1.5 text-[11px] font-mono text-emerald-400">
-            <span className="w-1.5 h-1.5 rounded-full bg-emerald-400" aria-hidden="true" />
-            AST Index Ready
-          </span>
+        <div className="px-3.5 py-3 border-t border-black/[0.06] shrink-0 flex items-center justify-between gap-2">
+          <div className="min-w-0">
+            <span className="inline-flex items-center gap-1.5 text-[11.5px] text-[#34C759] font-medium">
+              <span className="w-1.5 h-1.5 rounded-full bg-[#34C759] animate-pulse" aria-hidden="true" />
+              AST Index Active
+            </span>
+            {user && (
+              <div className="text-[11.5px] text-[#86868B] truncate mt-0.5" title={user.githubUsername}>
+                @{user.githubUsername}
+              </div>
+            )}
+          </div>
+          <button
+            type="button"
+            onClick={logout}
+            aria-label="Sign out"
+            title="Sign out"
+            className="shrink-0 w-7 h-7 rounded-full flex items-center justify-center text-[#86868B] hover:text-[#1D1D1F] hover:bg-black/[0.05] transition-colors"
+          >
+            <LogOut size={13} aria-hidden="true" />
+          </button>
         </div>
       </aside>
     </>
   );
 }
 
-function NavRow({ item, onNavigate }) {
+function NavRow({ item, currentPath, repositoryId, onNavigate }) {
   const Icon = item.icon;
 
   if (item.kind === 'soon') {
     return (
-      <div className="flex items-center gap-2.5 px-4 py-2.5 text-[13px] text-slate-600 cursor-not-allowed">
-        <Icon size={15} className="text-slate-700 shrink-0" aria-hidden="true" />
+      <div className="flex items-center gap-2.5 px-3 py-2 rounded-xl text-[13px] text-[#86868B] cursor-not-allowed opacity-60">
+        <Icon size={15} className="text-[#86868B] shrink-0" aria-hidden="true" />
         <span className="truncate">{item.label}</span>
-        <span className="ml-auto text-[10px] font-semibold uppercase tracking-wide text-slate-600 bg-white/5 rounded-full px-1.5 py-0.5 shrink-0">
+        <span className="ml-auto text-[10px] font-medium uppercase tracking-wide text-[#86868B] bg-black/[0.05] rounded-full px-2 py-0.5 shrink-0">
           Soon
         </span>
       </div>
     );
   }
 
+  const onCurrentPage = currentPath === item.page || currentPath.startsWith(`${item.page}/`);
+  const target = repositoryId ? `${item.page}/${repositoryId}` : item.page;
+  const href = item.anchor && onCurrentPage ? `#${item.id}` : `${target}${item.anchor ? `#${item.id}` : ''}`;
+  const isActive = onCurrentPage && item.primary;
+  const Tag = item.anchor && onCurrentPage ? 'a' : Link;
+  const linkProp = Tag === 'a' ? { href } : { to: href };
+
   return (
-    <a
-      href={`#${item.id}`}
+    <Tag
+      {...linkProp}
       onClick={onNavigate}
-      aria-current={item.kind === 'active' ? 'page' : undefined}
-      className={`flex items-center gap-2.5 px-4 py-2.5 text-[13px] transition-colors ${
-        item.kind === 'active'
-          ? 'bg-white/[0.06] text-slate-100 font-semibold'
-          : 'text-slate-400 hover:bg-white/[0.04] hover:text-slate-200'
+      aria-current={isActive ? 'page' : undefined}
+      className={`flex items-center gap-2.5 px-3 py-2 rounded-xl text-[13px] font-medium transition-all ${
+        isActive
+          ? 'bg-[#0071E3]/10 text-[#0071E3] font-semibold'
+          : 'text-[#86868B] hover:bg-black/[0.04] hover:text-[#1D1D1F]'
       }`}
     >
-      <Icon size={15} className={item.kind === 'active' ? 'text-blue-400' : 'text-slate-500'} aria-hidden="true" />
+      <Icon size={15} className={isActive ? 'text-[#0071E3]' : 'text-[#86868B]'} aria-hidden="true" />
       <span className="truncate">{item.label}</span>
-      {item.kind === 'active' && <span className="ml-auto w-1.5 h-1.5 rounded-full bg-blue-500 shrink-0" aria-hidden="true" />}
-    </a>
+      {isActive && <span className="ml-auto w-1.5 h-1.5 rounded-full bg-[#0071E3] shrink-0" aria-hidden="true" />}
+    </Tag>
   );
 }

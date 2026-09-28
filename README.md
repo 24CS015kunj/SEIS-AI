@@ -1,5 +1,9 @@
 # SEIS — Software Evolution Intelligence System
 
+> **⚠️ STATUS NOTICE (added 2026-09-02, updated in the same day's later cleanup pass)**: This README describes an earlier project vision and technology stack (Gemini, self-hosted-only ChromaDB, FastAPI as a network-isolated private service) that has since evolved. For the current, code-verified architecture, see **[`docs/PROJECT_CONTEXT.md`](docs/PROJECT_CONTEXT.md)**. For the target production deployment architecture, see **[`docs/deployment/DEPLOYMENT_ARCHITECTURE.md`](docs/deployment/DEPLOYMENT_ARCHITECTURE.md)**. For a full map of the documentation tree, see **[`docs/DOCUMENTATION_INDEX.md`](docs/DOCUMENTATION_INDEX.md)**. The content below is preserved as originally written and was not rewritten as part of either cleanup pass.
+>
+> **Note**: `docs/` is intentionally excluded from git (see `.gitignore`'s "Internal working documentation" section) — this is a deliberate, pre-existing project convention, not an oversight, and was not changed by this cleanup.
+
 > **AI-powered intelligence layer for understanding how software repositories are structured, how they evolve, and how engineers can query them using grounded AI.**
 
 SEIS (Software Evolution Intelligence System) analyzes GitHub repositories as **living software systems**. It combines repository structure, source code, documentation, and commit history to produce engineering intelligence such as code hotspots, churn trends, architectural signals, documentation gaps, and grounded repository conversations.
@@ -119,15 +123,15 @@ flowchart LR
     EXP[Express Backend<br/>Node.js + MongoDB Atlas]
     FAST[FastAPI AI Service<br/>Python]
     CHROMA[(ChromaDB)]
-    GEMINI[Gemini LLM]
+    NEMOTRON[NVIDIA Nemotron 3 Ultra]
     REACT[React Frontend]
     USER[End User]
 
     GH -->|OAuth / REST / Webhooks| EXP
     EXP -->|Ingested repository data| FAST
     FAST -->|Vectors + metadata| CHROMA
-    FAST -->|Grounded prompts| GEMINI
-    GEMINI -->|Generated response| FAST
+    FAST -->|Grounded prompts| NEMOTRON
+    NEMOTRON -->|Generated response| FAST
     FAST -->|AI results| EXP
     EXP -->|REST / WebSocket| REACT
     REACT --> USER
@@ -602,14 +606,13 @@ SERVICE_PORT=8000
 
 INTERNAL_API_KEY=change-me
 
-GEMINI_API_KEY=your-gemini-api-key
-GEMINI_MODEL_NAME=your-pinned-gemini-model
-GEMINI_TEMPERATURE=0.2
-GEMINI_MAX_OUTPUT_TOKENS=2048
-GEMINI_TIMEOUT_MS=30000
+NVIDIA_API_KEY=your-nvidia-api-key
+NEMOTRON_MODEL_NAME=nvidia/nemotron-3-ultra-550b-a55b
+NEMOTRON_MAX_OUTPUT_TOKENS=2048
+NEMOTRON_TIMEOUT_MS=30000
 
-EMBEDDING_MODEL_NAME=your-embedding-model
-EMBEDDING_MODEL_VERSION=1
+EMBEDDING_MODEL_NAME=nvidia/nemotron-3-embed-1b
+EMBEDDING_MODEL_VERSION=v1
 
 CHROMA_HOST=localhost
 CHROMA_PORT=8001

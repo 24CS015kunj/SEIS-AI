@@ -7,8 +7,12 @@ ENV PYTHONUNBUFFERED=1
 WORKDIR /app
 
 # Install system dependencies if any are needed
+# curl is required by docker-compose.yml's healthcheck (CMD-SHELL curl ...) --
+# python:3.11-slim ships without it, which left the api container permanently
+# "unhealthy" (every check failing with "curl: not found") despite the app
+# itself working correctly.
 RUN apt-get update && \
-    apt-get install -y --no-install-recommends gcc build-essential && \
+    apt-get install -y --no-install-recommends gcc build-essential curl && \
     rm -rf /var/lib/apt/lists/*
 
 # Install python dependencies

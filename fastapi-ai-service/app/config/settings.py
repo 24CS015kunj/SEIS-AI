@@ -61,18 +61,40 @@ class Settings(BaseSettings):
     service_port: int = Field(default=8000, ge=1024, le=65535)
     # Secret — service-to-service auth token Express must present (§26.1-§26.2).
     internal_api_key: SecretStr = SecretStr("")
+    # Express gateway base URL for webhook callbacks (§11.2)
+    express_base_url: str = "http://localhost:5000"
 
-    # --- Model / Gemini (§19.3) — answer-generation LLM only. Unchanged by
-    # the embedding-provider migration below (explicitly out of scope). ---
-    gemini_api_key: SecretStr = SecretStr("")
-    gemini_model_name: str = "gemini-2.5-flash"
-    gemini_temperature: float = Field(default=0.2, ge=0.0, le=2.0)
-    gemini_max_output_tokens: int = Field(default=2048, gt=0)
-    gemini_timeout_ms: int = Field(default=30_000, gt=0)
+    # --- Generation — NVIDIA hosted Nemotron 3 Ultra (Task 60, ADR-008).
+    # Replaces Gemini as the answer-generation LLM: real Gemini
+    # generate_text calls were live-observed (Task 59) timing out around
+    # 30s under normal repository-chat load with no reliable fix short of
+    # changing provider. Live-verified against NVIDIA's real hosted API
+    # before this default was chosen (not assumed from docs):
+    # `nvidia/nemotron-3-ultra-550b-a55b` responds to a realistic
+    # ~4200-token grounded chat prompt in ~3-6s. Reuses `nvidia_api_key`
+    # (already used for embeddings/reranking) -- no separate secret. ---
+    nemotron_model_name: str = "nvidia/nemotron-3-ultra-550b-a55b"
+    nemotron_max_output_tokens: int = Field(default=2048, gt=0)
+    # Live-verified (Task 60): real generate_text calls against the
+    # hosted API, including through the full repository-chat pipeline,
+    # ranged 3-10s. One real E2E run also hit a genuine full-timeout
+    # stall (zero response bytes) that succeeded immediately on retry --
+    # see NemotronGateway's own docstring/`_run_with_retry` for that
+    # finding and the single bounded timeout-retry it added in response.
+    # 30s leaves ~3x headroom above the slowest observed success, and a
+    # worst case of two attempts (60s total) still comfortably clears
+    # the Express chat proxy's 75s budget
+    # (backend/src/config/fastapi.config.js) -- unlike a blind inflation
+    # to cover every possible stall in one attempt.
+    nemotron_timeout_ms: int = Field(default=30_000, gt=0)
 
     # --- Embedding — NVIDIA Nemotron-3-Embed-1B, hosted API (ADR-007). ---
     # Secret — never logged, never committed. Empty by default so import/
     # boot never fails; only an actual embed call raises if this is blank.
+    nvidia_embedding_api_key: SecretStr = SecretStr("")
+    # --- Generation — NVIDIA Nemotron-3-Ultra-550B-A55B, hosted API (Task 60). ---
+    nvidia_chat_api_key: SecretStr = SecretStr("")
+    # Legacy fallback — single NVIDIA_API_KEY for backward compatibility.
     nvidia_api_key: SecretStr = SecretStr("")
     # NVIDIA's documented hosted-inference base URL (verified against
     # https://docs.api.nvidia.com/nim/reference/nvidia-nemotron-3-embed-1b
@@ -83,6 +105,13 @@ class Settings(BaseSettings):
     # hosted API this task requires.
     nvidia_embedding_base_url: str = "https://integrate.api.nvidia.com/v1"
     nvidia_embedding_timeout_ms: int = Field(default=30_000, gt=0)
+    # Generation host, live-verified (Task 60) to be the SAME host as
+    # embeddings above (unlike reranking's separate ai.api.nvidia.com
+    # host) -- kept as its own setting anyway, not a reused reference to
+    # nvidia_embedding_base_url, for the same "a model/endpoint family
+    # gets its own setting even when a host happens to coincide" reason
+    # nvidia_reranking_base_url already established.
+    nvidia_generation_base_url: str = "https://integrate.api.nvidia.com/v1"
     # Model id sent as the request's "model" field. The actual value read
     # by NemotronEmbedder is the module constant of the same name in
     # app/core/embedding/embedder.py (pinned, not settings-driven — see
@@ -103,10 +132,8 @@ class Settings(BaseSettings):
     # model's hosted reranking endpoint is served from `ai.api.nvidia.com`
     # under a per-model path, not `integrate.api.nvidia.com/v1/ranking`
     # (which 404s for this model) — see app/core/retrieval/rag_optimizer.py's
-    # module docstring for the full verification trail. Reuses
-    # `nvidia_api_key`/`nvidia_embedding_timeout_ms` rather than adding
-    # near-duplicate secret/timeout fields for what is still just one more
-    # hosted NVIDIA HTTP call.
+    # module docstring for the full verification trail. Uses
+    # `nvidia_embedding_api_key`/`nvidia_embedding_timeout_ms`.
     nvidia_reranking_base_url: str = "https://ai.api.nvidia.com"
 
     # --- Vector Store (§19 — connection only, no indexing this task) ---
@@ -119,9 +146,35 @@ class Settings(BaseSettings):
     cache_backend: Literal["memory", "redis"] = "memory"
     cache_ttl_seconds: int = Field(default=3600, ge=0)
 
+    # --- Conversation history (Task 65) -- own settings, not a reuse of
+    # cache_ttl_seconds above: conversation lifetime is a distinct concern
+    # from generic response caching, same "a model/endpoint family gets
+    # its own setting even when a value happens to coincide" reasoning
+    # NVIDIA_RERANKING_BASE_URL's own comment already establishes. ---
+    # 24h: long enough to resume a real coding-chat session later the same
+    # day, short enough to bound Redis memory growth automatically.
+    conversation_history_ttl_seconds: int = Field(default=86_400, ge=0)
+    # Maximum conversation turns sent to LLM per request (§20).
+    max_history_turns: int = Field(default=10, ge=0)
+    # Messages, not turns (1 turn = 2 messages: user + assistant) -- 12
+    # messages = 6 prior turns. Bounds both what's persisted (oldest
+    # messages are dropped first) and what's sent to Nemotron 3 Ultra per
+    # call: at a few hundred tokens per turn this adds low-single-digit-
+    # thousands of tokens at most, comfortably inside Nemotron 3 Ultra's
+    # context window and on top of ContextBuilder's own separate 4000-
+    # token repository-context budget.
+    conversation_history_max_messages: int = Field(default=12, gt=0)
+
     # --- Retriever (§19.6 — defaults, no retrieval logic yet) ---
     retriever_default_top_k: int = Field(default=8, gt=0)
-    retriever_similarity_threshold: float = Field(default=0.35, ge=0.0, le=1.0)
+    # Deliberately low: this is a recall-stage cutoff, not the precision
+    # filter. Live-verified against a real repository (Task 59) that a
+    # genuinely on-topic match can score as low as ~0.34 with real Nemotron
+    # embeddings, while RAGOptimizer's cross-encoder reranker (which always
+    # runs afterward for chat) reliably separates true matches (~0.98) from
+    # noise (~0.03-0.15) once given the chance to see them. 0.35 silently
+    # dropped legitimate matches before reranking ever ran.
+    retriever_similarity_threshold: float = Field(default=0.15, ge=0.0, le=1.0)
 
     # --- Logging (§19.8) ---
     log_level: Literal["DEBUG", "INFO", "WARNING", "ERROR", "CRITICAL"] = "INFO"
@@ -146,6 +199,17 @@ class Settings(BaseSettings):
         return f"http://{self.chroma_host}:{self.chroma_port}"
 
     @model_validator(mode="after")
+    def _fallback_legacy_nvidia_api_key(self) -> "Settings":
+        """Fallback for legacy NVIDIA_API_KEY if specific keys are unconfigured."""
+        legacy_key = self.nvidia_api_key.get_secret_value()
+        if legacy_key:
+            if not self.nvidia_embedding_api_key.get_secret_value():
+                self.nvidia_embedding_api_key = self.nvidia_api_key
+            if not self.nvidia_chat_api_key.get_secret_value():
+                self.nvidia_chat_api_key = self.nvidia_api_key
+        return self
+
+    @model_validator(mode="after")
     def _require_secrets_in_production(self) -> "Settings":
         """Configuration validation (§19, §26.3): production may never
         boot with empty secrets. Development/testing/staging are allowed
@@ -158,7 +222,8 @@ class Settings(BaseSettings):
 
         required: dict[str, SecretStr] = {
             "INTERNAL_API_KEY": self.internal_api_key,
-            "GEMINI_API_KEY": self.gemini_api_key,
+            "NVIDIA_EMBEDDING_API_KEY": self.nvidia_embedding_api_key,
+            "NVIDIA_CHAT_API_KEY": self.nvidia_chat_api_key,
         }
         missing = [name for name, value in required.items() if not value.get_secret_value()]
         if missing:

@@ -1,6 +1,7 @@
 version: '3.8'
 
 services:
+  # Python 3.13 FastAPI AI Microservice (Task #7 / Task #8)
   api:
     build:
       context: ./fastapi-ai-service
@@ -9,41 +10,144 @@ services:
     ports:
       - "8000:8000"
     volumes:
-      # Map the source code for hot-reloading
       - ./fastapi-ai-service:/app
-      # Do not override the installed node_modules/python packages in the container with the local one (if any)
       - /app/.venv
+    env_file:
+      - ./fastapi-ai-service/.env
     environment:
       - CHROMA_HOST=chromadb
       - CHROMA_PORT=8000
       - TASK_QUEUE_BROKER_URL=redis://redis:6379/0
-      # Ensure python output is visible immediately in the logs
+      - EXPRESS_BASE_URL=http://host.docker.internal:5000
       - PYTHONUNBUFFERED=1
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
     depends_on:
-      - redis
-      - chromadb
+      redis:
+        condition: service_healthy
+      chromadb:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD-SHELL", "curl -f http://localhost:8000/health/live || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
     restart: unless-stopped
 
+  # Celery Ingestion Worker
+  worker:
+    build:
+      context: ./fastapi-ai-service
+      dockerfile: Dockerfile
+    container_name: fastapi-worker
+    command: >
+      celery -A app.infra.queue.task_queue worker
+      --include=app.tasks.ingestion
+      --queues=ingestion
+      --loglevel=info
+    volumes:
+      - ./fastapi-ai-service:/app
+      - /app/.venv
+    env_file:
+      - ./fastapi-ai-service/.env
+    environment:
+      - CHROMA_HOST=chromadb
+      - CHROMA_PORT=8000
+      - TASK_QUEUE_BROKER_URL=redis://redis:6379/0
+      - EXPRESS_BASE_URL=http://host.docker.internal:5000
+      - PYTHONUNBUFFERED=1
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    depends_on:
+      redis:
+        condition: service_healthy
+      chromadb:
+        condition: service_healthy
+    restart: unless-stopped
+
+  # Node.js Express Backend Gateway (Task #8)
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: seis-backend
+    ports:
+      - "5000:5000"
+    env_file:
+      - ./backend/.env
+    environment:
+      - PORT=5000
+      - FASTAPI_BASE_URL=http://api:8000
+      - FRONTEND_URL=${FRONTEND_URL:-http://localhost}
+    depends_on:
+      api:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD-SHELL", "curl -f http://localhost:5000/api/health || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
+    restart: unless-stopped
+
+  # React 19 Frontend Web Client (Task #8)
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+    container_name: seis-frontend
+    ports:
+      - "80:80"
+    depends_on:
+      backend:
+        condition: service_healthy
+    healthcheck:
+      # 127.0.0.1, not localhost: this image's /etc/hosts resolves
+      # "localhost" to ::1 first, but nginx only listens on 0.0.0.0 (IPv4) --
+      # wget then hits a real IPv6 connection-refused, permanently failing
+      # the healthcheck despite nginx serving real traffic correctly over
+      # IPv4 the whole time. This compose-level healthcheck overrides the
+      # Dockerfile's own HEALTHCHECK instruction, so both were fixed.
+      test: ["CMD-SHELL", "wget --quiet --tries=1 --spider http://127.0.0.1/ || exit 1"]
+      interval: 15s
+      timeout: 5s
+      retries: 3
+      start_period: 5s
+    restart: unless-stopped
+
+  # Redis Cache & Celery Broker
   redis:
     image: redis:7-alpine
     container_name: fastapi-redis
+    command: redis-server --appendonly yes
     ports:
       - "6379:6379"
+    volumes:
+      - redisdata:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 5
     restart: unless-stopped
 
+  # Chroma Vector Database
   chromadb:
-    # Pinned to match ADR-004/06_DEPLOYMENT_GUIDE.md exactly. `:latest`
-    # previously resolved to server v1.0.0, incompatible with the pinned
-    # `chromadb==0.6.2` Python client (requirements-vectorstore.txt) --
-    # confirmed via a real `KeyError: '_type'` on collection creation in
-    # the prior infrastructure audit. 0.6.3 matches the client.
     image: chromadb/chroma:0.6.3
     container_name: fastapi-chromadb
     ports:
       - "8001:8000"
     volumes:
       - chromadata:/chroma/chroma
+    healthcheck:
+      test: ["CMD-SHELL", "curl -f http://localhost:8000/api/v1/heartbeat || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
     restart: unless-stopped
 
 volumes:
   chromadata:
+  redisdata:

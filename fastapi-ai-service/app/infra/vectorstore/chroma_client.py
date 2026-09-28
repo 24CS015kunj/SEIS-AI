@@ -382,6 +382,30 @@ class ChromaClient:
 
         return await self._execute("query_similarity", repository_id, _op)
 
+    async def get_all_chunks(self, repository_id: str, limit: int = 2000) -> list[Chunk]:
+        """Read-only scan of every chunk in one repository's collection,
+        newly added for Task 63's lexical retriever -- needs to compare a
+        query's exact identifiers/filenames against every indexed chunk's
+        metadata and content, not just a similarity-ranked subset.
+
+        Scoped by ``repository_id`` exactly like every other method here
+        (via ``_get_collection`` -> ``repo_{repository_id}``) -- the same
+        collection-per-repository isolation boundary (§5.5, ADR-004),
+        never a metadata filter that could be misapplied. ``limit`` bounds
+        the scan (default 2000, comfortably above this project's current
+        real-repository scale of tens of chunks) so a pathologically large
+        repository can't turn one chat turn into an unbounded read; this
+        is a safety cap, not a tuning knob callers are expected to adjust.
+        """
+
+        def _op() -> list[Chunk]:
+            client = self._get_client()
+            collection = self._get_collection(client, repository_id)
+            result = collection.get(include=["documents", "metadatas"], limit=limit)
+            return self._to_chunks(result)
+
+        return await self._execute("get_all_chunks", repository_id, _op)
+
     async def get_chunks(self, repository_id: str, chunk_ids: list[str]) -> list[Chunk]:
         """Direct retrieval of specific chunks by id (not a similarity query)."""
         if not chunk_ids:

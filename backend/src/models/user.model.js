@@ -5,12 +5,12 @@ const UserSchema = new mongoose.Schema(
   {
     githubId: {
       type: String,
-      requried: true,
+      required: true,
       unique: true,
     },
     githubUsername: {
       type: String,
-      requried: true,
+      required: true,
       trim: true,
     },
     name: {
@@ -50,6 +50,14 @@ const UserSchema = new mongoose.Schema(
 
     githubProfileUrl: {
       type: String,
+    },
+
+    // GitHub OAuth access token -- hidden from normal queries by default
+    // (auth.middleware.js explicitly opts in via .select("+accessToken")
+    // when it needs to attach it to req.user for downstream GitHub calls).
+    accessToken: {
+      type: String,
+      select: false,
     },
 
     publicRepos: {

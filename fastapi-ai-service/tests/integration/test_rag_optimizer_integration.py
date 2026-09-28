@@ -7,7 +7,9 @@ is configured in this environment/session, this module is skipped with
 an explicit reason, never a fabricated pass.
 
 Makes real, billable (or free-tier) HTTPS calls to
-``https://integrate.api.nvidia.com/v1/ranking`` per test run. The API
+``https://ai.api.nvidia.com/v1/retrieval/nvidia/llama-nemotron-rerank-vl-1b-v2/reranking``
+per test run (model updated in Task 60 after the prior model reached
+end-of-life -- see ``rag_optimizer.py``'s module docstring). The API
 key is read only via ``Settings``/``get_secret_value()``; it is never
 printed, logged, or otherwise included in any assertion or failure
 message here.
@@ -25,11 +27,10 @@ from app.domain.models import ChunkMetadata, SearchResultItem
 _settings_for_skip_check = get_settings()
 
 pytestmark = pytest.mark.skipif(
-    not _settings_for_skip_check.nvidia_api_key.get_secret_value(),
+    not _settings_for_skip_check.nvidia_embedding_api_key.get_secret_value(),
     reason=(
-        "No NVIDIA_API_KEY configured in this environment. Set it in "
-        "fastapi-ai-service/.env (see .env.example) and re-run to verify "
-        "against the real NVIDIA hosted reranking API."
+        "No NVIDIA_EMBEDDING_API_KEY configured in this environment. Set it in "
+        "fastapi-ai-service/.env to run live integration tests."
     ),
 )
 
@@ -98,4 +99,4 @@ async def test_relevant_passage_is_ranked_above_an_irrelevant_one_against_the_re
 
 
 def test_reranking_model_name_matches_the_verified_current_model() -> None:
-    assert RERANKING_MODEL_NAME == "nvidia/llama-nemotron-rerank-1b-v2"
+    assert RERANKING_MODEL_NAME == "nvidia/llama-nemotron-rerank-vl-1b-v2"

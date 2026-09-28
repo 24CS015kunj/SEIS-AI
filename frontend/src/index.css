@@ -1,175 +1,314 @@
 @import "tailwindcss";
 
 @theme {
-  --font-sans: 'Inter', -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+  --font-sans: -apple-system, BlinkMacSystemFont, "SF Pro Display", "SF Pro Text", "SF Pro", "Helvetica Neue", Helvetica, Arial, sans-serif;
+  --font-mono: "SF Mono", SFMono-Regular, ui-monospace, Menlo, Monaco, Consolas, monospace;
 }
 
 @layer base {
   html {
     scroll-behavior: smooth;
+    background-color: #F5F5F7;
   }
+
   body {
     font-family: var(--font-sans);
     -webkit-font-smoothing: antialiased;
     -moz-osx-font-smoothing: grayscale;
+    background-color: #F5F5F7;
+    color: #1D1D1F;
+    letter-spacing: -0.01em;
+  }
+
+  /* Sleek Apple-style translucent scrollbar */
+  ::-webkit-scrollbar {
+    width: 8px;
+    height: 8px;
+  }
+  ::-webkit-scrollbar-track {
+    background: transparent;
+  }
+  ::-webkit-scrollbar-thumb {
+    background: rgba(0, 0, 0, 0.18);
+    border-radius: 9999px;
+    border: 2px solid transparent;
+    background-clip: padding-box;
+  }
+  ::-webkit-scrollbar-thumb:hover {
+    background: rgba(0, 0, 0, 0.32);
+    border: 2px solid transparent;
+    background-clip: padding-box;
   }
 }
 
 @layer components {
-  /* Typography Scale */
+  /* Apple Typography Hierarchy */
   .headline-xl {
     font-size: 3rem;
-    line-height: 1.1;
+    line-height: 1.08;
     font-weight: 800;
-    color: #0f172a;
-    letter-spacing: -0.025em;
+    color: #1D1D1F;
+    letter-spacing: -0.035em;
   }
   @media (min-width: 768px) {
     .headline-xl {
       font-size: 3.75rem;
+      letter-spacing: -0.04em;
     }
   }
 
   .headline-lg {
-    font-size: 2.25rem;
+    font-size: 2.125rem;
     line-height: 1.15;
-    font-weight: 800;
-    color: #0f172a;
-    letter-spacing: -0.025em;
+    font-weight: 700;
+    color: #1D1D1F;
+    letter-spacing: -0.03em;
   }
   @media (min-width: 768px) {
     .headline-lg {
-      font-size: 3rem;
+      font-size: 2.75rem;
     }
   }
 
   .body-lg {
-    font-size: 1.25rem;
-    line-height: 1.625;
-    color: #475569;
+    font-size: 1.1875rem;
+    line-height: 1.55;
+    color: #86868B;
+    letter-spacing: -0.015em;
   }
 
   .body-base {
     font-size: 1rem;
-    line-height: 1.625;
-    color: #475569;
+    line-height: 1.55;
+    color: #86868B;
+    letter-spacing: -0.01em;
   }
 
   .body-sm {
     font-size: 0.875rem;
-    line-height: 1.625;
-    color: #64748b;
+    line-height: 1.5;
+    color: #86868B;
   }
 
   .eyebrow {
-    font-size: 13px;
-    font-weight: 700;
-    color: #2563eb;
-    letter-spacing: 0.1em;
+    font-size: 12px;
+    font-weight: 600;
+    color: #0071E3;
+    letter-spacing: 0.06em;
     text-transform: uppercase;
-    margin-bottom: 1rem;
+    margin-bottom: 0.75rem;
   }
 
-  /* Layout Spacing */
+  /* Apple Liquid Glass (HIG 2025 Dynamic Translucent Material) */
+  .liquid-glass,
+  .tech-glass {
+    background: rgba(255, 255, 255, 0.75) !important;
+    backdrop-filter: blur(28px) saturate(190%) !important;
+    -webkit-backdrop-filter: blur(28px) saturate(190%) !important;
+    border: 1px solid rgba(255, 255, 255, 0.7) !important;
+    box-shadow: 0 4px 24px -2px rgba(0, 0, 0, 0.05), inset 0 1px 0 0 rgba(255, 255, 255, 0.85) !important;
+  }
+
+  .liquid-glass-clear {
+    background: rgba(255, 255, 255, 0.55) !important;
+    backdrop-filter: blur(20px) saturate(180%) !important;
+    -webkit-backdrop-filter: blur(20px) saturate(180%);
+    border: 1px solid rgba(255, 255, 255, 0.5) !important;
+    box-shadow: 0 8px 32px 0 rgba(0, 0, 0, 0.06) !important;
+  }
+
+  /* Apple Structured Content Card (Squircle geometry with diffuse Apple shadow) */
+  .apple-card,
+  .dev-card {
+    background-color: #FFFFFF !important;
+    border-radius: 20px !important;
+    border: 1px solid rgba(0, 0, 0, 0.06) !important;
+    box-shadow: 0 4px 20px -2px rgba(0, 0, 0, 0.035), 0 1px 2px 0 rgba(0, 0, 0, 0.02) !important;
+    transition: all 0.25s cubic-bezier(0.16, 1, 0.3, 1) !important;
+  }
+  .apple-card:hover,
+  .dev-card:hover {
+    box-shadow: 0 14px 34px -4px rgba(0, 0, 0, 0.07), 0 2px 6px 0 rgba(0, 0, 0, 0.03) !important;
+    transform: translateY(-2px);
+  }
+
+  /* Universal Apple Card Overrides for Existing Components */
+  .bg-white {
+    background-color: #FFFFFF !important;
+    border-radius: 20px;
+    box-shadow: 0 4px 20px -2px rgba(0, 0, 0, 0.035), 0 1px 2px 0 rgba(0, 0, 0, 0.02);
+  }
+
+  .border-slate-200,
+  .border-slate-100 {
+    border-color: rgba(0, 0, 0, 0.06) !important;
+  }
+
+  .text-slate-900 {
+    color: #1D1D1F !important;
+  }
+  .text-slate-800 {
+    color: #2D2D30 !important;
+  }
+  .text-slate-700 {
+    color: #48484A !important;
+  }
+  .text-slate-600,
+  .text-slate-500 {
+    color: #86868B !important;
+  }
+  .text-slate-400 {
+    color: #A1A1A6 !important;
+  }
+
+  .bg-\[\#F8FAFC\],
+  .bg-\[\#FAFAFA\],
+  .bg-\[\#F5F6FA\] {
+    background-color: #F5F5F7 !important;
+  }
+
+  /* Apple Buttons (Pill & Soft Tinted) */
+  .btn-primary,
+  .btn-apple-primary {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 0.5rem;
+    height: 44px;
+    padding: 0 1.5rem;
+    background-color: #0071E3 !important;
+    color: #FFFFFF !important;
+    font-size: 0.95rem;
+    font-weight: 500;
+    border-radius: 9999px !important;
+    border: none !important;
+    cursor: pointer;
+    box-shadow: 0 2px 8px 0 rgba(0, 113, 227, 0.32);
+    transition: all 0.2s cubic-bezier(0.16, 1, 0.3, 1);
+  }
+  .btn-primary:hover,
+  .btn-apple-primary:hover {
+    background-color: #0077ED !important;
+    box-shadow: 0 4px 16px 0 rgba(0, 113, 227, 0.42);
+    transform: scale(1.02);
+  }
+  .btn-primary:active,
+  .btn-apple-primary:active {
+    transform: scale(0.97);
+    background-color: #0062C4 !important;
+  }
+
+  .btn-dev-primary {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 0.625rem;
+    background-color: #0F172A !important;
+    color: #FFFFFF !important;
+    font-size: 0.95rem;
+    font-weight: 600;
+    border-radius: 12px !important;
+    border: 1px solid #1E293B !important;
+    cursor: pointer;
+    box-shadow: 0 4px 14px rgba(15, 23, 42, 0.16);
+    transition: all 0.2s cubic-bezier(0.16, 1, 0.3, 1);
+  }
+  .btn-dev-primary:hover {
+    background-color: #1E293B !important;
+    box-shadow: 0 6px 20px rgba(15, 23, 42, 0.24);
+    transform: translateY(-1px);
+  }
+  .btn-dev-primary:active {
+    transform: translateY(0);
+    background-color: #0B1120 !important;
+  }
+
+  .btn-secondary,
+  .btn-apple-secondary {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 0.5rem;
+    height: 44px;
+    padding: 0 1.5rem;
+    background-color: rgba(0, 0, 0, 0.05) !important;
+    color: #1D1D1F !important;
+    font-size: 0.95rem;
+    font-weight: 500;
+    border-radius: 9999px !important;
+    border: 1px solid rgba(0, 0, 0, 0.06) !important;
+    cursor: pointer;
+    transition: all 0.2s cubic-bezier(0.16, 1, 0.3, 1);
+  }
+  .btn-secondary:hover,
+  .btn-apple-secondary:hover {
+    background-color: rgba(0, 0, 0, 0.08) !important;
+    transform: scale(1.02);
+  }
+  .btn-secondary:active,
+  .btn-apple-secondary:active {
+    transform: scale(0.97);
+  }
+
+  /* Apple Capsule Segmented Control */
+  .apple-segmented {
+    display: inline-flex;
+    align-items: center;
+    background: rgba(120, 120, 128, 0.12);
+    border-radius: 9999px;
+    padding: 3px;
+    gap: 2px;
+  }
+  .apple-segmented-item {
+    padding: 5px 14px;
+    font-size: 12px;
+    font-weight: 500;
+    border-radius: 9999px;
+    color: #1D1D1F;
+    transition: all 0.18s ease;
+    cursor: pointer;
+  }
+  .apple-segmented-item.active {
+    background: #FFFFFF;
+    box-shadow: 0 1px 3px 0 rgba(0, 0, 0, 0.12), 0 1px 2px 0 rgba(0, 0, 0, 0.08);
+    font-weight: 600;
+  }
+
+  /* macOS Window Chrome */
+  .app-window {
+    border-radius: 22px !important;
+    overflow: hidden;
+    border: 1px solid rgba(0, 0, 0, 0.08) !important;
+    box-shadow: 0 25px 60px -15px rgba(0, 0, 0, 0.16), 0 0 0 1px rgba(0, 0, 0, 0.02) !important;
+  }
+
+  .app-titlebar {
+    height: 2.8rem;
+    padding: 0 1.25rem;
+    border-bottom: 1px solid rgba(0, 0, 0, 0.06);
+    display: flex;
+    align-items: center;
+    background: rgba(255, 255, 255, 0.88);
+    backdrop-filter: blur(20px);
+  }
+
+  /* Section Spacing */
   .section-padding {
-    padding-top: 6rem;
-    padding-bottom: 6rem;
+    padding-top: 5.5rem;
+    padding-bottom: 5.5rem;
   }
   @media (min-width: 768px) {
     .section-padding {
-      padding-top: 8rem;
-      padding-bottom: 8rem;
-    }
-  }
-
-  .section-padding-sm {
-    padding-top: 4rem;
-    padding-bottom: 4rem;
-  }
-  @media (min-width: 768px) {
-    .section-padding-sm {
-      padding-top: 6rem;
-      padding-bottom: 6rem;
+      padding-top: 7rem;
+      padding-bottom: 7rem;
     }
   }
 
   .section-header-centered {
     text-align: center;
-    max-width: 800px;
+    max-width: 840px;
     margin-left: auto;
     margin-right: auto;
-    margin-bottom: 4rem;
-  }
-  @media (min-width: 768px) {
-    .section-header-centered {
-      margin-bottom: 6rem;
-    }
-  }
-
-  .section-header-layout {
-    max-width: 800px;
-    margin-bottom: 4rem;
-  }
-  @media (min-width: 768px) {
-    .section-header-layout {
-      margin-bottom: 6rem;
-    }
-  }
-
-  /* Interactive Components */
-  .btn-primary {
-    display: inline-flex;
-    align-items: center;
-    justify-content: center;
-    gap: 0.5rem;
-    height: 48px;
-    padding: 0 1.5rem;
-    background-color: #4f46e5;
-    color: #ffffff;
-    font-size: 1rem;
-    font-weight: 600;
-    border-radius: 0.5rem;
-    border: none;
-    cursor: pointer;
-    transition: background-color 0.2s;
-  }
-  .btn-primary:hover {
-    background-color: #4338ca;
-  }
-
-  .btn-secondary {
-    display: inline-flex;
-    align-items: center;
-    justify-content: center;
-    gap: 0.5rem;
-    height: 48px;
-    padding: 0 1.5rem;
-    background-color: #ffffff;
-    color: #0f172a;
-    font-size: 1rem;
-    font-weight: 600;
-    border-radius: 0.5rem;
-    border: 1.5px solid #e2e8f0;
-    cursor: pointer;
-    transition: background-color 0.2s;
-  }
-  .btn-secondary:hover {
-    background-color: #f8fafc;
-  }
-
-  /* Utility Animations */
-  .app-window {
-    border-radius: 0.75rem;
-    overflow: hidden;
-    border: 1px solid #e2e8f0;
-    box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.25);
-  }
-
-  .app-titlebar {
-    height: 2.5rem;
-    padding: 0 1rem;
-    border-bottom: 1px solid #e2e8f0;
-    display: flex;
-    align-items: center;
+    margin-bottom: 3.5rem;
   }
 }

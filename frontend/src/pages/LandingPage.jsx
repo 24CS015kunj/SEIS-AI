@@ -28,34 +28,27 @@ export default function LandingPage() {
 
   return (
     <div
-      style={{
-        height: '100vh',
-        fontFamily: "'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif",
-        color: '#0F172A',
-      }}
-      className="relative bg-[#FAFAFA] h-screen w-full overflow-y-auto overflow-x-hidden scroll-smooth"
+      className="relative bg-[#F5F5F7] text-[#1D1D1F] min-h-screen w-full overflow-y-auto overflow-x-hidden scroll-smooth"
     >
-      {/* 1. Base Subtle Dot Grid */}
-      <div
-        className="fixed inset-0 z-0 pointer-events-none"
-        style={{
-          backgroundImage: 'radial-gradient(#CBD5E1 1px, transparent 1px)',
-          backgroundSize: '32px 32px',
-        }}
-      />
+      {/* 1. Luminous Apple Ambient Aurora Wallpaper */}
+      <div className="absolute top-0 left-1/2 -translate-x-1/2 w-full max-w-[1340px] h-[640px] pointer-events-none overflow-hidden z-0">
+        <div className="absolute top-[-100px] left-1/2 -translate-x-1/2 w-[800px] sm:w-[1040px] h-[480px] bg-gradient-to-b from-[#0071E3]/18 via-[#AF52DE]/10 to-transparent rounded-full blur-[110px]" />
+        <div className="absolute top-[120px] left-1/6 w-[480px] h-[360px] bg-[#32ADE6]/12 rounded-full blur-[100px]" />
+        <div className="absolute top-[80px] right-1/6 w-[420px] h-[320px] bg-[#FF9500]/08 rounded-full blur-[100px]" />
+      </div>
 
-      {/* 2. Antigravity Glowing Spotlight Circle */}
+      {/* 2. Interactive Cursor Spotlight */}
       <div
-        className="fixed z-0 pointer-events-none transition-opacity duration-300 ease-out mix-blend-multiply"
+        className="fixed z-0 pointer-events-none transition-opacity duration-300 ease-out"
         style={{
-          width: '800px',
-          height: '800px',
+          width: '750px',
+          height: '750px',
           left: 0,
           top: 0,
-          transform: `translate(${mousePos.x - 400}px, ${mousePos.y - 400}px)`,
-          background: 'radial-gradient(circle, rgba(59,130,246,0.15) 0%, rgba(139,92,246,0.08) 40%, transparent 70%)',
-          filter: 'blur(40px)',
-          opacity: mousePos.x === -1000 ? 0 : 1
+          transform: `translate(${mousePos.x - 375}px, ${mousePos.y - 375}px)`,
+          background: 'radial-gradient(circle, rgba(0,113,227,0.08) 0%, rgba(175,82,222,0.04) 40%, transparent 70%)',
+          filter: 'blur(60px)',
+          opacity: mousePos.x === -1000 ? 0 : 1,
         }}
       />
 

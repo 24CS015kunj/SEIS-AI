@@ -42,6 +42,7 @@ dist-ssr
 .windsurf/
 .continue/
 .aider*
+apple-design-skill/
 
 # --- Internal working documentation (not part of the shipped codebase) ---
 docs/
@@ -55,6 +56,13 @@ __pycache__/
 .coverage
 htmlcov/
 
+# --- Environment / secrets ---
+.env
+.env.*
+!.env.example
+
 # --- OS / IDE ---
 Thumbs.db
+.idea/
+.vscode/
 

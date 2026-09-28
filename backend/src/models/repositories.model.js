@@ -8,6 +8,19 @@ const RepositorySchema = new mongoose.Schema(
             required: true
         },
 
+        // Not required (Task 43): repositories synced before a Workspace
+        // concept existed have no legitimate workspace to backfill onto --
+        // fabricating one (from userId, repository._id, etc.) was
+        // explicitly rejected during the Task 42 investigation. Left null
+        // until the owning user actually associates this repository with a
+        // real, explicitly-created Workspace (see workspaceId handling in
+        // github.controller.js's syncRepositories).
+        workspaceId: {
+            type: mongoose.Schema.Types.ObjectId,
+            ref: "Workspace",
+            default: null
+        },
+
         githubRepoId: {
             type: String,
             required: true
@@ -119,6 +132,37 @@ const RepositorySchema = new mongoose.Schema(
 
         lastFetchedAt: {
             type: Date
+        },
+
+        ingestionStatus: {
+            type: String,
+            enum: ["pending", "processing", "completed", "failed"],
+            default: "pending"
+        },
+
+        ingestionStage: {
+            type: String,
+            default: null
+        },
+
+        chunkCount: {
+            type: Number,
+            default: 0
+        },
+
+        lastIngestedAt: {
+            type: Date,
+            default: null
+        },
+
+        ingestionError: {
+            type: String,
+            default: null
+        },
+
+        lastIngestedCommitSha: {
+            type: String,
+            default: null
         }
     },
     {

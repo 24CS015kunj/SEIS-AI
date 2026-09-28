@@ -1,57 +1,333 @@
 import React from 'react';
-import { AlertOctagon, AlertTriangle, Info, Sparkles } from 'lucide-react';
+import { AlertOctagon, AlertTriangle, Flame, Info, Loader2, Sparkles, TrendingUp } from 'lucide-react';
 
 const SEVERITY = {
-  critical: { icon: AlertOctagon, label: 'Critical', text: 'text-rose-400', bg: 'bg-rose-500/10', border: 'border-rose-500/20' },
-  warning: { icon: AlertTriangle, label: 'Warning', text: 'text-amber-400', bg: 'bg-amber-500/10', border: 'border-amber-500/20' },
-  info: { icon: Info, label: 'Info', text: 'text-blue-400', bg: 'bg-blue-500/10', border: 'border-blue-500/20' },
+  critical: { icon: AlertOctagon, label: 'Critical', text: 'text-[#FF3B30]', bg: 'bg-[#FF3B30]/10', border: 'border-[#FF3B30]/20' },
+  major: { icon: AlertTriangle, label: 'Warning', text: 'text-[#FF9500]', bg: 'bg-[#FF9500]/10', border: 'border-[#FF9500]/20' },
+  minor: { icon: Info, label: 'Info', text: 'text-[#0071E3]', bg: 'bg-[#0071E3]/10', border: 'border-[#0071E3]/20' },
 };
 
-/**
- * Fixes the Figma audit's "AI Insights panel is empty" finding: this always
- * renders a real, structured list — never a blank card. `insights` is a
- * flat array of {severity,title,description,category}, matching the shape
- * a future real-AI response would use, so swapping the mock for a live
- * result needs no change here.
- */
-export default function AiInsightsPanel({ insights }) {
+const CATEGORY_LABEL = {
+  high_risk_module: 'High-Risk Module',
+  refactoring_recommended: 'Refactoring Recommended',
+  bus_factor_warning: 'Concentrated Ownership',
+};
+
+function categoryLabel(category) {
+  return CATEGORY_LABEL[category] ?? category;
+}
+
+const MAX_VISIBLE_HOTSPOTS = 5;
+
+export default function AiInsightsPanel({ status, analysis, stale, generating, error, onGenerate, onPreviewFile }) {
   return (
     <section id="insights" className="scroll-mt-20">
-      <div className="flex items-center gap-2 mb-3">
-        <Sparkles size={15} className="text-indigo-400" aria-hidden="true" />
-        <h2 className="text-[13.5px] font-bold text-slate-100">AI Insights</h2>
+      <div className="flex items-center justify-between gap-3 mb-3">
+        <div className="flex items-center gap-2">
+          <Sparkles size={16} className="text-[#0071E3]" aria-hidden="true" />
+          <h2 className="text-[14px] font-semibold text-[#1D1D1F]">AI Insights</h2>
+        </div>
+        {status === 'ready' && (
+          <GenerateButton onGenerate={onGenerate} generating={generating} label={stale ? 'Re-analyze' : 'Re-run'} />
+        )}
       </div>
 
-      {insights.length === 0 ? (
-        <div className="bg-[#111A2C] border border-[#1E293B] rounded-xl p-6 text-center">
-          <p className="text-[13px] text-slate-500 m-0">No notable findings for this repository yet.</p>
+      {status === 'loading' ? (
+        <PanelMessage text="Checking for existing analysis…" />
+      ) : status === 'error' ? (
+        <div className="apple-card p-6 text-center bg-[#FF3B30]/05 border border-[#FF3B30]/20 rounded-2xl">
+          <p className="text-[13px] text-[#FF3B30] m-0 mb-3">{error || 'Unable to load repository analysis.'}</p>
+          <GenerateButton onGenerate={onGenerate} generating={generating} label="Try Again" inline />
+        </div>
+      ) : status === 'none' ? (
+        <div className="apple-card p-6 text-center rounded-2xl">
+          <p className="text-[13px] text-[#86868B] m-0 mb-3">Repository analysis has not been generated yet.</p>
+          <GenerateButton onGenerate={onGenerate} generating={generating} label="Generate Insights" inline />
         </div>
       ) : (
-        <ul className="flex flex-col gap-2.5">
-          {insights.map((insight) => {
-            const s = SEVERITY[insight.severity] ?? SEVERITY.info;
-            const Icon = s.icon;
-            return (
-              <li
-                key={insight.id}
-                className={`flex items-start gap-3 rounded-xl border p-4 ${s.bg} ${s.border}`}
-              >
-                <Icon size={16} className={`${s.text} shrink-0 mt-0.5`} aria-hidden="true" />
-                <div className="min-w-0">
-                  <div className="flex flex-wrap items-center gap-2 mb-1">
-                    <span className="text-[13.5px] font-semibold text-slate-100">{insight.title}</span>
-                    <span className={`text-[10px] font-bold uppercase tracking-wide ${s.text}`}>{s.label}</span>
-                    <span className="text-[10.5px] text-slate-500 bg-white/5 rounded-full px-2 py-0.5">
-                      {insight.category}
-                    </span>
-                  </div>
-                  <p className="text-[12.5px] text-slate-400 leading-relaxed m-0">{insight.description}</p>
-                </div>
-              </li>
-            );
-          })}
-        </ul>
+        <div className="flex flex-col gap-4">
+          <FindingsSection analysis={analysis} />
+          <HotspotsSection hotspots={analysis.hotspots} insights={analysis.insights} onPreviewFile={onPreviewFile} />
+          <TrendsSection trends={analysis.trends} />
+          <Meta analysis={analysis} stale={stale} />
+        </div>
       )}
     </section>
+  );
+}
+
+function FindingsSection({ analysis }) {
+  const insights = analysis.insights ?? [];
+
+  if (insights.length === 0) {
+    return (
+      <div className="bg-white border border-slate-200 rounded-xl shadow-sm p-6 text-center">
+        <p className="text-[13px] text-slate-400 m-0">
+          Analysis ran on {analysis.analyzedCommitCount ?? 0} recent commit
+          {analysis.analyzedCommitCount === 1 ? '' : 's'} and found no notable findings.
+        </p>
+      </div>
+    );
+  }
+
+  return (
+    <div>
+      <SeverityDistribution insights={insights} />
+      <ul className="flex flex-col gap-2.5">
+        {insights.map((insight, i) => {
+          const s = SEVERITY[insight.severity] ?? SEVERITY.minor;
+          const Icon = s.icon;
+          return (
+            <li
+              key={`${insight.category}-${insight.subject}-${i}`}
+              className={`flex items-start gap-3 rounded-xl border p-4 ${s.bg} ${s.border}`}
+            >
+              <Icon size={16} className={`${s.text} shrink-0 mt-0.5`} aria-hidden="true" />
+              <div className="min-w-0">
+                <div className="flex flex-wrap items-center gap-2 mb-1">
+                  <span className="text-[12px] font-mono font-semibold text-slate-900 truncate">
+                    {insight.subject}
+                  </span>
+                  <span className={`text-[10px] font-bold uppercase tracking-wide ${s.text}`}>{s.label}</span>
+                  <span className="text-[10.5px] text-slate-500 bg-white border border-slate-200 rounded-full px-2 py-0.5">
+                    {categoryLabel(insight.category)}
+                  </span>
+                </div>
+                <p className="text-[12.5px] text-slate-600 leading-relaxed m-0">{insight.summary}</p>
+                <p className="text-[11.5px] text-slate-400 leading-relaxed mt-1 m-0 italic">
+                  {insight.recommendation}
+                </p>
+              </div>
+            </li>
+          );
+        })}
+      </ul>
+    </div>
+  );
+}
+
+/**
+ * A real, derived count of `insight.severity` values already present in
+ * `insights` -- not a new metric, just a quick-scan summary of data
+ * already rendered in full below it (Task 74 §3 "severity/category
+ * distribution where the existing real data supports it").
+ */
+function SeverityDistribution({ insights }) {
+  const order = ['critical', 'major', 'minor'];
+  const counts = { critical: 0, major: 0, minor: 0 };
+  for (const insight of insights) {
+    if (counts[insight.severity] != null) counts[insight.severity] += 1;
+  }
+  const visible = order.filter((key) => counts[key] > 0);
+  if (visible.length === 0) return null;
+
+  return (
+    <div className="flex flex-wrap items-center gap-3 mb-2.5">
+      {visible.map((key) => {
+        const s = SEVERITY[key];
+        const Icon = s.icon;
+        return (
+          <span key={key} className={`inline-flex items-center gap-1 text-[11px] font-semibold ${s.text}`}>
+            <Icon size={12} aria-hidden="true" />
+            {counts[key]} {s.label}
+          </span>
+        );
+      })}
+    </div>
+  );
+}
+
+/**
+ * Real, ranked file-churn data from `analysis.hotspots`
+ * (`HotspotMetrics[]`) -- never shown when absent/empty; the honest
+ * "not available" state matches the rest of this Dashboard's pattern
+ * (`OverviewMetrics`/`ArchitectureSection`) rather than reading as an
+ * error. `hotspot_score` is rendered as-is (already normalized 0-100 by
+ * the backend); this component only sorts and caps what's shown, it never
+ * recomputes or reinterprets the score.
+ */
+function HotspotsSection({ list, insights, onPreviewFile }) {
+  const hotspotsList = Array.isArray(list) ? list : [];
+  const flaggedPaths = new Set((insights ?? []).map((insight) => insight.subject));
+
+  return (
+    <section aria-labelledby="hotspots-heading">
+      <h3
+        id="hotspots-heading"
+        className="flex items-center gap-1.5 text-[10.5px] font-bold uppercase tracking-wider text-slate-400 mb-2"
+      >
+        <Flame size={12} aria-hidden="true" />
+        Hotspots
+      </h3>
+
+      {hotspotsList.length === 0 ? (
+        <div className="bg-white border border-slate-200 rounded-xl shadow-sm p-4 text-center">
+          <p className="text-[12.5px] text-slate-400 m-0">Hotspot data is not available for this analysis.</p>
+        </div>
+      ) : (
+        <div className="bg-white border border-slate-200 rounded-xl shadow-sm p-3.5">
+          <p className="text-[11px] text-slate-400 mb-3 m-0">
+            Files ranked by commit frequency relative to the rest of this analysis -- a higher score means more
+            concentrated recent change, not a defect.
+          </p>
+          <ul className="flex flex-col gap-2.5">
+            {[...hotspotsList]
+              .sort((a, b) => b.hotspot_score - a.hotspot_score)
+              .slice(0, MAX_VISIBLE_HOTSPOTS)
+              .map((hotspot) => (
+                <HotspotRow
+                  key={hotspot.file_path}
+                  hotspot={hotspot}
+                  flagged={flaggedPaths.has(hotspot.file_path)}
+                  onPreviewFile={onPreviewFile}
+                />
+              ))}
+          </ul>
+          {hotspotsList.length > MAX_VISIBLE_HOTSPOTS && (
+            <p className="text-[11px] text-slate-400 mt-2.5 mb-0">
+              +{hotspotsList.length - MAX_VISIBLE_HOTSPOTS} more hotspot{hotspotsList.length - MAX_VISIBLE_HOTSPOTS === 1 ? '' : 's'}{' '}
+              in this analysis
+            </p>
+          )}
+        </div>
+      )}
+    </section>
+  );
+}
+
+function HotspotRow({ hotspot, flagged, onPreviewFile }) {
+  const score = Math.round(hotspot.hotspot_score);
+  return (
+    <li className="flex items-center gap-3 min-w-0">
+      <span className="flex-1 min-w-0 flex items-center gap-1.5">
+        {onPreviewFile ? (
+          <button
+            type="button"
+            onClick={() => onPreviewFile(hotspot.file_path)}
+            aria-label={`Preview code for ${hotspot.file_path}`}
+            className="min-w-0 text-[12px] font-mono text-blue-700 hover:text-blue-900 hover:underline truncate text-left bg-transparent border-0 p-0 cursor-pointer"
+            title={`Preview ${hotspot.file_path}`}
+          >
+            {hotspot.file_path}
+          </button>
+        ) : (
+          <span className="min-w-0 text-[12px] font-mono text-slate-700 truncate" title={hotspot.file_path}>
+            {hotspot.file_path}
+          </span>
+        )}
+        {flagged && (
+          <span className="shrink-0 text-[9.5px] font-bold uppercase tracking-wide text-amber-700 bg-amber-50 border border-amber-200 rounded-full px-1.5 py-0.5">
+            Flagged
+          </span>
+        )}
+      </span>
+      <div className="hidden sm:block w-20 shrink-0 h-1.5 rounded-full bg-slate-100 overflow-hidden">
+        <div className="h-full rounded-full bg-blue-600" style={{ width: `${Math.max(score, 4)}%` }} />
+      </div>
+      <span className="shrink-0 w-7 text-right text-[11px] font-mono font-semibold text-slate-500 tabular-nums">
+        {score}
+      </span>
+      <span className="hidden sm:inline shrink-0 text-[11px] text-slate-400 whitespace-nowrap">
+        {hotspot.commit_count} commit{hotspot.commit_count === 1 ? '' : 's'}
+      </span>
+    </li>
+  );
+}
+
+/**
+ * Real module-level churn data from `analysis.trends.module_trends`
+ * (`StructuralTrends`) -- exact vocabulary from the backend
+ * (`module`/`churn_share`/`is_high_churn`), not renamed or reinterpreted.
+ * `churn_share` is a real fraction (0-1) from the backend, displayed as a
+ * rounded percentage -- a display transform, not a fabricated value.
+ */
+function TrendsSection({ trends }) {
+  const moduleTrends = trends?.module_trends ?? [];
+
+  return (
+    <section aria-labelledby="trends-heading">
+      <h3
+        id="trends-heading"
+        className="flex items-center gap-1.5 text-[10.5px] font-bold uppercase tracking-wider text-slate-400 mb-2"
+      >
+        <TrendingUp size={12} aria-hidden="true" />
+        Module Trends
+      </h3>
+
+      {moduleTrends.length === 0 ? (
+        <div className="bg-white border border-slate-200 rounded-xl shadow-sm p-4 text-center">
+          <p className="text-[12.5px] text-slate-400 m-0">Module trends are not available for this analysis.</p>
+        </div>
+      ) : (
+        <div className="bg-white border border-slate-200 rounded-xl shadow-sm overflow-hidden">
+          <div className="grid grid-cols-[1fr_auto_auto] gap-x-3 px-3.5 py-2 border-b border-slate-100 text-[10px] font-bold uppercase tracking-wider text-slate-400">
+            <span>Module</span>
+            <span className="text-right">Churn Share</span>
+            <span className="text-right">Commits</span>
+          </div>
+          <ul className="divide-y divide-slate-100">
+            {moduleTrends.map((m) => (
+              <li key={m.module} className="grid grid-cols-[1fr_auto_auto] items-center gap-x-3 px-3.5 py-2.5">
+                <span className="min-w-0 flex items-center gap-1.5">
+                  <span className="min-w-0 text-[12px] font-mono text-slate-700 truncate" title={m.module}>
+                    {m.module}
+                  </span>
+                  {m.is_high_churn && (
+                    <span className="shrink-0 text-[9.5px] font-bold uppercase tracking-wide text-amber-700 bg-amber-50 border border-amber-200 rounded-full px-1.5 py-0.5">
+                      High Churn
+                    </span>
+                  )}
+                </span>
+                <span className="text-[11px] font-mono font-semibold text-slate-500 tabular-nums text-right">
+                  {Math.round(m.churn_share * 100)}%
+                </span>
+                <span className="text-[11px] text-slate-400 tabular-nums text-right whitespace-nowrap">
+                  {m.commit_count}
+                </span>
+              </li>
+            ))}
+          </ul>
+        </div>
+      )}
+    </section>
+  );
+}
+
+function Meta({ analysis, stale }) {
+  const generated = analysis.generatedAt ? new Date(analysis.generatedAt) : null;
+  return (
+    <p className="text-[11px] text-slate-400 m-0">
+      {generated && !Number.isNaN(generated.getTime()) ? `Generated ${generated.toLocaleString()}` : 'Generated'}
+      {' · '}
+      {analysis.analyzedCommitCount ?? 0} commits, {analysis.analyzedFileCount ?? 0} files analyzed
+      {stale && <span className="text-amber-600"> · New commits since this analysis</span>}
+    </p>
+  );
+}
+
+function GenerateButton({ onGenerate, generating, label, inline = false }) {
+  return (
+    <button
+      type="button"
+      onClick={onGenerate}
+      disabled={generating}
+      aria-busy={generating}
+      className={`inline-flex items-center justify-center gap-1.5 h-8.5 px-4 rounded-full text-[12.5px] font-medium border-0 cursor-pointer transition-all disabled:cursor-not-allowed disabled:opacity-60 ${
+        inline
+          ? 'bg-[#0071E3] hover:bg-[#0077ED] text-white shadow-xs'
+          : 'bg-[#0071E3]/10 hover:bg-[#0071E3]/15 text-[#0071E3]'
+      }`}
+    >
+      {generating ? <Loader2 size={13} className="animate-spin motion-reduce:animate-none" aria-hidden="true" /> : null}
+      {generating ? 'Analyzing…' : label}
+    </button>
+  );
+}
+
+function PanelMessage({ text }) {
+  return (
+    <div className="apple-card p-6 text-center rounded-2xl">
+      <p className="text-[13px] text-[#86868B] m-0">{text}</p>
+    </div>
   );
 }

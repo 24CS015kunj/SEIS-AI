@@ -1,124 +1,79 @@
 import React, { useMemo } from 'react';
-import { Boxes, CheckCircle2 } from 'lucide-react';
-
-const RISK_DOT = { low: 'bg-emerald-400', moderate: 'bg-amber-400', elevated: 'bg-rose-400' };
-const RISK_LABEL = { low: 'Low risk', moderate: 'Moderate risk', elevated: 'Elevated risk' };
-
-const COLUMN_WIDTH = 176;
-const NODE_WIDTH = 148;
-const NODE_HEIGHT = 52;
-const ROW_GAP = 22;
-const TOP_PADDING = 28;
+import { Boxes, FolderTree } from 'lucide-react';
 
 /**
- * Fixes the Figma audit's "architecture diagram clipping" finding: the SVG
- * canvas is sized to fit every node (never cropped) and lives inside an
- * `overflow-x-auto` track, so on narrow viewports it becomes horizontally
- * scrollable instead of cutting nodes off. The module list underneath
- * repeats the same information in a format that never requires scrolling
- * at all, so nothing is locked behind the diagram alone.
+ * Task 68: this section previously rendered a fully fabricated dependency
+ * graph (hardcoded nodes like "services/"/"auth/", invented "risk" levels,
+ * and invented edges implying import relationships between directories).
+ * None of that is derivable from repository file paths alone -- a
+ * directory containing many files says nothing about what imports what.
+ *
+ * What real, already-indexed file paths *do* honestly support is a
+ * top-level directory breakdown with real file counts, which is what this
+ * renders: one real bar per real top-level directory, sized relative to
+ * the largest, plus the real root-level file count. No relationships, no
+ * risk labels, no circular-dependency claim -- none of that data exists.
  */
-export default function ArchitectureSection({ architecture }) {
-  const { positioned, width, height } = useMemo(() => layoutGraph(architecture), [architecture]);
+export default function ArchitectureSection({ available, directories, rootFileCount }) {
+  const maxCount = useMemo(
+    () => Math.max(rootFileCount, ...directories.map((d) => d.fileCount), 1),
+    [directories, rootFileCount]
+  );
 
   return (
     <section id="architecture" className="scroll-mt-20">
       <div className="flex items-center gap-2 mb-3">
-        <Boxes size={15} className="text-blue-400" aria-hidden="true" />
-        <h2 className="text-[13.5px] font-bold text-slate-100">Architecture</h2>
+        <Boxes size={16} className="text-[#0071E3]" aria-hidden="true" />
+        <h2 className="text-[14px] font-semibold text-[#1D1D1F]">Repository Structure</h2>
       </div>
 
-      <div className="bg-[#111A2C] border border-[#1E293B] rounded-xl p-4">
-        <div className="overflow-x-auto -mx-1 px-1">
-          <svg width={width} height={height} className="block" role="img" aria-label="Module dependency diagram, layered by architectural layer">
-            {architecture.relationships.map((rel) => {
-              const from = positioned.find((n) => n.id === rel.from);
-              const to = positioned.find((n) => n.id === rel.to);
-              if (!from || !to) return null;
-              return (
-                <line
-                  key={`${rel.from}-${rel.to}`}
-                  x1={from.cx + NODE_WIDTH / 2}
-                  y1={from.cy}
-                  x2={to.cx - NODE_WIDTH / 2}
-                  y2={to.cy}
-                  stroke="#334155"
-                  strokeWidth={1.5}
-                />
-              );
-            })}
-            {positioned.map((node) => (
-              <foreignObject
-                key={node.id}
-                x={node.cx - NODE_WIDTH / 2}
-                y={node.cy - NODE_HEIGHT / 2}
-                width={NODE_WIDTH}
-                height={NODE_HEIGHT}
-              >
-                <div className="w-full h-full rounded-lg bg-[#0B1220] border border-[#1E293B] px-3 py-1.5 flex flex-col justify-center">
-                  <span className="text-[11.5px] font-mono font-semibold text-slate-100 truncate">{node.name}</span>
-                  <span className="inline-flex items-center gap-1 text-[10px] text-slate-500 mt-0.5">
-                    <span className={`w-1.5 h-1.5 rounded-full ${RISK_DOT[node.risk]}`} aria-hidden="true" />
-                    {node.files} files
-                  </span>
-                </div>
-              </foreignObject>
-            ))}
-          </svg>
-        </div>
-
-        <div className="flex items-center gap-1.5 text-[12px] font-mono text-emerald-400 mt-3 pt-3 border-t border-[#1E293B]">
-          <CheckCircle2 size={13} aria-hidden="true" />
-          {architecture.circularDependencies} circular dependencies detected across {architecture.nodes.length} modules
-        </div>
+      <div className="apple-card p-5 rounded-[20px]">
+        {!available || (directories.length === 0 && rootFileCount === 0) ? (
+          <div className="py-6 text-center">
+            <FolderTree size={20} className="text-[#86868B] mx-auto mb-2" aria-hidden="true" />
+            <p className="text-[13px] text-[#86868B] m-0">
+              Repository structure is not available yet — sync files from Source Control to see it here.
+            </p>
+          </div>
+        ) : (
+          <>
+            <p className="text-[12px] text-[#86868B] mb-4 m-0">
+              Real top-level directories, sized by number of files actually synced from GitHub.
+            </p>
+            <ul className="flex flex-col gap-2.5 max-h-[360px] overflow-y-auto pr-1">
+              {rootFileCount > 0 && (
+                <DirectoryRow label="(repository root)" count={rootFileCount} max={maxCount} muted />
+              )}
+              {directories.map((d) => (
+                <DirectoryRow key={d.path} label={`${d.path}/`} count={d.fileCount} max={maxCount} />
+              ))}
+            </ul>
+          </>
+        )}
       </div>
-
-      <ul className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-2.5 mt-3">
-        {architecture.nodes.map((node) => (
-          <li key={node.id} className="bg-[#111A2C] border border-[#1E293B] rounded-xl p-3.5">
-            <div className="flex items-center justify-between gap-2 mb-2">
-              <span className="text-[12.5px] font-mono font-semibold text-slate-100 truncate">{node.name}</span>
-              <span className="inline-flex items-center gap-1 text-[10.5px] text-slate-400 shrink-0">
-                <span className={`w-1.5 h-1.5 rounded-full ${RISK_DOT[node.risk]}`} aria-hidden="true" />
-                <span className="sr-only">{RISK_LABEL[node.risk]}</span>
-                {RISK_LABEL[node.risk]}
-              </span>
-            </div>
-            <div className="flex gap-3 text-[11px] font-mono text-slate-500">
-              <span>{node.files} files</span>
-              <span>{node.dependencies} deps</span>
-              <span>{node.layer}</span>
-            </div>
-          </li>
-        ))}
-      </ul>
     </section>
   );
 }
 
-function layoutGraph(architecture) {
-  const columns = architecture.layers.map((layer) =>
-    architecture.nodes.filter((n) => n.layer === layer)
+function DirectoryRow({ label, count, max, muted = false }) {
+  const widthPercent = Math.max((count / max) * 100, 4);
+  return (
+    <li className="flex items-center gap-3">
+      <span
+        className={`w-[168px] shrink-0 text-[12.5px] font-mono truncate ${muted ? 'text-[#86868B] italic' : 'text-[#1D1D1F] font-medium'}`}
+        title={label}
+      >
+        {label}
+      </span>
+      <div className="flex-1 h-2.5 rounded-full bg-black/[0.04] overflow-hidden min-w-[60px]">
+        <div
+          className={`h-full rounded-full transition-all duration-300 ${muted ? 'bg-black/20' : 'bg-[#0071E3]'}`}
+          style={{ width: `${widthPercent}%` }}
+        />
+      </div>
+      <span className="w-16 shrink-0 text-right text-[12px] font-mono text-[#86868B] tabular-nums">
+        {count} file{count === 1 ? '' : 's'}
+      </span>
+    </li>
   );
-  const maxRows = Math.max(...columns.map((c) => c.length), 1);
-
-  const positioned = [];
-  columns.forEach((col, colIndex) => {
-    const colHeight = col.length * NODE_HEIGHT + (col.length - 1) * ROW_GAP;
-    const totalHeight = maxRows * NODE_HEIGHT + (maxRows - 1) * ROW_GAP;
-    const offsetY = TOP_PADDING + (totalHeight - colHeight) / 2;
-    col.forEach((node, rowIndex) => {
-      positioned.push({
-        ...node,
-        cx: COLUMN_WIDTH * colIndex + COLUMN_WIDTH / 2,
-        cy: offsetY + rowIndex * (NODE_HEIGHT + ROW_GAP) + NODE_HEIGHT / 2,
-      });
-    });
-  });
-
-  return {
-    positioned,
-    width: COLUMN_WIDTH * columns.length,
-    height: TOP_PADDING * 2 + maxRows * NODE_HEIGHT + (maxRows - 1) * ROW_GAP,
-  };
 }

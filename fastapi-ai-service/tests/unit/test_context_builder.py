@@ -1,9 +1,10 @@
 """Unit tests for app/core/retrieval/context_builder.py (Task 21).
 
-Uses a real `GeminiGateway` instance with `count_tokens` monkeypatched
+Uses a real `NemotronGateway` instance with `count_tokens` monkeypatched
 to a controllable fake counter (same pattern as tests/unit/test_retriever.py)
 -- exercises `ContextBuilder`'s own packing/truncation/citation-mapping
-logic without calling the real Gemini API.
+logic without depending on the real (local, network-free since Task
+60/ADR-008) token-count estimate.
 """
 
 from __future__ import annotations
@@ -14,7 +15,7 @@ from app.config.settings import Settings
 from app.core.retrieval.context_builder import _REFERENCE_DATA_LABEL, ContextBuilder
 from app.domain.enums import ChunkType, DocumentType
 from app.domain.models import ChunkMetadata, Citation, SearchResultItem
-from app.infra.llm.gemini_client import GeminiGateway
+from app.infra.llm.gemini_client import NemotronGateway
 
 
 def _chunk(
@@ -44,7 +45,7 @@ def _chunk(
 class Harness:
     def __init__(self) -> None:
         self.token_calls: list[str] = []
-        self.gateway = GeminiGateway(settings=Settings())
+        self.gateway = NemotronGateway(settings=Settings())
 
     def wire(self, monkeypatch: pytest.MonkeyPatch, costs: list[int]) -> ContextBuilder:
         queue = list(costs)
@@ -54,7 +55,7 @@ class Harness:
             return queue.pop(0)
 
         monkeypatch.setattr(self.gateway, "count_tokens", _count_tokens)
-        return ContextBuilder(gemini_gateway=self.gateway)
+        return ContextBuilder(llm_gateway=self.gateway)
 
 
 @pytest.fixture

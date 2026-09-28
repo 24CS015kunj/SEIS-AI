@@ -22,6 +22,7 @@ from dataclasses import dataclass
 
 import structlog
 
+from app.core.processing.metadata_generator import MetadataGenerator
 from app.domain.enums import ChunkType, DocumentType
 from app.domain.models import Chunk, ChunkMetadata, Document
 
@@ -264,3 +265,23 @@ class ASTChunker:
 
     def _chunk_generic(self, document: Document) -> list[_RawChunk]:
         return _split_oversized(document.content, 1, ChunkType.GENERIC_TEXT, None)
+
+
+def build_chunks_for_documents(
+    documents: list[Document], chunker: ASTChunker, metadata_generator: MetadataGenerator
+) -> list[Chunk]:
+    """Chunks every document and finalizes each chunk's metadata through
+    ``MetadataGenerator``'s normalization/validation pass (Task 17).
+
+    Factored out of :class:`~app.core.processing.synchronizer.IncrementalSynchronizer`
+    (Task 18) so the Repository Ingestion Worker (Task 40) -- which needs
+    the identical chunk-then-finalize-metadata sequence for a full
+    :class:`~app.domain.models.RepositoryManifest` rather than a diff --
+    reuses it instead of duplicating it.
+    """
+    chunks: list[Chunk] = []
+    for document in documents:
+        for raw_chunk in chunker.chunk(document):
+            metadata = metadata_generator.generate_metadata(document, raw_chunk)
+            chunks.append(raw_chunk.model_copy(update={"metadata": metadata}))
+    return chunks
