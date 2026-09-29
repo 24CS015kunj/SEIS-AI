@@ -32,20 +32,30 @@ jobs:
           for attempt in range(1, 4):
               request = urllib.request.Request(
                   endpoint + "/collections",
-                  headers={"api-key": token, "User-Agent": "seis-ai-keepalive"},
+                  headers={"api-key": token, "Accept": "application/json", "User-Agent": "seis-ai-keepalive"},
               )
               try:
                   with urllib.request.urlopen(request, timeout=20, context=context) as response:
                       if 200 <= response.status < 300:
-                          print(f"Qdrant keepalive succeeded on attempt {attempt}")
+                          print(f"Qdrant keepalive succeeded: HTTP {response.status} on attempt {attempt}")
                           break
                       raise RuntimeError(f"Unexpected status: {response.status}")
               except urllib.error.HTTPError as error:
                   errors.append(f"HTTP {error.code}")
                   if error.code in {401, 403}:
                       raise SystemExit(
-                          "Qdrant keepalive failed: verify QDRANT_API_KEY permissions"
+                          f"Qdrant request rejected with HTTP {error.code}; "
+                          "verify QDRANT_API_KEY permissions and cluster access restrictions"
                       ) from None
+                  if error.code == 404:
+                      raise SystemExit(
+                          "Qdrant request rejected with HTTP 404; verify the cluster REST endpoint in QDRANT_URL"
+                      ) from None
+              except urllib.error.URLError as error:
+                  # Raw reasons may include URLs or other private details.
+                  errors.append(f"Connection failure ({type(error.reason).__name__})")
+              except TimeoutError:
+                  errors.append("Request timed out")
               except Exception as error:
                   errors.append(type(error).__name__)
               if attempt < 3:
