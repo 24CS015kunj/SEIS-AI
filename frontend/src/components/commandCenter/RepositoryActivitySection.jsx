@@ -88,13 +88,15 @@ export default function RepositoryActivitySection({ commits, dashboardData, load
     <section
       role="region"
       aria-label="Repository Activity and Contribution Insights"
-      className="apple-card p-6 flex flex-col gap-5"
+      className="apple-card p-5 rounded-xl border border-slate-200/90 bg-white shadow-xs flex flex-col gap-4"
     >
       {/* Header & Date Range Controls */}
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-black/[0.04] pb-4">
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-slate-100 pb-3">
         <div className="flex items-center gap-2">
-          <Activity size={18} className="text-[#0071E3] shrink-0" aria-hidden="true" />
-          <h2 className="text-[15px] font-semibold text-[#1D1D1F] m-0 leading-tight">
+          <span className="w-6 h-6 rounded-md bg-blue-50 text-[#0071E3] flex items-center justify-center shrink-0">
+            <Activity size={14} aria-hidden="true" />
+          </span>
+          <h2 className="text-[13.5px] font-semibold text-slate-800 m-0">
             Repository Activity &amp; Contribution Insights
           </h2>
         </div>
@@ -103,7 +105,7 @@ export default function RepositoryActivitySection({ commits, dashboardData, load
         <div
           role="group"
           aria-label="Select date range for activity analytics"
-          className="inline-flex items-center rounded-full bg-black/[0.05] p-1 self-start sm:self-auto shrink-0"
+          className="inline-flex items-center rounded-lg bg-slate-100 p-0.5 border border-slate-200/80 self-start sm:self-auto shrink-0"
         >
           {[7, 30, 90].map((days) => {
             const isSelected = rangeDays === days;
@@ -114,10 +116,10 @@ export default function RepositoryActivitySection({ commits, dashboardData, load
                 id={`activity-range-${days}d`}
                 onClick={() => setRangeDays(days)}
                 aria-pressed={isSelected}
-                className={`px-3.5 py-1 text-[12px] font-medium rounded-full transition-all duration-200 cursor-pointer ${
+                className={`px-2.5 py-1 text-[11.5px] font-mono font-medium rounded-md transition-all duration-150 cursor-pointer ${
                   isSelected
-                    ? 'bg-white text-[#1D1D1F] shadow-[0_1px_3px_rgba(0,0,0,0.1)] font-semibold'
-                    : 'text-[#86868B] hover:text-[#1D1D1F]'
+                    ? 'bg-white text-slate-900 shadow-2xs font-semibold'
+                    : 'text-slate-500 hover:text-slate-800'
                 }`}
               >
                 {days}D
@@ -130,14 +132,14 @@ export default function RepositoryActivitySection({ commits, dashboardData, load
       {loading ? (
         <ActivitySkeleton />
       ) : !analytics.available ? (
-        <div className="p-8 text-center bg-black/[0.02] border border-black/[0.06] rounded-2xl">
-          <p className="text-[13px] text-[#86868B] m-0 font-medium">{analytics.reason}</p>
+        <div className="p-8 text-center bg-slate-50 border border-slate-200/80 rounded-xl">
+          <p className="text-[12.5px] font-mono text-slate-500 m-0">{analytics.reason}</p>
         </div>
       ) : (
-        <div className="flex flex-col gap-5">
+        <div className="flex flex-col gap-4">
           {analytics.isLimitedHistory && (
-            <div className="flex items-center gap-2 px-3.5 py-2 rounded-xl bg-[#0071E3]/10 text-[12px] text-[#0071E3]">
-              <Info size={14} className="text-[#0071E3] shrink-0" aria-hidden="true" />
+            <div className="flex items-center gap-2 px-3 py-2 rounded-lg bg-blue-50 border border-blue-200/80 text-[12px] font-mono text-blue-700">
+              <Info size={14} className="text-blue-600 shrink-0" aria-hidden="true" />
               <span>{analytics.historyBannerMessage}</span>
             </div>
           )}
@@ -145,111 +147,126 @@ export default function RepositoryActivitySection({ commits, dashboardData, load
           {/* Top Row: Chart Card + Activity Health Card */}
           <div className="grid grid-cols-1 lg:grid-cols-[1fr_300px] gap-4 items-stretch">
             {/* Advanced Engineering Chart Card */}
-            <div className="bg-[#FBFBFD] border border-black/[0.06] rounded-2xl p-4.5 flex flex-col justify-between">
+            <div className="bg-slate-50/60 border border-slate-200/80 rounded-xl p-4 flex flex-col justify-between">
               {/* Metric Mode Switcher Header */}
-              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 mb-3">
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 mb-3 pb-2.5 border-b border-slate-200/60">
                 <div>
-                  <span className="text-[11px] font-medium text-[#86868B] block mb-0.5">
+                  <span className="text-[10.5px] font-mono uppercase tracking-wider text-slate-500 block mb-0.5">
                     {activeMetricDisplay.label}
                   </span>
-                  <div className="flex items-baseline gap-2">
-                    <span className={`text-[22px] font-bold tracking-tight ${activeMetricDisplay.colorClass}`}>
+                  <div className="flex items-center gap-2.5">
+                    <span className={`text-[22px] font-bold font-mono tracking-tight ${activeMetricDisplay.colorClass}`}>
                       {activeMetricDisplay.value}
                     </span>
-                    <span className="text-[12px] text-[#86868B]">{activeMetricDisplay.unit}</span>
+                    <span className="text-[12px] font-mono text-slate-500">{activeMetricDisplay.unit}</span>
+
+                    {/* Trend Indicator Badge (inline next to value) */}
+                    <div
+                      className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-[10.5px] font-mono font-medium border ${
+                        analytics.trendState === 'up'
+                          ? 'bg-emerald-50 text-emerald-700 border-emerald-200'
+                          : analytics.trendState === 'down'
+                          ? 'bg-rose-50 text-rose-700 border-rose-200'
+                          : analytics.trendState === 'new_activity'
+                          ? 'bg-blue-50 text-blue-700 border-blue-200'
+                          : analytics.trendState === 'limited'
+                          ? 'bg-amber-50 text-amber-700 border-amber-200'
+                          : 'bg-slate-100 text-slate-600 border-slate-200'
+                      }`}
+                      title={analytics.trendDescription}
+                    >
+                      {analytics.trendState === 'up' && (
+                        <TrendingUp size={11} aria-hidden="true" />
+                      )}
+                      {analytics.trendState === 'down' && (
+                        <TrendingDown size={11} aria-hidden="true" />
+                      )}
+                      <span>{analytics.trendLabel}</span>
+                    </div>
                   </div>
                 </div>
 
-                <div className="flex flex-wrap items-center justify-between sm:justify-end gap-2">
-                  {/* Mode Switcher Buttons */}
-                  <div
-                    role="group"
-                    aria-label="Select chart mode"
-                    className="inline-flex items-center rounded-full bg-black/[0.05] p-1 flex-wrap gap-1"
-                  >
-                    {[
-                      { key: 'activity', label: 'Activity' },
-                      { key: 'churn', label: 'Code Churn' },
-                      { key: 'net', label: 'Net Change' },
-                      { key: 'additions', label: 'Additions' },
-                      { key: 'deletions', label: 'Deletions' },
-                    ].map((m) => {
-                      const isSelected = metric === m.key;
-                      return (
-                        <button
-                          key={m.key}
-                          type="button"
-                          id={`metric-toggle-${m.key}`}
-                          onClick={() => setMetric(m.key)}
-                          aria-pressed={isSelected}
-                          className={`px-3 py-1 text-[11.5px] font-medium rounded-full transition-all duration-200 cursor-pointer ${
-                            isSelected
-                              ? 'bg-white text-[#1D1D1F] shadow-xs font-semibold'
-                              : 'text-[#86868B] hover:text-[#1D1D1F]'
-                          }`}
-                        >
-                          {m.label}
-                        </button>
-                      );
-                    })}
-                  </div>
-
-                  {/* Trend Indicator Badge */}
-                  <div
-                    className={`inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[11.5px] font-medium ${
-                      analytics.trendState === 'up'
-                        ? 'bg-[#34C759]/10 text-[#34C759]'
-                        : analytics.trendState === 'down'
-                        ? 'bg-[#FF3B30]/10 text-[#FF3B30]'
-                        : analytics.trendState === 'new_activity'
-                        ? 'bg-[#0071E3]/10 text-[#0071E3]'
-                        : analytics.trendState === 'limited'
-                        ? 'bg-[#FF9500]/10 text-[#FF9500]'
-                        : 'bg-black/[0.05] text-[#86868B]'
-                    }`}
-                    title={analytics.trendDescription}
-                  >
-                    {analytics.trendState === 'up' && (
-                      <TrendingUp size={12} aria-hidden="true" />
-                    )}
-                    {analytics.trendState === 'down' && (
-                      <TrendingDown size={12} aria-hidden="true" />
-                    )}
-                    <span>{analytics.trendLabel}</span>
-                  </div>
+                {/* Mode Switcher Buttons */}
+                <div
+                  role="group"
+                  aria-label="Select chart mode"
+                  className="inline-flex items-center rounded-lg bg-white p-0.5 border border-slate-200/90 shadow-2xs self-start sm:self-auto shrink-0 flex-wrap gap-0.5"
+                >
+                  {[
+                    { key: 'activity', label: 'Activity' },
+                    { key: 'churn', label: 'Code Churn' },
+                    { key: 'net', label: 'Net Change' },
+                    { key: 'additions', label: 'Additions' },
+                    { key: 'deletions', label: 'Deletions' },
+                  ].map((m) => {
+                    const isSelected = metric === m.key;
+                    return (
+                      <button
+                        key={m.key}
+                        type="button"
+                        id={`metric-toggle-${m.key}`}
+                        onClick={() => setMetric(m.key)}
+                        aria-pressed={isSelected}
+                        className={`px-2.5 py-1 text-[11px] font-mono font-medium rounded-md transition-all duration-150 cursor-pointer ${
+                          isSelected
+                            ? 'bg-slate-900 text-white font-semibold'
+                            : 'text-slate-600 hover:text-slate-900 hover:bg-slate-50'
+                        }`}
+                      >
+                        {m.label}
+                      </button>
+                    );
+                  })}
                 </div>
               </div>
 
               {/* Advanced SVG Area Chart with Crosshairs */}
-              <ActivityAreaChart
-                buckets={analytics.buckets}
-                metric={metric}
-                rangeDays={rangeDays}
-              />
+              <div className="relative">
+                <ActivityAreaChart
+                  buckets={analytics.buckets}
+                  metric={metric}
+                  rangeDays={rangeDays}
+                />
+                {analytics.highlights.totalCommitsCount === 0 && (
+                  <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
+                    <span className="text-[11px] font-mono text-slate-500 bg-white/90 border border-slate-200/80 px-2.5 py-1 rounded-md shadow-2xs">
+                      No commit activity recorded in this period
+                    </span>
+                  </div>
+                )}
+              </div>
 
               {/* 4-Column Engineering Summary Highlights */}
-              <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 mt-4 pt-3 border-t border-slate-200/60 text-[11px]">
+              <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 mt-3 pt-3 border-t border-slate-200/80 text-[11px]">
                 <div>
-                  <span className="text-slate-400 block mb-0.5">Peak Activity</span>
-                  <span className="font-mono font-semibold text-slate-800 truncate block">
+                  <span className="text-[10px] font-mono uppercase tracking-wider text-slate-400 block mb-0.5">
+                    Peak Activity
+                  </span>
+                  <span className="font-mono text-[12px] font-semibold text-slate-800 truncate block" title={peakDisplay}>
                     {peakDisplay}
                   </span>
                 </div>
                 <div>
-                  <span className="text-slate-400 block mb-0.5">Average Rate</span>
-                  <span className="font-mono font-semibold text-slate-800 block">
+                  <span className="text-[10px] font-mono uppercase tracking-wider text-slate-400 block mb-0.5">
+                    Average Rate
+                  </span>
+                  <span className="font-mono text-[12px] font-semibold text-slate-800 block">
                     ~{analytics.highlights.avgCommitsPerDay} commits/day
                   </span>
                 </div>
                 <div>
-                  <span className="text-slate-400 block mb-0.5">Active Period</span>
-                  <span className="font-mono font-semibold text-slate-800 block">
+                  <span className="text-[10px] font-mono uppercase tracking-wider text-slate-400 block mb-0.5">
+                    Active Period
+                  </span>
+                  <span className="font-mono text-[12px] font-semibold text-slate-800 block">
                     {analytics.highlights.activeDaysCount} / {analytics.highlights.totalDaysCount} {analytics.highlights.unitLabel}
                   </span>
                 </div>
                 <div>
-                  <span className="text-slate-400 block mb-0.5">Net Code Change</span>
-                  <span className="font-mono font-semibold text-slate-800 block">
+                  <span className="text-[10px] font-mono uppercase tracking-wider text-slate-400 block mb-0.5">
+                    Net Code Change
+                  </span>
+                  <span className="font-mono text-[12px] font-semibold text-slate-800 block">
                     {analytics.codeChanges.hasStats
                       ? `${analytics.codeChanges.netChange >= 0 ? '+' : ''}${analytics.codeChanges.netChange.toLocaleString()} lines`
                       : 'N/A'}
@@ -258,45 +275,80 @@ export default function RepositoryActivitySection({ commits, dashboardData, load
               </div>
             </div>
 
-            {/* Activity Health Card */}
-            <div className="bg-slate-50/50 border border-slate-200 rounded-xl p-4 flex flex-col justify-between">
+            {/* Activity Health Card with Mini Visual Meters */}
+            <div className="bg-slate-50/60 border border-slate-200/80 rounded-xl p-4 flex flex-col justify-between">
               <div>
-                <span className="text-[10.5px] font-bold uppercase tracking-wider text-slate-400 block mb-1">
+                <span className="text-[10px] font-mono font-bold uppercase tracking-wider text-slate-500 block mb-1">
                   Activity Health Indicator
                 </span>
-                <div className="flex items-baseline gap-2.5 mb-2">
+                <div className="flex items-baseline gap-2 mb-1.5">
                   <span className="text-[26px] font-bold font-mono text-blue-600">
                     {analytics.health.score}
                   </span>
                   <span className="text-[12px] font-mono text-slate-400">/ 100</span>
-                  <span className="inline-block px-2 py-0.5 rounded-full bg-blue-100 text-blue-800 text-[11px] font-semibold ml-auto">
+                  <span className="inline-block px-2 py-0.5 rounded-md bg-blue-50 border border-blue-200 text-blue-800 text-[10.5px] font-mono font-semibold ml-auto">
                     {analytics.health.label}
                   </span>
                 </div>
-              </div>
 
-              <div className="space-y-2 mt-3 text-[11.5px] border-t border-slate-200/60 pt-3">
-                <div className="flex items-center justify-between text-slate-600">
-                  <span>Recency Score</span>
-                  <span className="font-mono font-semibold text-slate-800">
-                    {analytics.health.recencyScore} / 40 pts
-                  </span>
-                </div>
-                <div className="flex items-center justify-between text-slate-600">
-                  <span>Consistency Ratio</span>
-                  <span className="font-mono font-semibold text-slate-800">
-                    {analytics.health.consistencyScore} / 30 pts
-                  </span>
-                </div>
-                <div className="flex items-center justify-between text-slate-600">
-                  <span>Author Diversity</span>
-                  <span className="font-mono font-semibold text-slate-800">
-                    {analytics.health.diversityScore} / 30 pts
-                  </span>
+                {/* Overall Score Progress Bar */}
+                <div className="w-full h-1.5 bg-slate-200 rounded-full overflow-hidden mb-3">
+                  <div
+                    className="h-full bg-blue-600 rounded-full transition-all duration-300"
+                    style={{ width: `${Math.min(100, Math.max(4, analytics.health.score))}%` }}
+                  />
                 </div>
               </div>
 
-              <p className="text-[10.5px] text-slate-400 mt-3 m-0 leading-tight border-t border-slate-200/40 pt-2">
+              {/* Sub-score Breakdown with Mini Visual Bars */}
+              <div className="space-y-2 text-[11px] font-mono border-t border-slate-200/80 pt-3">
+                <div className="space-y-1">
+                  <div className="flex items-center justify-between text-slate-600">
+                    <span>Recency Score</span>
+                    <span className="font-semibold text-slate-800">
+                      {analytics.health.recencyScore} / 40 pts
+                    </span>
+                  </div>
+                  <div className="w-full h-1 bg-slate-200/70 rounded-full overflow-hidden">
+                    <div
+                      className="h-full bg-blue-500 rounded-full"
+                      style={{ width: `${Math.min(100, (analytics.health.recencyScore / 40) * 100)}%` }}
+                    />
+                  </div>
+                </div>
+
+                <div className="space-y-1">
+                  <div className="flex items-center justify-between text-slate-600">
+                    <span>Consistency Ratio</span>
+                    <span className="font-semibold text-slate-800">
+                      {analytics.health.consistencyScore} / 30 pts
+                    </span>
+                  </div>
+                  <div className="w-full h-1 bg-slate-200/70 rounded-full overflow-hidden">
+                    <div
+                      className="h-full bg-blue-500 rounded-full"
+                      style={{ width: `${Math.min(100, (analytics.health.consistencyScore / 30) * 100)}%` }}
+                    />
+                  </div>
+                </div>
+
+                <div className="space-y-1">
+                  <div className="flex items-center justify-between text-slate-600">
+                    <span>Author Diversity</span>
+                    <span className="font-semibold text-slate-800">
+                      {analytics.health.diversityScore} / 30 pts
+                    </span>
+                  </div>
+                  <div className="w-full h-1 bg-slate-200/70 rounded-full overflow-hidden">
+                    <div
+                      className="h-full bg-blue-500 rounded-full"
+                      style={{ width: `${Math.min(100, (analytics.health.diversityScore / 30) * 100)}%` }}
+                    />
+                  </div>
+                </div>
+              </div>
+
+              <p className="text-[10px] font-mono text-slate-400 mt-3 m-0 leading-tight border-t border-slate-200/60 pt-2">
                 Calculated strictly from real commit timestamps, frequency, and author count.
               </p>
             </div>
@@ -305,113 +357,130 @@ export default function RepositoryActivitySection({ commits, dashboardData, load
           {/* Bottom Grid: Contributors, Code Changes, Active Areas */}
           <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
             {/* Top Contributors Card */}
-            <div className="bg-slate-50/50 border border-slate-200 rounded-xl p-4 flex flex-col gap-3">
-              <div className="flex items-center gap-1.5">
-                <Users size={14} className="text-blue-600 shrink-0" aria-hidden="true" />
-                <span className="text-[11px] font-bold uppercase tracking-wider text-slate-400">
-                  Top Contributors ({analytics.totalContributorsCount})
-                </span>
-              </div>
-
-              {analytics.topContributors.length === 0 ? (
-                <p className="text-[12px] text-slate-400 m-0">No contributor data available.</p>
-              ) : (
-                <div className="space-y-2.5">
-                  {analytics.topContributors.map((c) => (
-                    <div key={c.name} className="flex flex-col gap-1">
-                      <div className="flex items-center justify-between text-[12px]">
-                        <span className="font-semibold text-slate-800 truncate" title={c.name}>
-                          {c.name}
-                        </span>
-                        <span className="font-mono text-slate-500 text-[11px] shrink-0 ml-2">
-                          {c.commits} commit{c.commits === 1 ? '' : 's'} ({c.sharePercent}%)
-                        </span>
-                      </div>
-                      <div className="w-full h-1.5 bg-slate-200 rounded-full overflow-hidden">
-                        <div
-                          className="h-full bg-blue-600 rounded-full transition-all duration-300"
-                          style={{ width: `${Math.max(4, c.sharePercent)}%` }}
-                        />
-                      </div>
-                    </div>
-                  ))}
+            <div className="bg-slate-50/60 border border-slate-200/80 rounded-xl p-4 flex flex-col gap-3 justify-between">
+              <div>
+                <div className="flex items-center justify-between gap-1.5 mb-2.5">
+                  <div className="flex items-center gap-1.5">
+                    <span className="w-5 h-5 rounded bg-blue-50 text-[#0071E3] flex items-center justify-center shrink-0">
+                      <Users size={12} aria-hidden="true" />
+                    </span>
+                    <span className="text-[10.5px] font-mono font-bold uppercase tracking-wider text-slate-500">
+                      Top Contributors
+                    </span>
+                  </div>
+                  <span className="text-[10px] font-mono text-slate-500 bg-white px-1.5 py-0.5 rounded border border-slate-200/80">
+                    {analytics.totalContributorsCount}
+                  </span>
                 </div>
-              )}
+
+                {analytics.topContributors.length === 0 ? (
+                  <p className="text-[12px] font-mono text-slate-400 m-0">No contributor data available.</p>
+                ) : (
+                  <div className="space-y-2.5">
+                    {analytics.topContributors.map((c) => (
+                      <div key={c.name} className="flex flex-col gap-1">
+                        <div className="flex items-center justify-between text-[11.5px]">
+                          <span className="font-semibold text-slate-800 truncate" title={c.name}>
+                            {c.name}
+                          </span>
+                          <span className="font-mono text-slate-500 text-[10.5px] shrink-0 ml-2">
+                            {c.commits} commit{c.commits === 1 ? '' : 's'} ({c.sharePercent}%)
+                          </span>
+                        </div>
+                        <div className="w-full h-1.5 bg-slate-200 rounded-full overflow-hidden">
+                          <div
+                            className="h-full bg-blue-600 rounded-full transition-all duration-300"
+                            style={{ width: `${Math.max(4, c.sharePercent)}%` }}
+                          />
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
             </div>
 
             {/* Code Changes Card */}
-            <div className="bg-slate-50/50 border border-slate-200 rounded-xl p-4 flex flex-col gap-3">
-              <div className="flex items-center gap-1.5">
-                <BarChart2 size={14} className="text-blue-600 shrink-0" aria-hidden="true" />
-                <span className="text-[11px] font-bold uppercase tracking-wider text-slate-400">
-                  Code Changes Metrics
-                </span>
-              </div>
-
-              {!analytics.codeChanges.hasStats ? (
-                <p className="text-[12px] text-slate-400 m-0">
-                  Statistics not available for commits in this date range.
-                </p>
-              ) : (
-                <div className="space-y-2.5 text-[12.5px]">
-                  <div className="flex items-center justify-between font-mono">
-                    <span className="text-slate-600">Total Additions</span>
-                    <span className="font-bold text-emerald-600">
-                      +{analytics.codeChanges.totalAdditions.toLocaleString()}
-                    </span>
-                  </div>
-                  <div className="flex items-center justify-between font-mono">
-                    <span className="text-slate-600">Total Deletions</span>
-                    <span className="font-bold text-rose-600">
-                      -{analytics.codeChanges.totalDeletions.toLocaleString()}
-                    </span>
-                  </div>
-                  <div className="flex items-center justify-between font-mono pt-1 border-t border-slate-200/60">
-                    <span className="text-slate-600">Net Change</span>
-                    <span className="font-bold text-slate-900">
-                      {analytics.codeChanges.netChange >= 0
-                        ? `+${analytics.codeChanges.netChange.toLocaleString()}`
-                        : analytics.codeChanges.netChange.toLocaleString()}
-                    </span>
-                  </div>
-                  {analytics.codeChanges.avgChangesPerCommit != null && (
-                    <div className="flex items-center justify-between font-mono text-[11.5px] text-slate-500 pt-1">
-                      <span>Avg / Commit</span>
-                      <span>~{analytics.codeChanges.avgChangesPerCommit} lines</span>
-                    </div>
-                  )}
+            <div className="bg-slate-50/60 border border-slate-200/80 rounded-xl p-4 flex flex-col gap-3 justify-between">
+              <div>
+                <div className="flex items-center gap-1.5 mb-2.5">
+                  <span className="w-5 h-5 rounded bg-blue-50 text-[#0071E3] flex items-center justify-center shrink-0">
+                    <BarChart2 size={12} aria-hidden="true" />
+                  </span>
+                  <span className="text-[10.5px] font-mono font-bold uppercase tracking-wider text-slate-500">
+                    Code Changes
+                  </span>
                 </div>
-              )}
+
+                {!analytics.codeChanges.hasStats ? (
+                  <p className="text-[12px] font-mono text-slate-400 m-0">
+                    Statistics not available for commits in this date range.
+                  </p>
+                ) : (
+                  <div className="space-y-2 text-[12px]">
+                    <div className="flex items-center justify-between font-mono">
+                      <span className="text-slate-600">Total Additions</span>
+                      <span className="font-bold text-emerald-600">
+                        +{analytics.codeChanges.totalAdditions.toLocaleString()}
+                      </span>
+                    </div>
+                    <div className="flex items-center justify-between font-mono">
+                      <span className="text-slate-600">Total Deletions</span>
+                      <span className="font-bold text-rose-600">
+                        -{analytics.codeChanges.totalDeletions.toLocaleString()}
+                      </span>
+                    </div>
+                    <div className="flex items-center justify-between font-mono pt-1.5 border-t border-slate-200/80">
+                      <span className="text-slate-700 font-semibold">Net Change</span>
+                      <span className="font-bold text-slate-900">
+                        {analytics.codeChanges.netChange >= 0
+                          ? `+${analytics.codeChanges.netChange.toLocaleString()}`
+                          : analytics.codeChanges.netChange.toLocaleString()}
+                      </span>
+                    </div>
+                    {analytics.codeChanges.avgChangesPerCommit != null && (
+                      <div className="flex items-center justify-between font-mono text-[11px] text-slate-500 pt-1">
+                        <span>Avg / Commit</span>
+                        <span>~{analytics.codeChanges.avgChangesPerCommit} lines</span>
+                      </div>
+                    )}
+                  </div>
+                )}
+              </div>
             </div>
 
             {/* Most Active Areas Card */}
-            <div className="bg-slate-50/50 border border-slate-200 rounded-xl p-4 flex flex-col gap-3">
-              <div className="flex items-center gap-1.5">
-                <FolderGit2 size={14} className="text-blue-600 shrink-0" aria-hidden="true" />
-                <span className="text-[11px] font-bold uppercase tracking-wider text-slate-400">
-                  Most Active Directories
-                </span>
-              </div>
-
-              {analytics.activeAreas.length === 0 ? (
-                <p className="text-[12px] text-slate-400 m-0">No active directory data available.</p>
-              ) : (
-                <div className="space-y-2 text-[12px]">
-                  {analytics.activeAreas.map((area) => (
-                    <div
-                      key={area.dir}
-                      className="flex items-center justify-between gap-2 p-1.5 rounded-lg bg-white border border-slate-200/80"
-                    >
-                      <span className="font-mono text-slate-800 truncate" title={area.dir}>
-                        {area.dir}
-                      </span>
-                      <span className="font-mono font-semibold text-blue-700 bg-blue-50 px-2 py-0.5 rounded text-[11px] shrink-0">
-                        {area.count} {area.count === 1 ? 'change' : 'changes'}
-                      </span>
-                    </div>
-                  ))}
+            <div className="bg-slate-50/60 border border-slate-200/80 rounded-xl p-4 flex flex-col gap-3 justify-between">
+              <div>
+                <div className="flex items-center gap-1.5 mb-2.5">
+                  <span className="w-5 h-5 rounded bg-blue-50 text-[#0071E3] flex items-center justify-center shrink-0">
+                    <FolderGit2 size={12} aria-hidden="true" />
+                  </span>
+                  <span className="text-[10.5px] font-mono font-bold uppercase tracking-wider text-slate-500">
+                    Active Directories
+                  </span>
                 </div>
-              )}
+
+                {analytics.activeAreas.length === 0 ? (
+                  <p className="text-[12px] font-mono text-slate-400 m-0">No active directory data available.</p>
+                ) : (
+                  <div className="space-y-1.5 text-[11.5px]">
+                    {analytics.activeAreas.map((area) => (
+                      <div
+                        key={area.dir}
+                        className="flex items-center justify-between gap-2 p-1.5 rounded-lg bg-white border border-slate-200/90 shadow-2xs"
+                      >
+                        <span className="font-mono text-slate-800 truncate" title={area.dir}>
+                          {area.dir}
+                        </span>
+                        <span className="font-mono font-semibold text-blue-700 bg-blue-50 border border-blue-200/60 px-1.5 py-0.5 rounded text-[10.5px] shrink-0">
+                          {area.count} {area.count === 1 ? 'change' : 'changes'}
+                        </span>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
             </div>
           </div>
         </div>

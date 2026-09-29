@@ -35,18 +35,20 @@ export default function EngineeringHotspotsSection({
     <section
       role="region"
       aria-label="Engineering Hotspots and Risk Areas"
-      className="apple-card p-6 flex flex-col gap-5"
+      className="apple-card p-5 rounded-xl border border-slate-200/90 bg-white shadow-xs flex flex-col gap-4"
     >
       {/* Header & Controls */}
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-black/[0.04] pb-4">
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-slate-100 pb-3">
         <div>
           <div className="flex items-center gap-2">
-            <Flame size={18} className="text-[#FF9500] shrink-0" aria-hidden="true" />
-            <h2 className="text-[15px] font-semibold text-[#1D1D1F] m-0 leading-tight">
+            <span className="w-6 h-6 rounded-md bg-amber-50 text-[#FF9500] flex items-center justify-center shrink-0">
+              <Flame size={14} aria-hidden="true" />
+            </span>
+            <h2 className="text-[13.5px] font-semibold text-slate-800 m-0 leading-tight">
               Engineering Hotspots &amp; Risk Areas
             </h2>
           </div>
-          <p className="text-[12.5px] text-[#86868B] m-0 mt-0.5">
+          <p className="text-[12px] font-mono text-slate-500 m-0 mt-1">
             Areas receiving the most engineering activity and technical attention.
           </p>
         </div>
@@ -55,17 +57,17 @@ export default function EngineeringHotspotsSection({
         <div
           role="group"
           aria-label="Select hotspot aggregation mode"
-          className="inline-flex items-center rounded-full bg-black/[0.05] p-1 self-start sm:self-auto shrink-0"
+          className="inline-flex items-center rounded-lg bg-slate-100 p-0.5 border border-slate-200/80 self-start sm:self-auto shrink-0"
         >
           <button
             type="button"
             id="hotspot-mode-files"
             onClick={() => setViewMode('files')}
             aria-pressed={viewMode === 'files'}
-            className={`px-3.5 py-1 text-[12px] font-medium rounded-full transition-all duration-200 cursor-pointer ${
+            className={`px-2.5 py-1 text-[11.5px] font-mono font-medium rounded-md transition-all duration-150 cursor-pointer ${
               viewMode === 'files'
-                ? 'bg-white text-[#1D1D1F] shadow-[0_1px_3px_rgba(0,0,0,0.1)] font-semibold'
-                : 'text-[#86868B] hover:text-[#1D1D1F]'
+                ? 'bg-white text-slate-900 shadow-2xs font-semibold'
+                : 'text-slate-500 hover:text-slate-800'
             }`}
           >
             Hotspot Files
@@ -75,10 +77,10 @@ export default function EngineeringHotspotsSection({
             id="hotspot-mode-directories"
             onClick={() => setViewMode('directories')}
             aria-pressed={viewMode === 'directories'}
-            className={`px-3.5 py-1 text-[12px] font-medium rounded-full transition-all duration-200 cursor-pointer ${
+            className={`px-2.5 py-1 text-[11.5px] font-mono font-medium rounded-md transition-all duration-150 cursor-pointer ${
               viewMode === 'directories'
-                ? 'bg-white text-[#1D1D1F] shadow-[0_1px_3px_rgba(0,0,0,0.1)] font-semibold'
-                : 'text-[#86868B] hover:text-[#1D1D1F]'
+                ? 'bg-white text-slate-900 shadow-2xs font-semibold'
+                : 'text-slate-500 hover:text-slate-800'
             }`}
           >
             Hotspot Directories

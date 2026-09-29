@@ -266,7 +266,7 @@ function CommandCenterPageContent({ repositoryId }) {
         onCloseMobile={() => setMobileNavOpen(false)}
       />
 
-      <div className="flex-1 min-w-0 flex flex-col">
+      <div className="flex-1 min-w-0 flex flex-col relative z-10">
         <CommandCenterHeader
           repository={headerRepo}
           repositoryId={repositoryId}
@@ -290,8 +290,8 @@ function CommandCenterPageContent({ repositoryId }) {
           ) : dashboardStatus === 'error' ? (
             <DashboardErrorState message={dashboardError} onRetry={() => setDashboardRetryNonce((n) => n + 1)} />
           ) : (
-            <div className="lg:grid lg:grid-cols-[1fr_300px] lg:gap-6 lg:items-start max-w-[1240px] mx-auto">
-              <div className="flex flex-col gap-6 min-w-0">
+            <div className="lg:grid lg:grid-cols-[1fr_320px] lg:gap-5 lg:items-start max-w-[1280px] mx-auto">
+              <div className="flex flex-col gap-5 min-w-0">
                 <section aria-label="Key engineering overview">
                   <OverviewMetrics metrics={metrics} />
                 </section>
