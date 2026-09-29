@@ -12,6 +12,12 @@ const WorkspaceSchema = new mongoose.Schema(
             type: mongoose.Schema.Types.ObjectId,
             ref: "User",
             required: true
+        },
+
+        defaultRepositoryId: {
+            type: mongoose.Schema.Types.ObjectId,
+            ref: "Repository",
+            default: null
         }
     },
     {

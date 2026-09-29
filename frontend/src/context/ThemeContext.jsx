@@ -17,10 +17,18 @@ export function ThemeProvider({ children }) {
     const root = document.documentElement;
     if (theme === 'dark') {
       root.classList.add('dark');
+      root.setAttribute('data-theme', 'dark');
+      root.style.colorScheme = 'dark';
     } else {
       root.classList.remove('dark');
+      root.setAttribute('data-theme', 'light');
+      root.style.colorScheme = 'light';
     }
-    localStorage.setItem('seis-theme', theme);
+    try {
+      localStorage.setItem('seis-theme', theme);
+    } catch (e) {
+      // Ignore if localStorage unavailable
+    }
   }, [theme]);
 
   const toggleTheme = () => {

@@ -1,8 +1,13 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
-import { Search, Check, FolderGit2, Loader2, AlertCircle, X } from 'lucide-react';
+import { Search, Check, FolderGit2, Loader2, AlertCircle, X, Plus } from 'lucide-react';
 import { listRepositories } from '../../services/repositoryService';
 import { buildRepositorySwitchPath } from '../../utils/navigationUtils';
+import {
+  getActiveWorkspace,
+  getDefaultRepositoryForWorkspace,
+  setDefaultRepositoryForWorkspace,
+} from '../../services/workspaceService';
 
 export default function RepositorySwitcherPopover({ currentRepositoryId, onClose }) {
   const navigate = useNavigate();
@@ -65,7 +70,20 @@ export default function RepositorySwitcherPopover({ currentRepositoryId, onClose
     return () => document.removeEventListener('mousedown', handleClickOutside);
   }, [onClose]);
 
+  const activeWs = useMemo(() => getActiveWorkspace(), []);
+  const defaultRepoId = useMemo(() => {
+    return activeWs?._id ? getDefaultRepositoryForWorkspace(activeWs._id) : null;
+  }, [activeWs]);
+
   const handleSelectRepo = (targetRepoId) => {
+    if (activeWs?._id && targetRepoId) {
+      const targetRepo = repos.find((r) => r._id === targetRepoId);
+      setDefaultRepositoryForWorkspace(
+        activeWs._id,
+        targetRepoId,
+        targetRepo?.fullName || targetRepo?.name
+      );
+    }
     const targetPath = buildRepositorySwitchPath(location.pathname, targetRepoId);
     onClose();
     navigate(targetPath);
@@ -141,6 +159,7 @@ export default function RepositorySwitcherPopover({ currentRepositoryId, onClose
           <ul className="flex flex-col gap-0.5">
             {filteredRepos.map((repo, idx) => {
               const isCurrent = repo._id === currentRepositoryId;
+              const isDefault = repo._id === defaultRepoId;
               const isFocused = idx === selectedIndex;
               return (
                 <li key={repo._id}>
@@ -163,8 +182,15 @@ export default function RepositorySwitcherPopover({ currentRepositoryId, onClose
                         aria-hidden="true"
                       />
                       <div className="min-w-0">
-                        <div className="text-[13px] font-semibold truncate leading-snug">
-                          {repo.name}
+                        <div className="flex items-center gap-1.5">
+                          <span className="text-[13px] font-semibold truncate leading-snug">
+                            {repo.name}
+                          </span>
+                          {isDefault && (
+                            <span className="text-[10px] font-bold text-emerald-700 bg-emerald-50 border border-emerald-200/80 rounded px-1.5 py-0.2 shrink-0">
+                              Default
+                            </span>
+                          )}
                         </div>
                         <div className="text-[11px] text-slate-400 truncate">
                           {repo.owner || 'GitHub'} · {repo.defaultBranch || 'main'}
@@ -180,6 +206,20 @@ export default function RepositorySwitcherPopover({ currentRepositoryId, onClose
             })}
           </ul>
         )}
+      </div>
+
+      <div className="p-2 border-t border-slate-100 bg-slate-50/70">
+        <button
+          type="button"
+          onClick={() => {
+            onClose();
+            navigate('/import-repository');
+          }}
+          className="w-full flex items-center justify-center gap-1.5 py-1.5 px-3 rounded-lg text-[12px] font-semibold text-blue-600 hover:text-blue-700 hover:bg-blue-50/80 transition-colors cursor-pointer"
+        >
+          <Plus size={13} />
+          Connect / Import Another Repo
+        </button>
       </div>
     </div>
   );

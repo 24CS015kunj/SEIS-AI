@@ -11,29 +11,69 @@ import axios from 'axios';
 export const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'http://localhost:5000';
 
 const AUTH_TOKEN_STORAGE_KEY = 'seis_auth_token';
+const STAY_LOGGED_IN_STORAGE_KEY = 'seis_stay_logged_in';
 
 /**
- * Reads the SEIS-AI JWT, if one is stored.
+ * Returns whether the user opted to stay logged in across browser sessions.
+ * Defaults to true so users aren't repeatedly prompted to log in.
+ */
+export function getStayLoggedInPreference() {
+  if (typeof window === 'undefined') return true;
+  const val = window.localStorage.getItem(STAY_LOGGED_IN_STORAGE_KEY);
+  return val !== null ? val === 'true' : true;
+}
+
+/**
+ * Persists the user's preference to stay logged in or use session-only auth.
+ */
+export function setStayLoggedInPreference(enabled) {
+  if (typeof window === 'undefined') return;
+  window.localStorage.setItem(STAY_LOGGED_IN_STORAGE_KEY, String(Boolean(enabled)));
+}
+
+/**
+ * Saves the authentication token according to the user's stayLoggedIn choice:
+ * - If true: stored in localStorage (survives browser restarts)
+ * - If false: stored in sessionStorage (cleared when browser session ends)
+ */
+export function setAuthToken(token, stayLoggedIn = true) {
+  if (typeof window === 'undefined' || !token) return;
+  setStayLoggedInPreference(stayLoggedIn);
+  if (stayLoggedIn) {
+    window.localStorage.setItem(AUTH_TOKEN_STORAGE_KEY, token);
+    window.sessionStorage.removeItem(AUTH_TOKEN_STORAGE_KEY);
+  } else {
+    window.sessionStorage.setItem(AUTH_TOKEN_STORAGE_KEY, token);
+    window.localStorage.removeItem(AUTH_TOKEN_STORAGE_KEY);
+  }
+}
+
+/**
+ * Reads the SEIS-AI JWT token, if one is stored.
  *
- * Two sources, in order:
- *  1. `localStorage` -- where a previously-established session persists.
- *  2. The `?token=` query parameter -- the exact hand-off shape Express's
- *     `githubCallback` already produces when invoked with `redirect=true`
- *     (`res.redirect(`${FRONTEND_URL}?token=${token}`)`, `auth.controller.js`).
- *     Picking it up here (and persisting it) is the minimal, already-
- *     backend-supported bootstrap for whenever the real GitHub OAuth
- *     button is wired up -- no backend change needed for that to work.
+ * Sources in priority order:
+ *  1. The `?token=` query parameter from OAuth redirect.
+ *  2. `localStorage` (if stayLoggedIn is true).
+ *  3. `sessionStorage` (if stayLoggedIn is false).
  */
 export function getAuthToken() {
   if (typeof window === 'undefined') return null;
 
   const params = new URLSearchParams(window.location.search);
   const tokenFromUrl = params.get('token');
+  const stayLoggedInParam = params.get('stayLoggedIn');
+
   if (tokenFromUrl) {
-    window.localStorage.setItem(AUTH_TOKEN_STORAGE_KEY, tokenFromUrl);
-    // Strip the token out of the visible URL so it isn't left in browser
-    // history/referrer headers once it's safely persisted.
+    const stayLoggedIn =
+      stayLoggedInParam !== null
+        ? stayLoggedInParam !== 'false'
+        : getStayLoggedInPreference();
+
+    setAuthToken(tokenFromUrl, stayLoggedIn);
+
+    // Strip token and stayLoggedIn out of visible URL
     params.delete('token');
+    params.delete('stayLoggedIn');
     const cleanedSearch = params.toString();
     window.history.replaceState(
       {},
@@ -43,12 +83,16 @@ export function getAuthToken() {
     return tokenFromUrl;
   }
 
-  return window.localStorage.getItem(AUTH_TOKEN_STORAGE_KEY);
+  return (
+    window.localStorage.getItem(AUTH_TOKEN_STORAGE_KEY) ||
+    window.sessionStorage.getItem(AUTH_TOKEN_STORAGE_KEY)
+  );
 }
 
 export function clearAuthToken() {
   if (typeof window === 'undefined') return;
   window.localStorage.removeItem(AUTH_TOKEN_STORAGE_KEY);
+  window.sessionStorage.removeItem(AUTH_TOKEN_STORAGE_KEY);
 }
 
 const apiClient = axios.create({

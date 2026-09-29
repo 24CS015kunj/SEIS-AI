@@ -63,63 +63,27 @@ export default function DocsModal({ isOpen, onClose }) {
 
   return (
     <div
-      style={{
-        position: 'fixed',
-        inset: 0,
-        background: 'rgba(15, 23, 42, 0.5)',
-        backdropFilter: 'blur(4px)',
-        zIndex: 100,
-        display: 'flex',
-        alignItems: 'center',
-        justifyContent: 'center',
-        padding: 16,
-      }}
+      className="fixed inset-0 bg-slate-950/60 backdrop-blur-sm z-[100] flex items-center justify-center p-4"
       onClick={(e) => e.target === e.currentTarget && onClose()}
     >
       <div
-        style={{
-          background: '#FFFFFF',
-          borderRadius: 16,
-          border: '1px solid #E2E8F0',
-          boxShadow: '0 24px 64px rgba(15, 23, 42, 0.18)',
-          width: '100%',
-          maxWidth: 800,
-          maxHeight: '85vh',
-          display: 'flex',
-          flexDirection: 'column',
-          overflow: 'hidden',
-        }}
+        className="bg-white dark:bg-[#111827] rounded-2xl border border-slate-200 dark:border-slate-800 shadow-2xl w-full max-w-[800px] max-h-[85vh] flex flex-col overflow-hidden transition-colors"
       >
         {/* Header */}
         <div
-          style={{
-            padding: '20px 24px',
-            borderBottom: '1px solid #E2E8F0',
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'space-between',
-            flexShrink: 0,
-          }}
+          className="px-6 py-4 sm:py-5 border-b border-slate-200 dark:border-slate-800 flex items-center justify-between shrink-0"
         >
-          <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+          <div className="flex items-center gap-3">
             <div
-              style={{
-                width: 34,
-                height: 34,
-                borderRadius: 8,
-                background: '#0F172A',
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'center',
-              }}
+              className="w-9 h-9 rounded-lg bg-slate-900 dark:bg-blue-600/20 dark:border dark:border-blue-500/30 flex items-center justify-center"
             >
-              <BookOpen size={16} color="#60A5FA" />
+              <BookOpen size={16} className="text-blue-400" />
             </div>
             <div>
-              <div style={{ fontSize: 15, fontWeight: 700, color: '#0F172A' }}>
+              <div className="text-[15px] font-bold text-slate-900 dark:text-slate-100">
                 SEIS AI Copilot Documentation
               </div>
-              <div style={{ fontSize: 12, color: '#94A3B8', fontFamily: 'var(--font-mono)' }}>
+              <div className="text-[12px] text-slate-500 dark:text-slate-400 font-mono">
                 Developer Guide · v2.4
               </div>
             </div>
@@ -127,36 +91,18 @@ export default function DocsModal({ isOpen, onClose }) {
           <button
             onClick={onClose}
             aria-label="Close"
-            style={{
-              width: 32,
-              height: 32,
-              borderRadius: 8,
-              border: '1px solid #E2E8F0',
-              background: '#FFFFFF',
-              cursor: 'pointer',
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'center',
-              color: '#64748B',
-            }}
+            className="w-8 h-8 rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-500 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white flex items-center justify-center transition-colors cursor-pointer"
           >
             <X size={16} />
           </button>
         </div>
 
         {/* Body */}
-        <div style={{ display: 'flex', flex: 1, overflow: 'hidden' }}>
+        <div className="flex flex-1 overflow-hidden flex-col sm:flex-row">
 
           {/* Sidebar nav */}
           <div
-            style={{
-              width: 220,
-              borderRight: '1px solid #E2E8F0',
-              padding: '16px 12px',
-              flexShrink: 0,
-              overflowY: 'auto',
-              background: '#F8FAFC',
-            }}
+            className="w-full sm:w-[220px] border-b sm:border-b-0 sm:border-r border-slate-200 dark:border-slate-800 p-3 sm:p-4 shrink-0 overflow-y-auto bg-slate-50 dark:bg-slate-900/60"
           >
             {docs.map((doc) => {
               const Icon = doc.icon;
@@ -165,63 +111,36 @@ export default function DocsModal({ isOpen, onClose }) {
                 <button
                   key={doc.id}
                   onClick={() => setActiveId(doc.id)}
-                  style={{
-                    width: '100%',
-                    padding: '10px 12px',
-                    borderRadius: 8,
-                    border: 'none',
-                    background: active ? '#FFFFFF' : 'transparent',
-                    boxShadow: active ? '0 1px 3px rgba(15,23,42,0.06)' : 'none',
-                    cursor: 'pointer',
-                    display: 'flex',
-                    alignItems: 'center',
-                    justifyContent: 'space-between',
-                    gap: 8,
-                    textAlign: 'left',
-                    fontFamily: 'var(--font-sans)',
-                    marginBottom: 4,
-                  }}
+                  className={`w-full px-3 py-2.5 rounded-lg border-0 transition-colors cursor-pointer flex items-center justify-between gap-2 text-left mb-1 ${
+                    active
+                      ? 'bg-white dark:bg-slate-800 text-blue-600 dark:text-blue-400 shadow-xs font-semibold'
+                      : 'bg-transparent text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800/50'
+                  }`}
                 >
-                  <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                    <Icon size={14} color={active ? '#2563EB' : '#64748B'} />
-                    <span style={{ fontSize: 13, fontWeight: active ? 600 : 400, color: active ? '#0F172A' : '#64748B' }}>
+                  <div className="flex items-center gap-2">
+                    <Icon size={14} className={active ? 'text-blue-600 dark:text-blue-400' : 'text-slate-500 dark:text-slate-400'} />
+                    <span className="text-[13px]">
                       {doc.label}
                     </span>
                   </div>
-                  {active && <ChevronRight size={12} color="#94A3B8" />}
+                  {active && <ChevronRight size={12} className="text-slate-400" />}
                 </button>
               );
             })}
           </div>
 
           {/* Content */}
-          <div style={{ flex: 1, padding: '28px 28px', overflowY: 'auto' }}>
-            <h2 style={{ fontSize: 20, fontWeight: 700, color: '#0F172A', margin: '0 0 20px' }}>
+          <div className="flex-1 p-5 sm:p-7 overflow-y-auto">
+            <h2 className="text-[18px] sm:text-[20px] font-bold text-slate-900 dark:text-slate-100 m-0 mb-4">
               {activeDoc.title}
             </h2>
             <div
-              style={{
-                fontSize: 14,
-                color: '#475569',
-                lineHeight: 1.75,
-                marginBottom: 24,
-                whiteSpace: 'pre-line',
-              }}
+              className="text-[14px] text-slate-600 dark:text-slate-300 leading-relaxed mb-6 whitespace-pre-line"
             >
               {activeDoc.content}
             </div>
             <div
-              style={{
-                background: '#0F172A',
-                borderRadius: 10,
-                padding: '16px 20px',
-                fontFamily: 'var(--font-mono)',
-                fontSize: 13,
-                color: '#94A3B8',
-                lineHeight: 1.6,
-                whiteSpace: 'pre',
-                overflow: 'auto',
-              }}
+              className="bg-slate-900 dark:bg-slate-950 border border-slate-800 rounded-xl p-4 font-mono text-[13px] text-slate-300 leading-relaxed whitespace-pre overflow-auto"
             >
               {activeDoc.code}
             </div>
@@ -231,27 +150,11 @@ export default function DocsModal({ isOpen, onClose }) {
 
         {/* Footer */}
         <div
-          style={{
-            padding: '14px 24px',
-            borderTop: '1px solid #E2E8F0',
-            display: 'flex',
-            justifyContent: 'flex-end',
-            flexShrink: 0,
-          }}
+          className="px-6 py-3.5 border-t border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-900/60 flex items-center justify-end shrink-0"
         >
           <button
             onClick={onClose}
-            style={{
-              padding: '8px 20px',
-              fontSize: 13,
-              fontWeight: 600,
-              color: '#0F172A',
-              background: '#F8FAFC',
-              border: '1px solid #E2E8F0',
-              borderRadius: 8,
-              cursor: 'pointer',
-              fontFamily: 'var(--font-sans)',
-            }}
+            className="h-8.5 px-4 rounded-lg bg-blue-600 hover:bg-blue-700 text-white font-semibold text-[13px] cursor-pointer border-0 transition-colors"
           >
             Close
           </button>

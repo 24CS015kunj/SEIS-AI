@@ -16,6 +16,7 @@ import CopilotDrawer from '../components/commandCenter/CopilotDrawer';
 import FileCodePreviewDrawer from '../components/common/FileCodePreviewDrawer';
 import EngineeringBackground from '../components/common/EngineeringBackground';
 import EmptyRepositoryState from '../components/common/EmptyRepositoryState';
+import { useAutoResolveDefaultRepository } from '../hooks/useAutoResolveDefaultRepository';
 
 const SUGGESTED_QUESTIONS = [
   'What does this repository do?',
@@ -120,6 +121,7 @@ const GRANULARITY_LABEL = { day: 'day', week: 'week', month: 'month' };
  */
 export default function SoftwareEvolutionPage() {
   const { repositoryId } = useParams();
+  useAutoResolveDefaultRepository(repositoryId, '/software-evolution');
   return <SoftwareEvolutionPageContent key={repositoryId ?? 'none'} repositoryId={repositoryId} />;
 }
 

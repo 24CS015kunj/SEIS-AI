@@ -28,7 +28,7 @@ export default function LandingPage() {
 
   return (
     <div
-      className="relative bg-[#F5F5F7] text-[#1D1D1F] min-h-screen w-full overflow-y-auto overflow-x-hidden scroll-smooth"
+      className="relative bg-[#F5F5F7] dark:bg-[#0B0F19] text-[#1D1D1F] dark:text-[#F8FAFC] min-h-screen w-full overflow-y-auto overflow-x-hidden scroll-smooth transition-colors duration-200"
     >
       {/* 1. Luminous Apple Ambient Aurora Wallpaper */}
       <div className="absolute top-0 left-1/2 -translate-x-1/2 w-full max-w-[1340px] h-[640px] pointer-events-none overflow-hidden z-0">

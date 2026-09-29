@@ -16,6 +16,7 @@ import {
 } from 'lucide-react';
 import { BrandGlyph } from '../common/BrandMark';
 import { getRepository, ingestRepository, getRepositoryBranches } from '../../services/repositoryService';
+import { getActiveWorkspace, setDefaultRepositoryForWorkspace } from '../../services/workspaceService';
 
 const PIPELINE_STAGES = [
   {
@@ -179,6 +180,14 @@ export default function AiIngestionWizardModal({ isOpen, repository, onClose }) 
   if (!isOpen || !repository) return null;
 
   const handleEnterCommandCenter = () => {
+    const activeWs = getActiveWorkspace();
+    if (activeWs?._id && repoId) {
+      setDefaultRepositoryForWorkspace(
+        activeWs._id,
+        repoId,
+        repository?.fullName || repository?.name
+      );
+    }
     navigate(`/command-center/${repoId}`);
   };
 

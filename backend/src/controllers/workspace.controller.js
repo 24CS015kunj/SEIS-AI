@@ -1,4 +1,6 @@
+import mongoose from "mongoose";
 import Workspace from "../models/workspaces.model.js";
+import Repository from "../models/repositories.model.js";
 
 /**
  * Creates a workspace owned by the authenticated user.
@@ -39,12 +41,84 @@ export const createWorkspace = async (req, res, next) => {
  */
 export const getWorkspaces = async (req, res, next) => {
     try {
-        const workspaces = await Workspace.find({ ownerId: req.user._id }).sort({ createdAt: -1 });
+        let query = Workspace.find({ ownerId: req.user._id });
+        if (typeof query.populate === "function") {
+            query = query.populate("defaultRepositoryId", "name owner fullName defaultBranch status visibility language");
+        }
+        if (typeof query.sort === "function") {
+            query = query.sort({ createdAt: -1 });
+        }
+        const workspaces = await query;
 
         return res.json({
             success: true,
             count: workspaces.length,
             workspaces,
+        });
+    } catch (error) {
+        next(error);
+    }
+};
+
+/**
+ * Sets or clears the default repository for a workspace.
+ * PATCH /api/workspaces/:workspaceId/default-repository
+ */
+export const setDefaultRepository = async (req, res, next) => {
+    try {
+        const { workspaceId } = req.params;
+        const { repositoryId } = req.body;
+
+        if (!mongoose.Types.ObjectId.isValid(workspaceId)) {
+            return res.status(400).json({
+                success: false,
+                message: "Invalid workspace ID.",
+            });
+        }
+
+        const workspace = await Workspace.findOne({ _id: workspaceId, ownerId: req.user._id });
+        if (!workspace) {
+            return res.status(404).json({
+                success: false,
+                message: "Workspace not found.",
+            });
+        }
+
+        if (repositoryId) {
+            if (!mongoose.Types.ObjectId.isValid(repositoryId)) {
+                return res.status(400).json({
+                    success: false,
+                    message: "Invalid repository ID.",
+                });
+            }
+
+            const repo = await Repository.findOne({ _id: repositoryId, userId: req.user._id });
+            if (!repo) {
+                return res.status(404).json({
+                    success: false,
+                    message: "Repository not found or not owned by user.",
+                });
+            }
+
+            // Associate repository with this workspace if not already associated
+            if (!repo.workspaceId || String(repo.workspaceId) !== String(workspace._id)) {
+                repo.workspaceId = workspace._id;
+                await repo.save();
+            }
+
+            workspace.defaultRepositoryId = repo._id;
+        } else {
+            workspace.defaultRepositoryId = null;
+        }
+
+        await workspace.save();
+
+        const updated = await Workspace.findById(workspace._id)
+            .populate("defaultRepositoryId", "name owner fullName defaultBranch status visibility language");
+
+        return res.json({
+            success: true,
+            workspace: updated,
         });
     } catch (error) {
         next(error);

@@ -20,7 +20,13 @@ import BrandMark, { BrandGlyph } from '../components/common/BrandMark';
 import FadeIn from '../components/common/FadeIn';
 import OnboardingStepper from '../components/onboarding/OnboardingStepper';
 import { useAuth } from '../context/AuthContext';
-import { createWorkspace, listWorkspaces, setActiveWorkspace } from '../services/workspaceService';
+import {
+  createWorkspace,
+  listWorkspaces,
+  setActiveWorkspace,
+  getDefaultRepositoryForWorkspace,
+  getDefaultRepositoryDetailsForWorkspace,
+} from '../services/workspaceService';
 
 const WORKSPACE_TYPES = [
   { value: 'personal', label: 'Personal Workspace' },
@@ -93,7 +99,18 @@ export default function WorkspaceCreationPage() {
     };
   }, []);
 
-  const useExistingWorkspace = (workspace) => {
+  const handleOpenWorkspace = (workspace, defaultRepoId) => {
+    setActiveWorkspace(workspace);
+    if (defaultRepoId) {
+      navigate(`/command-center/${defaultRepoId}`);
+    } else {
+      navigate('/import-repository', {
+        state: { workspaceId: workspace._id, workspaceName: workspace.name },
+      });
+    }
+  };
+
+  const handleChangeRepo = (workspace) => {
     setActiveWorkspace(workspace);
     navigate('/import-repository', {
       state: { workspaceId: workspace._id, workspaceName: workspace.name },
@@ -293,7 +310,8 @@ export default function WorkspaceCreationPage() {
                 {existingWorkspacesStatus === 'ready' && existingWorkspaces.length > 0 && activeTab === 'existing' ? (
                   <ExistingWorkspacesPanel
                     workspaces={existingWorkspaces}
-                    onSelect={useExistingWorkspace}
+                    onOpen={handleOpenWorkspace}
+                    onChangeRepo={handleChangeRepo}
                     onCreateNew={() => setActiveTab('create')}
                   />
                 ) : (
@@ -570,7 +588,7 @@ function LogoUpload() {
   );
 }
 
-function ExistingWorkspacesPanel({ workspaces, onSelect, onCreateNew }) {
+function ExistingWorkspacesPanel({ workspaces, onOpen, onChangeRepo, onCreateNew }) {
   return (
     <div className="mb-7">
       <div className="flex items-center justify-between gap-2 mb-3">
@@ -589,35 +607,80 @@ function ExistingWorkspacesPanel({ workspaces, onSelect, onCreateNew }) {
       </div>
 
       <div className="grid grid-cols-1 gap-3">
-        {workspaces.map((workspace) => (
-          <div
-            key={workspace._id}
-            className="group flex items-center justify-between gap-3 bg-white border border-slate-200 hover:border-blue-400 hover:shadow-md rounded-xl p-4 transition-all"
-          >
-            <div className="flex items-center gap-3 min-w-0">
-              <div className="w-10 h-10 rounded-xl bg-blue-50 text-blue-600 flex items-center justify-center shrink-0">
-                <LayoutGrid size={18} />
+        {workspaces.map((workspace) => {
+          const defaultRepoId =
+            typeof workspace.defaultRepositoryId === 'object'
+              ? workspace.defaultRepositoryId?._id
+              : (workspace.defaultRepositoryId || getDefaultRepositoryForWorkspace(workspace._id));
+
+          const defaultRepoDetails = getDefaultRepositoryDetailsForWorkspace(workspace._id);
+          const defaultRepoName =
+            typeof workspace.defaultRepositoryId === 'object'
+              ? (workspace.defaultRepositoryId?.fullName || workspace.defaultRepositoryId?.name)
+              : (defaultRepoDetails?.repositoryName || null);
+
+          return (
+            <div
+              key={workspace._id}
+              className="group flex flex-col sm:flex-row sm:items-center justify-between gap-3 bg-white border border-slate-200 hover:border-blue-400 hover:shadow-md rounded-xl p-4 transition-all"
+            >
+              <div className="flex items-center gap-3 min-w-0">
+                <div className="w-10 h-10 rounded-xl bg-blue-50 text-blue-600 flex items-center justify-center shrink-0">
+                  <LayoutGrid size={18} />
+                </div>
+                <div className="min-w-0">
+                  <h4 className="text-[14.5px] font-bold text-slate-900 truncate m-0">
+                    {workspace.name}
+                  </h4>
+                  {defaultRepoName ? (
+                    <div className="flex items-center gap-1.5 text-[12px] text-slate-500 font-mono mt-0.5 truncate" title={`Default: ${defaultRepoName}`}>
+                      <FolderGit2 size={12} className="text-blue-600 shrink-0" />
+                      <span className="truncate">Default: <strong className="text-slate-800 font-semibold">{defaultRepoName}</strong></span>
+                    </div>
+                  ) : (
+                    <span className="text-[12px] text-slate-400 block mt-0.5">
+                      No repository linked yet
+                    </span>
+                  )}
+                </div>
               </div>
-              <div className="min-w-0">
-                <h4 className="text-[14.5px] font-bold text-slate-900 truncate m-0">
-                  {workspace.name}
-                </h4>
-                <span className="text-[12px] text-slate-400 block mt-0.5">
-                  Created {workspace.createdAt ? new Date(workspace.createdAt).toLocaleDateString() : 'Active'}
-                </span>
+
+              <div className="flex items-center gap-2 shrink-0 self-end sm:self-auto">
+                {defaultRepoId ? (
+                  <>
+                    <button
+                      type="button"
+                      onClick={() => onChangeRepo(workspace)}
+                      className="inline-flex items-center gap-1.5 h-9 px-3 rounded-lg bg-slate-100 hover:bg-slate-200 text-slate-700 hover:text-slate-900 text-[12px] font-semibold border border-slate-200 cursor-pointer transition-colors"
+                      title="Switch or choose a different repository for this workspace"
+                    >
+                      <FolderGit2 size={13} className="text-slate-500" />
+                      <span>Switch Repo</span>
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => onOpen(workspace, defaultRepoId)}
+                      className="inline-flex items-center gap-1.5 h-9 px-4 rounded-lg bg-blue-600 hover:bg-blue-700 text-white text-[13px] font-semibold border-0 cursor-pointer transition-colors shadow-xs"
+                      title="Directly open Command Center with default repository"
+                    >
+                      <span>Open Workspace</span>
+                      <ArrowRight size={14} />
+                    </button>
+                  </>
+                ) : (
+                  <button
+                    type="button"
+                    onClick={() => onChangeRepo(workspace)}
+                    className="inline-flex items-center gap-1.5 h-9 px-4 rounded-lg bg-blue-600 hover:bg-blue-700 text-white text-[13px] font-semibold border-0 cursor-pointer transition-colors shadow-xs"
+                  >
+                    <span>Select Repository</span>
+                    <ArrowRight size={14} />
+                  </button>
+                )}
               </div>
             </div>
-
-            <button
-              type="button"
-              onClick={() => onSelect(workspace)}
-              className="shrink-0 inline-flex items-center gap-1.5 h-9 px-4 rounded-lg bg-blue-600 hover:bg-blue-700 text-white text-[13px] font-semibold border-0 cursor-pointer transition-colors shadow-sm"
-            >
-              <span>Select</span>
-              <ArrowRight size={14} />
-            </button>
-          </div>
-        ))}
+          );
+        })}
       </div>
     </div>
   );

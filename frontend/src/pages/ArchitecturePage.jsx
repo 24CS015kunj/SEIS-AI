@@ -23,6 +23,7 @@ import FileCodePreviewDrawer from '../components/common/FileCodePreviewDrawer';
 import CitationDrawer from '../components/chat/CitationDrawer';
 import EngineeringBackground from '../components/common/EngineeringBackground';
 import EmptyRepositoryState from '../components/common/EmptyRepositoryState';
+import { useAutoResolveDefaultRepository } from '../hooks/useAutoResolveDefaultRepository';
 
 const SUGGESTED_QUESTIONS = [
   'What does this repository do?',
@@ -54,6 +55,7 @@ export default function ArchitecturePage() {
   // full, clean remount (selected module, retry counters, Copilot
   // conversation) whenever the active repository actually changes.
   const { repositoryId } = useParams();
+  useAutoResolveDefaultRepository(repositoryId, '/architecture');
   return <ArchitecturePageContent key={repositoryId ?? 'none'} repositoryId={repositoryId} />;
 }
 

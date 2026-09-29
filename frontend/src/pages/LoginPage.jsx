@@ -17,7 +17,13 @@ import GithubIcon from '../components/common/GithubIcon';
 import FadeIn from '../components/common/FadeIn';
 import BrandMark, { BrandGlyph } from '../components/common/BrandMark';
 import { useAuth } from '../context/AuthContext';
-import { API_BASE_URL } from '../services/apiClient';
+import {
+  API_BASE_URL,
+  getStayLoggedInPreference,
+  setStayLoggedInPreference,
+  getAuthToken,
+  setAuthToken,
+} from '../services/apiClient';
 
 const trustPoints = [
   {
@@ -50,6 +56,7 @@ export default function LoginPage() {
   const [connecting, setConnecting] = useState(false);
   const [confirming, setConfirming] = useState(false);
   const [switchNotice, setSwitchNotice] = useState(false);
+  const [stayLoggedIn, setStayLoggedIn] = useState(() => getStayLoggedInPreference());
 
   /**
    * Real GitHub OAuth handoff: a full browser navigation to Express's
@@ -61,11 +68,16 @@ export default function LoginPage() {
   const handleConnect = () => {
     if (connecting) return;
     setConnecting(true);
-    window.location.href = `${API_BASE_URL}/api/auth/github`;
+    setStayLoggedInPreference(stayLoggedIn);
+    window.location.href = `${API_BASE_URL}/api/auth/github?stayLoggedIn=${stayLoggedIn}`;
   };
 
   const handleConfirmContinue = () => {
     setConfirming(true);
+    const token = getAuthToken();
+    if (token) {
+      setAuthToken(token, stayLoggedIn);
+    }
     navigate('/workspace');
   };
 
@@ -182,12 +194,22 @@ export default function LoginPage() {
                     onConfirm={handleConfirmContinue}
                     onSwitchAccount={handleSwitchAccount}
                     confirming={confirming}
+                    stayLoggedIn={stayLoggedIn}
+                    onToggleStayLoggedIn={(val) => {
+                      setStayLoggedIn(val);
+                      setStayLoggedInPreference(val);
+                    }}
                   />
                 ) : (
                   <DefaultState
                     status={connecting ? 'loading' : 'default'}
                     onConnect={handleConnect}
                     switchNotice={switchNotice}
+                    stayLoggedIn={stayLoggedIn}
+                    onToggleStayLoggedIn={(val) => {
+                      setStayLoggedIn(val);
+                      setStayLoggedInPreference(val);
+                    }}
                   />
                 )}
               </div>
@@ -244,7 +266,14 @@ function VerifyingState() {
   );
 }
 
-function AccountConfirmationState({ user, onConfirm, onSwitchAccount, confirming }) {
+function AccountConfirmationState({
+  user,
+  onConfirm,
+  onSwitchAccount,
+  confirming,
+  stayLoggedIn,
+  onToggleStayLoggedIn,
+}) {
   const avatar = user?.avatarUrl;
   const username = user?.githubUsername || 'Developer';
   const name = user?.name || username;
@@ -329,11 +358,32 @@ function AccountConfirmationState({ user, onConfirm, onSwitchAccount, confirming
       </div>
 
       {/* Permission scope notice */}
-      <div className="flex items-start gap-2.5 p-3 rounded-lg bg-blue-50/70 border border-blue-100/90 mb-6 text-[12px] text-blue-900 leading-snug">
+      <div className="flex items-start gap-2.5 p-3 rounded-lg bg-blue-50/70 border border-blue-100/90 mb-4 text-[12px] text-blue-900 leading-snug">
         <ShieldCheck size={16} className="text-blue-600 shrink-0 mt-0.5" />
         <div>
           <span className="font-semibold">Read-Only Scope:</span> SEIS AI only accesses repositories and metadata you explicitly choose to import.
         </div>
+      </div>
+
+      {/* Stay logged in option */}
+      <div className="mb-5 p-3 rounded-xl border border-slate-200 bg-white hover:bg-slate-50/80 transition-colors">
+        <label className="flex items-start gap-3 cursor-pointer select-none">
+          <input
+            type="checkbox"
+            id="stay-logged-in-confirm"
+            checked={stayLoggedIn}
+            onChange={(e) => onToggleStayLoggedIn?.(e.target.checked)}
+            className="w-4 h-4 mt-0.5 text-blue-600 rounded border-slate-300 focus:ring-blue-500 cursor-pointer accent-blue-600"
+          />
+          <div className="text-left">
+            <div className="text-[13px] font-semibold text-slate-800">
+              Stay logged in on this device
+            </div>
+            <div className="text-[11.5px] text-slate-500 leading-snug mt-0.5">
+              Keep your session active so you don't need to log in again every time you open SEIS AI.
+            </div>
+          </div>
+        </label>
       </div>
 
       {/* Action Buttons */}
@@ -380,7 +430,13 @@ function AccountConfirmationState({ user, onConfirm, onSwitchAccount, confirming
   );
 }
 
-function DefaultState({ status, onConnect, switchNotice }) {
+function DefaultState({
+  status,
+  onConnect,
+  switchNotice,
+  stayLoggedIn,
+  onToggleStayLoggedIn,
+}) {
   const loading = status === 'loading';
   return (
     <>
@@ -416,10 +472,31 @@ function DefaultState({ status, onConnect, switchNotice }) {
       <h2 className="text-[22px] sm:text-2xl font-bold text-slate-900 text-center mb-2 leading-snug">
         Welcome to <span className="text-transparent bg-clip-text bg-gradient-to-r from-blue-600 to-indigo-600">SEIS AI Copilot</span>
       </h2>
-      <p className="text-sm text-slate-500 text-center leading-relaxed mb-8 max-w-[340px] mx-auto">
+      <p className="text-sm text-slate-500 text-center leading-relaxed mb-6 max-w-[340px] mx-auto">
         Connect your GitHub account to securely import repositories, analyze
         software projects, and unlock AI-powered engineering intelligence.
       </p>
+
+      {/* Stay logged in option */}
+      <div className="mb-5 p-3 rounded-xl border border-slate-200/90 bg-slate-50/70 hover:bg-slate-100/60 transition-colors text-left">
+        <label className="flex items-start gap-2.5 cursor-pointer select-none">
+          <input
+            type="checkbox"
+            id="stay-logged-in-login"
+            checked={stayLoggedIn}
+            onChange={(e) => onToggleStayLoggedIn?.(e.target.checked)}
+            className="w-4 h-4 mt-0.5 text-blue-600 rounded border-slate-300 focus:ring-blue-500 cursor-pointer accent-blue-600 shrink-0"
+          />
+          <div className="min-w-0">
+            <span className="text-[13px] font-semibold text-slate-800 block leading-tight">
+              Stay logged in on this device
+            </span>
+            <span className="text-[11.5px] text-slate-500 block leading-tight mt-1">
+              Remembers your session so you don't have to log in every time.
+            </span>
+          </div>
+        </label>
+      </div>
 
       <button
         type="button"

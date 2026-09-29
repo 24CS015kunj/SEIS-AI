@@ -19,6 +19,7 @@ import CopilotDrawer from '../components/commandCenter/CopilotDrawer';
 import FileCodePreviewDrawer from '../components/common/FileCodePreviewDrawer';
 import EngineeringBackground from '../components/common/EngineeringBackground';
 import EmptyRepositoryState from '../components/common/EmptyRepositoryState';
+import { useAutoResolveDefaultRepository } from '../hooks/useAutoResolveDefaultRepository';
 
 /** No repository-specific suggested-question generation exists anywhere in
  * this codebase (confirmed by inspection) -- this is a fixed set of
@@ -41,6 +42,7 @@ export default function CommandCenterPage() {
   // active repository actually changes, rather than auditing every
   // individual `useState` for staleness one at a time.
   const { repositoryId } = useParams();
+  useAutoResolveDefaultRepository(repositoryId, '/command-center');
   return <CommandCenterPageContent key={repositoryId ?? 'none'} repositoryId={repositoryId} />;
 }
 

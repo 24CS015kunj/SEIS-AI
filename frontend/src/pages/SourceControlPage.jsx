@@ -22,6 +22,7 @@ import FileList from '../components/sourceControl/FileList';
 import FileCodePreviewDrawer from '../components/common/FileCodePreviewDrawer';
 import EngineeringBackground from '../components/common/EngineeringBackground';
 import CommitCategoryStrip from '../components/commandCenter/CommitCategoryStrip';
+import { useAutoResolveDefaultRepository } from '../hooks/useAutoResolveDefaultRepository';
 
 /**
  * Maps one real `Commit` document (backend/src/models/commits.model.js)
@@ -55,6 +56,7 @@ export default function SourceControlPage() {
   // name, branch `_id`) that could otherwise collide across two
   // different repositories' data.
   const { repositoryId } = useParams();
+  useAutoResolveDefaultRepository(repositoryId, '/source-control');
   return <SourceControlPageContent key={repositoryId ?? 'none'} repositoryId={repositoryId} />;
 }
 

@@ -49,7 +49,7 @@ export default function Navbar({ onOpenAuth, onOpenDocs }) {
           <BrandMark size={30} />
           <span className="text-[15px] font-bold text-slate-900 tracking-tight flex items-center gap-2">
             SEIS AI Copilot
-            <span className="hidden sm:inline-block font-mono text-[10px] font-semibold text-blue-600 bg-blue-50 border border-blue-200/70 rounded px-1.5 py-0.5">
+            <span className="hidden sm:inline-block font-mono text-[10px] font-semibold text-blue-600 dark:text-blue-400 bg-blue-50 dark:bg-blue-950/60 border border-blue-200/70 dark:border-blue-800/60 rounded px-1.5 py-0.5">
               v1.0
             </span>
           </span>
@@ -62,7 +62,7 @@ export default function Navbar({ onOpenAuth, onOpenDocs }) {
               key={link.name}
               href={link.href}
               onClick={(e) => handleNavClick(e, link)}
-              className="relative text-[14px] font-medium text-slate-600 hover:text-slate-950 transition-colors group py-1.5"
+              className="relative text-[14px] font-medium text-slate-600 dark:text-slate-400 hover:text-slate-950 dark:hover:text-white transition-colors group py-1.5"
               style={{ textDecoration: 'none' }}
             >
               {link.name}
@@ -79,16 +79,16 @@ export default function Navbar({ onOpenAuth, onOpenDocs }) {
               <Link
                 to="/login"
                 title="Account Details & Confirmation"
-                className="flex items-center gap-2 h-9 px-2.5 rounded-lg bg-slate-100 hover:bg-slate-200/80 transition-colors no-underline text-slate-800 text-[13px] font-medium border border-slate-200"
+                className="flex items-center gap-2 h-9 px-2.5 rounded-lg bg-slate-100 dark:bg-slate-800 hover:bg-slate-200/80 dark:hover:bg-slate-700 transition-colors no-underline text-slate-800 dark:text-slate-200 text-[13px] font-medium border border-slate-200 dark:border-slate-700"
               >
                 {user.avatarUrl ? (
                   <img
                     src={user.avatarUrl}
                     alt={user.githubUsername}
-                    className="w-5 h-5 rounded-full object-cover border border-white"
+                    className="w-5 h-5 rounded-full object-cover border border-white dark:border-slate-700"
                   />
                 ) : (
-                  <GithubIcon className="w-4 h-4 text-slate-700" />
+                  <GithubIcon className="w-4 h-4 text-slate-700 dark:text-slate-300" />
                 )}
                 <span>@{user.githubUsername}</span>
               </Link>
@@ -115,7 +115,7 @@ export default function Navbar({ onOpenAuth, onOpenDocs }) {
           <ThemeToggle />
           <button
             onClick={() => setMenuOpen(!menuOpen)}
-            className="p-2 rounded-md text-slate-500 hover:text-slate-900 hover:bg-slate-100 transition-colors"
+            className="p-2 rounded-md text-slate-500 hover:text-slate-900 dark:hover:text-slate-100 hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors"
             aria-label="Toggle menu"
             style={{ background: 'none', border: 'none', cursor: 'pointer' }}
           >
@@ -126,21 +126,21 @@ export default function Navbar({ onOpenAuth, onOpenDocs }) {
 
       {/* Mobile Drawer */}
       {menuOpen && (
-        <div className="lg:hidden absolute top-[72px] left-0 right-0 bg-white border-b border-[#E2E8F0] z-50 shadow-sm">
+        <div className="lg:hidden absolute top-[72px] left-0 right-0 bg-white dark:bg-[#0F172A] border-b border-[#E2E8F0] dark:border-slate-800 z-50 shadow-sm">
           <div className="px-6 py-5 space-y-1">
             {navLinks.map((link) => (
               <a
                 key={link.name}
                 href={link.href}
                 onClick={(e) => handleNavClick(e, link)}
-                style={{ fontSize: 15, fontWeight: 500, color: '#0F172A', textDecoration: 'none' }}
-                className="block py-2.5 hover:text-[#2563EB] transition-colors"
+                style={{ fontSize: 15, fontWeight: 500, textDecoration: 'none' }}
+                className="block py-2.5 text-slate-800 dark:text-slate-100 hover:text-[#2563EB] dark:hover:text-blue-400 transition-colors"
               >
                 {link.name}
               </a>
             ))}
           </div>
-          <div className="px-6 pb-6 pt-4 border-t border-[#E2E8F0] space-y-3">
+          <div className="px-6 pb-6 pt-4 border-t border-[#E2E8F0] dark:border-slate-800 space-y-3">
             {isAuthenticated ? (
               <div className="space-y-2">
                 <Link
@@ -160,7 +160,7 @@ export default function Navbar({ onOpenAuth, onOpenDocs }) {
                 <Link
                   to="/login"
                   onClick={() => setMenuOpen(false)}
-                  className="w-full h-10 text-[13px] font-medium text-slate-700 bg-slate-100 hover:bg-slate-200/80 rounded-lg flex items-center justify-center gap-2 no-underline"
+                  className="w-full h-10 text-[13px] font-medium text-slate-700 dark:text-slate-200 bg-slate-100 dark:bg-slate-800 hover:bg-slate-200/80 dark:hover:bg-slate-700 rounded-lg flex items-center justify-center gap-2 no-underline"
                 >
                   Manage Account & Switch User
                 </Link>

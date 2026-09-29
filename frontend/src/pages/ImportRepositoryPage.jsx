@@ -24,7 +24,13 @@ import FadeIn from '../components/common/FadeIn';
 import OnboardingStepper from '../components/onboarding/OnboardingStepper';
 import AiIngestionWizardModal from '../components/onboarding/AiIngestionWizardModal';
 import { listRepositories, syncRepositories } from '../services/repositoryService';
-import { listWorkspaces, getActiveWorkspace, setActiveWorkspace } from '../services/workspaceService';
+import {
+  listWorkspaces,
+  getActiveWorkspace,
+  setActiveWorkspace,
+  getDefaultRepositoryForWorkspace,
+  setDefaultRepositoryForWorkspace,
+} from '../services/workspaceService';
 
 const VISIBILITY_FILTERS = [
   { value: 'all', label: 'All' },
@@ -60,6 +66,15 @@ export default function ImportRepositoryPage() {
   const [language, setLanguage] = useState(null);
   const [selectedId, setSelectedId] = useState(null);
   const [ingestionModalOpen, setIngestionModalOpen] = useState(false);
+  const [defaultRepoId, setDefaultRepoId] = useState(() => {
+    return activeWorkspace?._id ? getDefaultRepositoryForWorkspace(activeWorkspace._id) : null;
+  });
+
+  useEffect(() => {
+    if (activeWorkspace?._id) {
+      setDefaultRepoId(getDefaultRepositoryForWorkspace(activeWorkspace._id));
+    }
+  }, [activeWorkspace?._id]);
 
   // Load existing workspaces to enable fast switching and auto-recovery
   useEffect(() => {
@@ -91,6 +106,7 @@ export default function ImportRepositoryPage() {
   const handleSelectWorkspace = (ws) => {
     setActiveWorkspaceState(ws);
     setActiveWorkspace(ws);
+    setDefaultRepoId(getDefaultRepositoryForWorkspace(ws._id));
     setWorkspaceMenuOpen(false);
   };
 
@@ -101,7 +117,14 @@ export default function ImportRepositoryPage() {
         const safeRepos = Array.isArray(data) ? data : [];
         setRepos(safeRepos);
         setLoadStatus('ready');
-        setSelectedId((current) => current ?? safeRepos[0]?._id ?? null);
+        setSelectedId((current) => {
+          if (current) return current;
+          const currentDef = activeWorkspace?._id ? getDefaultRepositoryForWorkspace(activeWorkspace._id) : null;
+          if (currentDef && safeRepos.some((r) => r._id === currentDef)) {
+            return currentDef;
+          }
+          return safeRepos[0]?._id ?? null;
+        });
       })
       .catch(() => {
         setRepos([]);
@@ -166,13 +189,39 @@ export default function ImportRepositoryPage() {
     setLanguage(null);
   };
 
+  const handleSetDefaultRepo = (repo) => {
+    if (!activeWorkspace?._id || !repo?._id) return;
+    setDefaultRepositoryForWorkspace(
+      activeWorkspace._id,
+      repo._id,
+      repo.fullName || repo.name
+    );
+    setDefaultRepoId(repo._id);
+  };
+
   const openSelectedRepository = () => {
     if (!selectedRepo) return;
+    if (activeWorkspace?._id) {
+      setDefaultRepositoryForWorkspace(
+        activeWorkspace._id,
+        selectedRepo._id,
+        selectedRepo.fullName || selectedRepo.name
+      );
+      setDefaultRepoId(selectedRepo._id);
+    }
     setIngestionModalOpen(true);
   };
 
   const handleDirectCommandCenter = () => {
     if (!selectedRepo) return;
+    if (activeWorkspace?._id) {
+      setDefaultRepositoryForWorkspace(
+        activeWorkspace._id,
+        selectedRepo._id,
+        selectedRepo.fullName || selectedRepo.name
+      );
+      setDefaultRepoId(selectedRepo._id);
+    }
     navigate(`/command-center/${selectedRepo._id}`);
   };
 
@@ -388,6 +437,7 @@ export default function ImportRepositoryPage() {
                         key={repo._id}
                         repo={repo}
                         selected={repo._id === selectedId}
+                        isDefault={repo._id === defaultRepoId}
                         onSelect={() => selectRepo(repo._id)}
                       />
                     ))}
@@ -397,7 +447,12 @@ export default function ImportRepositoryPage() {
             </div>
 
             <div className="lg:w-[280px] shrink-0">
-              <SidebarPanel repo={selectedRepo} />
+              <SidebarPanel
+                repo={selectedRepo}
+                isDefault={selectedRepo?._id === defaultRepoId}
+                onSetDefault={() => handleSetDefaultRepo(selectedRepo)}
+                workspaceName={activeWorkspace?.name}
+              />
             </div>
           </div>
 
@@ -445,7 +500,7 @@ export default function ImportRepositoryPage() {
   );
 }
 
-function RepoCard({ repo, selected, onSelect }) {
+function RepoCard({ repo, selected, isDefault, onSelect }) {
   return (
     <div
       role="radio"
@@ -477,6 +532,12 @@ function RepoCard({ repo, selected, onSelect }) {
             {repo.owner}/{repo.name}
           </span>
           <VisibilityBadge visibility={repo.visibility} />
+          {isDefault && (
+            <span className="inline-flex items-center gap-1 text-[11px] font-bold text-emerald-700 bg-emerald-50 border border-emerald-200 rounded-full px-2 py-0.5">
+              <Check size={10} strokeWidth={3} />
+              Default
+            </span>
+          )}
         </div>
         {repo.description && (
           <p className="text-[13px] text-slate-500 mt-1 leading-snug line-clamp-2">{repo.description}</p>
@@ -570,7 +631,7 @@ function EmptyResults({ onClear }) {
   );
 }
 
-function SidebarPanel({ repo }) {
+function SidebarPanel({ repo, isDefault, onSetDefault, workspaceName }) {
   return (
     <div className="lg:sticky lg:top-0">
       <span className="block text-[11px] font-bold uppercase tracking-wider text-slate-400 mb-2.5">
@@ -583,7 +644,7 @@ function SidebarPanel({ repo }) {
         </div>
       ) : (
         <>
-          <div className="relative rounded-xl p-[1.5px] bg-gradient-to-r from-blue-500 to-indigo-500 mb-4">
+          <div className="relative rounded-xl p-[1.5px] bg-gradient-to-r from-blue-500 to-indigo-500 mb-3">
             <div className="rounded-[10px] bg-white p-4">
               <div className="flex items-center gap-2.5 mb-2">
                 <div className="w-8 h-8 rounded-lg bg-blue-50 flex items-center justify-center shrink-0">
@@ -613,6 +674,36 @@ function SidebarPanel({ repo }) {
                   </>
                 )}
               </div>
+            </div>
+          </div>
+
+          {/* Workspace Default Repository Indicator & Action */}
+          <div className="rounded-xl border border-slate-200 bg-slate-50/70 p-3 mb-3">
+            <div className="flex items-center justify-between gap-2">
+              <div className="min-w-0">
+                <div className="text-[12px] font-semibold text-slate-800">
+                  Workspace Default
+                </div>
+                <div className="text-[11px] text-slate-500 truncate">
+                  {isDefault
+                    ? `Default for ${workspaceName || 'this workspace'}`
+                    : `Make default for ${workspaceName || 'this workspace'}`}
+                </div>
+              </div>
+              {isDefault ? (
+                <span className="shrink-0 inline-flex items-center gap-1 text-[11px] font-bold text-emerald-700 bg-emerald-100/80 border border-emerald-200 px-2 py-0.5 rounded-full">
+                  <Check size={11} strokeWidth={2.5} />
+                  Default
+                </span>
+              ) : (
+                <button
+                  type="button"
+                  onClick={onSetDefault}
+                  className="shrink-0 inline-flex items-center gap-1 text-[11.5px] font-semibold text-blue-600 hover:text-blue-700 bg-white hover:bg-blue-50 border border-slate-200 px-2.5 py-1 rounded-lg transition-colors cursor-pointer"
+                >
+                  Set as Default
+                </button>
+              )}
             </div>
           </div>
 

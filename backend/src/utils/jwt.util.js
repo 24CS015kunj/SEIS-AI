@@ -5,12 +5,13 @@ import jwt from "jsonwebtoken";
  * @param {string|mongoose.Types.ObjectId} userId - User's MongoDB ID
  * @returns {string} Signed JWT token
  */
-export const generateToken = (userId) => {
+export const generateToken = (userId, options = {}) => {
+    const expiresIn = options.expiresIn || process.env.JWT_EXPIRES_IN || "30d";
     return jwt.sign(
         { userId, type: "access" },
         process.env.JWT_SECRET,
         {
-            expiresIn: process.env.JWT_EXPIRES_IN || "15m",
+            expiresIn,
         }
     );
 };
