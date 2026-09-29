@@ -36,3 +36,16 @@ htmlcov/
 Thumbs.db
 .idea/
 .vscode/
+
+# Shared build artifacts and logs
+node_modules/
+dist/
+dist-ssr/
+*.local
+logs/
+*.log
+*.suo
+*.ntvs*
+*.njsproj
+*.sln
+*.sw?
