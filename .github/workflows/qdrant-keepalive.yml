@@ -1,0 +1,38 @@
+name: Qdrant Cloud keepalive
+
+on:
+  workflow_dispatch:
+  # Twice weekly leaves headroom below Qdrant Free's one-week inactivity window.
+  schedule:
+    - cron: "20 0 * * 1,4"
+
+permissions: {}
+
+jobs:
+  keepalive:
+    runs-on: ubuntu-latest
+    timeout-minutes: 3
+    steps:
+      - name: Read Qdrant collection list over verified HTTPS
+        env:
+          QDRANT_URL: ${{ secrets.QDRANT_URL }}
+          QDRANT_API_KEY: ${{ secrets.QDRANT_API_KEY }}
+        run: |
+          python3 - <<'PY'
+          import os, ssl, urllib.request, urllib.parse
+          endpoint = os.environ.get("QDRANT_URL", "").rstrip("/")
+          token = os.environ.get("QDRANT_API_KEY", "")
+          parsed = urllib.parse.urlsplit(endpoint)
+          if (parsed.scheme != "https" or not parsed.hostname or parsed.username
+              or parsed.password or parsed.query or parsed.fragment
+              or parsed.path or not token):
+              raise SystemExit("Configure valid QDRANT_URL and QDRANT_API_KEY repository secrets")
+          request = urllib.request.Request(endpoint + "/collections", headers={"api-key": token})
+          try:
+              with urllib.request.urlopen(request, timeout=20, context=ssl.create_default_context()) as response:
+                  if response.status != 200:
+                      raise RuntimeError("Unhealthy cluster")
+              print("Qdrant keepalive succeeded")
+          except Exception:
+              raise SystemExit("Qdrant keepalive failed; inspect cluster availability and credentials") from None
+          PY
