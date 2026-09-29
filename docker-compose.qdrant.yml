@@ -1,0 +1,15 @@
+# Qdrant Cloud + retained local Redis. Requires Compose >= 2.24.4.
+services:
+  api:
+    build:
+      args:
+        INSTALL_LEGACY_CHROMA: "false"
+    environment:
+      VECTOR_STORE_BACKEND: qdrant
+      QDRANT_URL: ${QDRANT_URL:?Set the Qdrant Cloud HTTPS endpoint}
+      QDRANT_API_KEY: ${QDRANT_API_KEY:?Set the cluster data API key securely}
+    depends_on: !override
+      redis:
+        condition: service_healthy
+  chromadb:
+    profiles: [legacy-chroma]

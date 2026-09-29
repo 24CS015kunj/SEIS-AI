@@ -168,15 +168,47 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     )
     for hook in _startup_hooks:
         await hook()
+
+    # Startup reconciliation for orphaned background jobs (Task T5, Architecture E)
+    try:
+        from app.api.deps import get_job_manager, get_repository_processing_service
+
+        proc_service = get_repository_processing_service()
+        reconciled = await proc_service.reconcile_interrupted_jobs()
+        if reconciled > 0:
+            logger.info("startup.reconciliation_complete", reconciled_jobs=reconciled)
+
+        # Start sustained background recovery and flush loop for post-startup resiliency
+        job_manager = get_job_manager()
+        job_manager.start_background_recovery_loop(proc_service)
+    except Exception as rec_err:
+        logger.warning("startup.reconciliation_failed", error=str(rec_err))
+
     logger.info("startup.complete", hooks_run=len(_startup_hooks))
 
     try:
         yield
     finally:
         logger.info("shutdown.begin")
+        # 1. Gracefully shut down IngestionJobManager before closing infra clients
+        try:
+            from app.api.deps import get_job_manager
+
+            job_manager = get_job_manager()
+            await job_manager.shutdown()
+        except Exception as jm_err:
+            logger.warning("shutdown.job_manager_failed", error=str(jm_err))
+
         # Reverse order: the last dependency started is the first torn down.
-        for hook in reversed(_shutdown_hooks):
-            await hook()
+        try:
+            for hook in reversed(_shutdown_hooks):
+                await hook()
+        finally:
+            # Close in the lifespan's loop, after ingestion/recovery tasks stop.
+            try:
+                await _deps.get_cache_client().close()
+            finally:
+                await _deps.get_chroma_client().close()
         logger.info("shutdown.complete")
 
 

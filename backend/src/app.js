@@ -11,20 +11,25 @@ import { correlationMiddleware } from "./middleware/correlation.middleware.js";
 import { requestLoggerMiddleware } from "./middleware/requestLogger.middleware.js";
 import { errorHandler } from "./middleware/error.middleware.js";
 import { getFastapiConfig } from "./config/fastapi.config.js";
+import { createCorsOptions } from "./config/cors.config.js";
 
 const app = express();
+
+// Proxy trust configuration (Task T3)
+// Defaults to untrusted (false) for security. When running behind a verified reverse proxy
+// (e.g. Render edge balancer), TRUST_PROXY can be set to an explicit hop count (e.g. "1").
+if (process.env.TRUST_PROXY) {
+    const tp = process.env.TRUST_PROXY.trim();
+    const hopCount = parseInt(tp, 10);
+    app.set("trust proxy", Number.isFinite(hopCount) ? hopCount : tp === "true" ? true : tp === "false" ? false : tp);
+}
 
 // 1. Correlation & Logging Middleware (Task #7)
 app.use(correlationMiddleware);
 app.use(requestLoggerMiddleware);
 
-// 2. CORS & Cookie Middleware
-app.use(
-    cors({
-        origin: process.env.FRONTEND_URL,
-        credentials: true,
-    })
-);
+// 2. Safe Multi-Origin CORS & Cookie Middleware (Task T3)
+app.use(cors(createCorsOptions()));
 
 app.use(cookieParser());
 app.use(express.json());
@@ -46,7 +51,7 @@ app.get("/api/health", (req, res) => {
     });
 });
 
-// Deep Readiness Probe Endpoint (Task #7)
+// Deep Readiness Probe Endpoint (Task #7 / Task T3)
 app.get("/api/health/ready", async (req, res) => {
     const mongoHealthy = mongoose.connection.readyState === 1;
 
@@ -57,9 +62,19 @@ app.get("/api/health/ready", async (req, res) => {
         const config = getFastapiConfig();
         if (config.baseUrl) {
             const url = `${config.baseUrl.replace(/\/+$/, "")}/health/ready`;
-            const response = await axios.get(url, { timeout: 3000 });
+            const headers = {};
+            if (req.correlationId) {
+                headers["X-Correlation-Id"] = req.correlationId;
+            }
+            if (config.internalApiKey) {
+                headers["Authorization"] = `Bearer ${config.internalApiKey}`;
+            }
+            const response = await axios.get(url, { headers, timeout: 3000 });
             fastapiHealthy = response.status === 200 && response.data?.status === "ready";
             fastapiDetails = response.data;
+        } else {
+            fastapiHealthy = false;
+            fastapiDetails = { error: "FASTAPI_BASE_URL is not configured" };
         }
     } catch (err) {
         fastapiHealthy = false;

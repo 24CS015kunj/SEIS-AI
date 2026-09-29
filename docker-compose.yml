@@ -6,6 +6,9 @@ services:
     build:
       context: ./fastapi-ai-service
       dockerfile: Dockerfile
+      target: development
+      args:
+        INSTALL_LEGACY_CHROMA: "true"
     container_name: fastapi-api
     ports:
       - "8000:8000"
@@ -33,35 +36,6 @@ services:
       start_period: 10s
     restart: unless-stopped
 
-  # Celery Ingestion Worker
-  worker:
-    build:
-      context: ./fastapi-ai-service
-      dockerfile: Dockerfile
-    container_name: fastapi-worker
-    command: >
-      celery -A app.infra.queue.task_queue worker
-      --include=app.tasks.ingestion
-      --queues=ingestion
-      --loglevel=info
-    volumes:
-      - ./fastapi-ai-service:/app
-      - /app/.venv
-    environment:
-      - CHROMA_HOST=chromadb
-      - CHROMA_PORT=8000
-      - TASK_QUEUE_BROKER_URL=redis://redis:6379/0
-      - EXPRESS_BASE_URL=http://host.docker.internal:5000
-      - PYTHONUNBUFFERED=1
-    extra_hosts:
-      - "host.docker.internal:host-gateway"
-    depends_on:
-      redis:
-        condition: service_healthy
-      chromadb:
-        condition: service_healthy
-    restart: unless-stopped
-
   # Node.js Express Backend Gateway (Task #8)
   backend:
     build:
@@ -73,7 +47,7 @@ services:
     environment:
       - PORT=5000
       - MONGODB_URL=${MONGODB_URL}
-      - JWT_SECRET=${JWT_SECRET:-seis_ai_jwt_secret_key_development_2026_super_secure}
+      - JWT_SECRET=${JWT_SECRET:?Set JWT_SECRET in the local .env}
       - FASTAPI_BASE_URL=http://api:8000
       # The Dockerized frontend is nginx on port 80 (http://localhost), not
       # the Vite dev server on :5173 -- this value is both the CORS allowed

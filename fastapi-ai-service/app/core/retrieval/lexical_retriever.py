@@ -15,7 +15,7 @@ chunk already carries ``file_path``, ``symbol_name`` (when the chunker's
 AST pass found one), and its raw ``content`` in ChromaDB metadata/
 documents (see ``app.infra.vectorstore.chroma_client``) -- this module
 pulls the target repository's full, already-indexed chunk set via the
-new :meth:`ChromaClient.get_all_chunks` (one bounded, read-only scan;
+new :meth:`VectorStoreClient.get_all_chunks` (one bounded, read-only scan;
 no upsert, no new collection, no new DB) and matches a small set of
 identifier-shaped terms extracted from the query against that metadata
 in plain Python. At this project's real scale (tens of chunks per
@@ -23,7 +23,7 @@ repository -- 49 for the verified Mazesolver repository) this is
 comfortably cheap; ``get_all_chunks``'s own ``limit`` bounds the
 worst case.
 
-Repository isolation: inherited entirely from ``ChromaClient``'s
+Repository isolation: inherited entirely from ``VectorStoreClient``'s
 existing collection-per-repository boundary (``repo_{repository_id}``,
 ADR-004) -- this module never filters by ``workspace_id`` and never
 sees another repository's collection, the same guarantee
@@ -55,7 +55,7 @@ from pathlib import PurePosixPath
 import structlog
 
 from app.domain.models import Chunk, SearchResultItem
-from app.infra.vectorstore.chroma_client import ChromaClient
+from app.infra.vectorstore.client import VectorStoreClient
 
 logger = structlog.get_logger("seis.core.retrieval")
 
@@ -153,7 +153,7 @@ class LexicalRetriever:
     """Exact filename/identifier/path-segment lookup over a repository's
     already-indexed chunks (Task 63)."""
 
-    def __init__(self, chroma_client: ChromaClient) -> None:
+    def __init__(self, chroma_client: VectorStoreClient) -> None:
         self._chroma = chroma_client
         self._log = logger.bind(component="lexical_retriever")
 
@@ -167,7 +167,7 @@ class LexicalRetriever:
         identifier-shaped terms or the repository has no indexed chunks.
 
         Repository isolation is inherited from
-        :meth:`ChromaClient.get_all_chunks`'s own collection-per-
+        :meth:`VectorStoreClient.get_all_chunks`'s own collection-per-
         repository scoping -- identical guarantee to
         :meth:`VectorRetriever.retrieve`.
         """

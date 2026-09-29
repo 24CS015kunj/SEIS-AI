@@ -34,6 +34,7 @@ coverage.xml
 # --- Local vector store / cache data (never committed — regenerated) ---
 .chroma/
 .cache/
+.migration/
 
 # --- IDE / OS ---
 .idea/

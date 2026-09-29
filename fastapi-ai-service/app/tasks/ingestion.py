@@ -45,7 +45,7 @@ Retry policy: deliberately none at the Celery level (no
 ``autoretry_for``, no ``self.retry()``). Every transient infrastructure
 failure this task can hit -- Redis, ChromaDB, the NVIDIA embedding API
 -- is already retried with bounded exponential backoff *inside* its own
-adapter (``RedisClient._run_with_retry``, ``ChromaClient._run_blocking``,
+adapter (``RedisClient._run_with_retry``, ``VectorStoreClient._run_blocking``,
 ``NemotronEmbedder._run_with_retry``, all pre-existing) before it ever
 reaches this task as a raised ``CacheError``/``VectorDBError``/
 ``EmbeddingError``. Adding a second, independent Celery-level retry on
@@ -79,16 +79,15 @@ from app.core.processing.document_processor import DocumentProcessor
 from app.core.processing.metadata_generator import MetadataGenerator
 from app.infra.cache.cache_client import RedisClient
 from app.infra.http.express_client import ExpressCallbackClient
-from app.infra.queue.task_queue import celery_app
-from app.infra.vectorstore.chroma_client import ChromaClient
+from app.infra.vectorstore.client import VectorStoreClient, create_vector_store
 from app.services.repository_ingestion_worker_service import RepositoryIngestionWorkerService
 
 logger = structlog.get_logger("seis.tasks.ingestion")
 
 
 @lru_cache(maxsize=1)
-def _get_chroma_client() -> ChromaClient:
-    return ChromaClient(settings=get_settings())
+def _get_chroma_client() -> VectorStoreClient:
+    return create_vector_store(get_settings())
 
 
 @lru_cache(maxsize=1)
@@ -133,18 +132,14 @@ def _build_worker_service() -> RepositoryIngestionWorkerService:
     )
 
 
-@celery_app.task(name="app.tasks.ingestion.process_repository", bind=True)  # type: ignore[misc]
-def process_repository(self: Any, payload: dict[str, Any]) -> None:
-    """Celery entry point for one repository ingestion job (Task 40).
+def process_repository(payload: dict[str, Any], *, job_id: str | None = None) -> None:
+    """Entry point for one repository ingestion job (Task 40 / Task T5).
 
-    ``payload`` is the JSON-decoded dict Task 30 produced via
+    ``payload`` is the JSON-decoded dict produced via
     ``manifest.model_dump(mode="json")`` -- reconstructed into a
     :class:`~app.domain.models.RepositoryManifest` by
-    :meth:`RepositoryIngestionWorkerService.process_ingestion_job`, not
-    here, so this function stays a thin Celery adapter with no
-    validation/business logic of its own.
+    :meth:`RepositoryIngestionWorkerService.process_ingestion_job`.
     """
-    job_id = self.request.id
     log = logger.bind(job_id=job_id)
     log.info("ingestion_task.received")
     service = _build_worker_service()

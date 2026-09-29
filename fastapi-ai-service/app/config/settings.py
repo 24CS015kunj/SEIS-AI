@@ -3,9 +3,8 @@
 Implements the configuration hierarchy defined in
 docs/week1-ai-system-design.md §19.1 (Code Defaults -> .env ->
 Deployment Env Vars) using Pydantic Settings, with the environment
-variable catalogue from §19.2. Every field name matches an entry in
-the frozen ``.env.example`` (Task 2) exactly -- no environment
-variable is renamed, added, or removed here.
+variable catalogue from §19.2, extended by the deployment transformation.
+The example environment documents canonical names and compatibility aliases.
 """
 
 from collections.abc import Callable
@@ -13,6 +12,7 @@ from enum import Enum
 from functools import lru_cache
 from pathlib import Path
 from typing import Literal
+from urllib.parse import urlsplit
 
 from pydantic import Field, SecretStr, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
@@ -47,6 +47,7 @@ class Settings(BaseSettings):
         # matching a declared field name, so nothing outside this model's
         # fields is ever presented to `extra` validation.
         extra="forbid",
+        hide_input_in_errors=True,
     )
 
     # --- Application identity (not in .env.example -- code defaults only;
@@ -137,14 +138,34 @@ class Settings(BaseSettings):
     nvidia_reranking_base_url: str = "https://ai.api.nvidia.com"
 
     # --- Vector Store (§19 — connection only, no indexing this task) ---
+    vector_store_backend: Literal["chroma", "qdrant"] = "chroma"
+    qdrant_url: str = Field(default="", repr=False, exclude=True)
+    qdrant_api_key: SecretStr = SecretStr("")
+    qdrant_timeout_seconds: int = Field(default=5, ge=1, le=30)
+    qdrant_upsert_batch_size: int = Field(default=64, ge=1, le=256)
     chroma_host: str = "localhost"
     chroma_port: int = Field(default=8001, ge=1, le=65535)
     chroma_persist_dir: Path = Path("./.chroma")
+    enable_chroma_in_memory_fallback: bool = False
 
     # --- Queue / Cache (§19.2) ---
-    task_queue_broker_url: str = "redis://localhost:6379/0"
+    redis_url: str = Field(default="", repr=False, exclude=True)
+    task_queue_broker_url: str = Field(default="redis://localhost:6379/0", repr=False, exclude=True)
+    redis_max_connections: int = Field(default=16, ge=2, le=100)
+    redis_socket_connect_timeout_seconds: float = Field(default=1.0, gt=0, le=5)
+    redis_socket_timeout_seconds: float = Field(default=1.0, gt=0, le=5)
+    redis_readiness_timeout_seconds: float = Field(default=1.0, gt=0, le=2)
     cache_backend: Literal["memory", "redis"] = "memory"
     cache_ttl_seconds: int = Field(default=3600, ge=0)
+
+    # --- Background Ingestion Job Manager (Task T5, Architecture E) ---
+    max_concurrent_ingestion_jobs: int = Field(default=2, ge=1, le=20)
+    max_admitted_ingestion_jobs: int = Field(default=10, ge=1, le=100)
+    ingestion_job_grace_period_seconds: float = Field(default=10.0, ge=0.5, le=120.0)
+    ingestion_heartbeat_interval_seconds: int = Field(default=15, ge=1, le=60)
+    ingestion_heartbeat_timeout_seconds: int = Field(default=90, ge=10, le=600)
+    ingestion_recovery_interval_seconds: float = Field(default=30.0, ge=1.0, le=300.0)
+    ingestion_recovery_idle_interval_seconds: float = Field(default=120.0, ge=1.0, le=300.0)
 
     # --- Conversation history (Task 65) -- own settings, not a reuse of
     # cache_ttl_seconds above: conversation lifetime is a distinct concern
@@ -232,6 +253,74 @@ class Settings(BaseSettings):
                 f"{', '.join(missing)}. Set them via the deployment platform's "
                 "secret store (§26.3) -- never in a committed file."
             )
+        return self
+
+    @model_validator(mode="after")
+    def _resolve_redis_url(self) -> "Settings":
+        """Resolve canonical URL once; never include credentials in validation errors."""
+        explicitly_configured = bool(self.redis_url.strip()) or (
+            "task_queue_broker_url" in self.model_fields_set
+            and bool(self.task_queue_broker_url.strip())
+        )
+        value = self.redis_url.strip() or self.task_queue_broker_url.strip()
+        value = value or "redis://localhost:6379/0"
+        try:
+            parsed = urlsplit(value)
+            port = parsed.port
+            valid = (
+                parsed.scheme in {"redis", "rediss"}
+                and bool(parsed.hostname)
+                and not any(char.isspace() for char in value)
+                and (port is None or 1 <= port <= 65535)
+                and not parsed.query
+                and not parsed.fragment
+                and (not parsed.path or parsed.path == "/" or parsed.path[1:].isdigit())
+            )
+        except ValueError:
+            valid = False
+        if not valid:
+            raise ValueError(
+                "REDIS_URL must be a Redis TCP URL without query parameters or fragment"
+            )
+        if self.is_production and (
+            not explicitly_configured
+            or parsed.scheme != "rediss"
+            or parsed.hostname in {"localhost", "127.0.0.1", "::1", "redis"}
+            or not parsed.password
+        ):
+            raise ValueError("Production requires an explicit authenticated rediss:// REDIS_URL")
+        self.redis_url = value
+        self.task_queue_broker_url = value
+        return self
+
+    @model_validator(mode="after")
+    def _validate_qdrant_configuration(self) -> "Settings":
+        if self.qdrant_url:
+            try:
+                parsed = urlsplit(self.qdrant_url)
+                valid = (
+                    parsed.scheme == "https"
+                    and bool(parsed.hostname)
+                    and parsed.username is None
+                    and parsed.password is None
+                    and not parsed.query
+                    and not parsed.fragment
+                    and parsed.path in {"", "/"}
+                    and not any(char.isspace() for char in self.qdrant_url)
+                    and (parsed.port is None or 1 <= parsed.port <= 65535)
+                )
+            except ValueError:
+                valid = False
+            if not valid:
+                raise ValueError(
+                    "QDRANT_URL must be an HTTPS endpoint without credentials or query"
+                )
+        if (
+            self.vector_store_backend == "qdrant"
+            and self.is_production
+            and (not self.qdrant_url or not self.qdrant_api_key.get_secret_value())
+        ):
+            raise ValueError("Qdrant production requires QDRANT_URL and QDRANT_API_KEY")
         return self
 
 

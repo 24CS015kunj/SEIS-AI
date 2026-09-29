@@ -1,0 +1,10 @@
+# Requires Docker Compose >= 2.24.4 for !override. No Redis container in this path.
+services:
+  api:
+    environment:
+      REDIS_URL: ${REDIS_URL:?Set REDIS_URL to the managed Redis TCP TLS connection string}
+    depends_on: !override
+      chromadb:
+        condition: service_healthy
+  redis:
+    profiles: [local-redis]

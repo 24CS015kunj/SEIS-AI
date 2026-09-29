@@ -56,7 +56,7 @@ from app.core.processing.document_processor import DocumentProcessor
 from app.core.processing.metadata_generator import MetadataGenerator
 from app.domain.enums import ProcessingStatus
 from app.domain.models import DiffManifest, RepositoryManifest
-from app.infra.vectorstore.chroma_client import ChromaClient
+from app.infra.vectorstore.client import VectorStoreClient
 
 logger = structlog.get_logger("seis.core.processing")
 
@@ -66,7 +66,7 @@ class IncrementalSynchronizer:
 
     def __init__(
         self,
-        chroma_client: ChromaClient,
+        chroma_client: VectorStoreClient,
         document_processor: DocumentProcessor,
         chunker: ASTChunker,
         metadata_generator: MetadataGenerator,

@@ -10,12 +10,13 @@ from functools import lru_cache
 from typing import cast
 
 import structlog
-from celery import Celery  # type: ignore[import-untyped]
 from fastapi import Depends
+from fastapi.params import Depends as DependsClass
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 
 from app.config.settings import Settings, get_settings
 from app.core.embedding.embedder import NemotronEmbedder
+from app.core.embedding.embedding_cache import EmbeddingCache
 from app.core.evolution.churn_calculator import ChurnCalculator
 from app.core.evolution.commit_analyzer import CommitAnalyzer
 from app.core.evolution.evolution_indexer import EvolutionIndexer
@@ -24,6 +25,9 @@ from app.core.generation.conversation_store import ConversationStore
 from app.core.generation.prompt_builder import PromptBuilder
 from app.core.intelligence.insights_generator import InsightsGenerator
 from app.core.intelligence.trend_detector import TrendDetector
+from app.core.processing.chunker import ASTChunker
+from app.core.processing.document_processor import DocumentProcessor
+from app.core.processing.metadata_generator import MetadataGenerator
 from app.core.retrieval.context_builder import ContextBuilder
 from app.core.retrieval.lexical_retriever import LexicalRetriever
 from app.core.retrieval.query_rewriter import QueryRewriter
@@ -34,13 +38,14 @@ from app.domain.exceptions import SEISAuthorizationError
 from app.infra.cache.cache_client import RedisClient
 from app.infra.http.express_client import ExpressCallbackClient
 from app.infra.llm.gemini_client import NemotronGateway
-from app.infra.queue.task_queue import celery_app
-from app.infra.vectorstore.chroma_client import ChromaClient
+from app.infra.vectorstore.client import VectorStoreClient, create_vector_store
 from app.services.evaluation_service import EvaluationService
 from app.services.evolution_analysis_service import EvolutionAnalysisService
+from app.services.job_manager import IngestionJobManager
 from app.services.repository_analysis_service import RepositoryAnalysisService
 from app.services.repository_chat_service import RepositoryChatService
 from app.services.repository_explain_service import RepositoryExplainService
+from app.services.repository_ingestion_worker_service import RepositoryIngestionWorkerService
 from app.services.repository_processing_service import RepositoryProcessingService
 from app.services.semantic_search_service import SemanticSearchService
 
@@ -147,18 +152,13 @@ def get_evaluation_service(
 # Infrastructure Client Providers (Level 1 Clean Architecture - Tasks 9-12)
 # ---------------------------------------------------------------------------
 @lru_cache(maxsize=1)
-def get_chroma_client() -> ChromaClient:
-    """FastAPI dependency provider for the process-wide ChromaDB adapter (Task 9).
+def get_chroma_client() -> VectorStoreClient:
+    """Compatibility provider for the explicitly selected vector store.
 
-    ``lru_cache`` gives ``ChromaClient`` the same process-lifetime
-    singleton semantics as :func:`app.config.settings.get_settings` --
-    one instance per process, never rebuilt per request or per vector
-    operation. Construction itself is cheap and lazy (the underlying
-    ``chromadb`` SDK client is built on first real use inside
-    ``ChromaClient``, not here), so this is safe to call from a
-    ``Depends()`` on every request without adding request latency.
+    One lazy instance per process; both Chroma rollback and Qdrant use
+    the same caller contract. Network failures never switch backends.
     """
-    return ChromaClient(settings=get_settings())
+    return create_vector_store(get_settings())
 
 
 @lru_cache(maxsize=1)
@@ -179,94 +179,95 @@ def get_express_callback_client() -> ExpressCallbackClient:
     return ExpressCallbackClient(settings=get_settings())
 
 
-def get_task_queue() -> Celery:
-    """FastAPI dependency provider for the process-wide Celery task queue (Task 11).
-
-    Unlike :func:`get_chroma_client`/:func:`get_cache_client`, no
-    ``lru_cache`` wrapper is needed here: ``celery_app``
-    (``app.infra.queue.task_queue``) is already a single, process-wide
-    module-level object built once at import time -- this provider
-    exists only so route handlers can request it the same way as every
-    other infrastructure client, via ``Depends(get_task_queue)``,
-    without importing ``app.infra.queue`` directly.
-    """
-    return celery_app
+@lru_cache(maxsize=1)
+def get_embedding_cache() -> EmbeddingCache:
+    """FastAPI dependency provider for process-wide EmbeddingCache."""
+    return EmbeddingCache(redis_client=get_cache_client(), settings=get_settings())
 
 
 @lru_cache(maxsize=1)
 def get_nemotron_gateway() -> NemotronGateway:
-    """FastAPI dependency provider for the process-wide LLM generation
-    gateway (Task 12; renamed from ``get_gemini_gateway`` and migrated to
-    NVIDIA Nemotron 3 Ultra in Task 60/ADR-008 -- unlike the module file
-    it's defined in, a provider function is not covered by the project's
-    frozen-file-tree rule, so it is renamed here the same way the class
-    it returns was).
-
-    Same ``lru_cache`` process-lifetime singleton pattern as
-    :func:`get_chroma_client`/:func:`get_cache_client` -- one
-    ``NemotronGateway`` per process, constructed lazily (the underlying
-    ``httpx.AsyncClient`` is built on first real call inside
-    ``NemotronGateway``, not here, so a missing ``NVIDIA_CHAT_API_KEY`` never
-    prevents the process from starting).
-    """
+    """FastAPI dependency provider for the process-wide LLM generation gateway."""
     return NemotronGateway(settings=get_settings())
 
 
 @lru_cache(maxsize=1)
 def get_rag_optimizer() -> RAGOptimizer:
-    """FastAPI dependency provider for the process-wide RAG Optimizer
-    (Task 24). Same ``lru_cache`` process-lifetime singleton pattern as
-    :func:`get_nemotron_gateway`/:func:`get_embedder` -- it lazily builds
-    and holds one ``httpx.AsyncClient`` for NVIDIA's hosted reranking
-    API, so a new instance per request would leak a client per call
-    instead of reusing one for the process lifetime. A missing
-    ``NVIDIA_EMBEDDING_API_KEY`` never prevents the process from starting; it
-    only fails an actual rerank call (Task 54).
-    """
+    """FastAPI dependency provider for the process-wide RAG Optimizer."""
     return RAGOptimizer(settings=get_settings())
 
 
 @lru_cache(maxsize=1)
 def get_embedder() -> NemotronEmbedder:
-    """FastAPI dependency provider for the process-wide embedding client
-    (ADR-007). Same ``lru_cache`` process-lifetime singleton pattern as
-    :func:`get_nemotron_gateway` -- constructed lazily, so a missing
-    ``NVIDIA_EMBEDDING_API_KEY`` never prevents the process from starting. First
-    needed by a route/service provider in Task 31 (``EvolutionIndexer``
-    requires it); no provider existed for it before this task since
-    nothing above the Core layer called into embedding directly.
-    """
+    """FastAPI dependency provider for the process-wide embedding client."""
     return NemotronEmbedder(settings=get_settings())
+
+
+@lru_cache(maxsize=1)
+def get_ingestion_worker_service() -> RepositoryIngestionWorkerService:
+    """FastAPI dependency provider for RepositoryIngestionWorkerService.
+
+    Constructs the end-to-end processing pipeline injecting lazy singleton
+    infrastructure clients.
+    """
+    return RepositoryIngestionWorkerService(
+        chroma_client=get_chroma_client(),
+        document_processor=DocumentProcessor(),
+        chunker=ASTChunker(),
+        metadata_generator=MetadataGenerator(),
+        embedder=get_embedder(),
+        embedding_cache=get_embedding_cache(),
+        cache_client=get_cache_client(),
+        express_callback_client=get_express_callback_client(),
+    )
+
+
+@lru_cache(maxsize=1)
+def get_job_manager() -> IngestionJobManager:
+    """FastAPI dependency provider for the in-process Background Ingestion Job Manager (Task T5).
+
+    Singleton managing bounded background tasks within the application lifespan.
+    """
+    return IngestionJobManager(
+        worker_factory=get_ingestion_worker_service,
+        settings=get_settings(),
+        cache_client=get_cache_client(),
+        express_callback_client=get_express_callback_client(),
+    )
 
 
 # ---------------------------------------------------------------------------
 # Service Layer Dependency Providers requiring infra clients (Task 30+)
 # ---------------------------------------------------------------------------
-# Placed after the Infrastructure Client Providers above (rather than
-# alongside the other, still-settings-only Service Layer providers
-# further up this file) because its Depends() defaults reference
-# get_cache_client/get_task_queue -- default argument values are
-# evaluated at `def` time, so those names must already be bound.
 def get_repository_processing_service(
     settings: Settings = Depends(get_settings_dep),
     cache_client: RedisClient = Depends(get_cache_client),
-    task_queue: Celery = Depends(get_task_queue),
+    job_manager: IngestionJobManager = Depends(get_job_manager),
+    express_callback_client: ExpressCallbackClient = Depends(get_express_callback_client),
 ) -> RepositoryProcessingService:
-    """Dependency provider for RepositoryProcessingService (Task 30).
+    """Dependency provider for RepositoryProcessingService (Task 30, Task T5).
 
-    The first Service Layer provider to wire real infrastructure
-    adapters (Redis locking/status, Celery job dispatch) rather than
-    just Settings -- every other provider above still awaits its own
-    task before evolving the same way.
+    Wires Redis locking/status, in-process job manager, and outbound callback client.
     """
+    actual_settings = get_settings_dep() if isinstance(settings, DependsClass) else settings
+    actual_cache = get_cache_client() if isinstance(cache_client, DependsClass) else cache_client
+    actual_job_manager = get_job_manager() if isinstance(job_manager, DependsClass) else job_manager
+    actual_callback = (
+        get_express_callback_client()
+        if isinstance(express_callback_client, DependsClass)
+        else express_callback_client
+    )
     return RepositoryProcessingService(
-        cache_client=cache_client, task_queue=task_queue, settings=settings
+        cache_client=actual_cache,
+        job_manager=actual_job_manager,
+        express_callback_client=actual_callback,
+        settings=actual_settings,
     )
 
 
 def get_semantic_search_service(
     settings: Settings = Depends(get_settings_dep),
-    chroma_client: ChromaClient = Depends(get_chroma_client),
+    chroma_client: VectorStoreClient = Depends(get_chroma_client),
     embedder: NemotronEmbedder = Depends(get_embedder),
     rag_optimizer: RAGOptimizer = Depends(get_rag_optimizer),
 ) -> SemanticSearchService:
@@ -287,7 +288,7 @@ def get_semantic_search_service(
 
 def get_repository_chat_service(
     settings: Settings = Depends(get_settings_dep),
-    chroma_client: ChromaClient = Depends(get_chroma_client),
+    chroma_client: VectorStoreClient = Depends(get_chroma_client),
     embedder: NemotronEmbedder = Depends(get_embedder),
     llm_gateway: NemotronGateway = Depends(get_nemotron_gateway),
     rag_optimizer: RAGOptimizer = Depends(get_rag_optimizer),
@@ -300,7 +301,7 @@ def get_repository_chat_service(
     ``ConversationStore`` (Task 65), ``QueryRewriter`` (Task 66), and
     ``RepositoryStructureService`` (Task 67) inline -- none of them hold
     a client worth caching across requests (unlike ``RAGOptimizer``/
-    ``NemotronGateway``/``ChromaClient``/``RedisClient``, each already a
+    ``NemotronGateway``/``VectorStoreClient``/``RedisClient``, each already a
     singleton via its own provider) -- same "no separate DI provider for
     a component with no independent lifecycle of its own" pattern
     ``get_evolution_analysis_service`` already uses for its
@@ -351,7 +352,7 @@ def get_repository_analysis_service() -> RepositoryAnalysisService:
 def get_evolution_analysis_service(
     settings: Settings = Depends(get_settings_dep),
     cache_client: RedisClient = Depends(get_cache_client),
-    chroma_client: ChromaClient = Depends(get_chroma_client),
+    chroma_client: VectorStoreClient = Depends(get_chroma_client),
     embedder: NemotronEmbedder = Depends(get_embedder),
 ) -> EvolutionAnalysisService:
     """Dependency provider for EvolutionAnalysisService (Task 31).
@@ -377,7 +378,7 @@ def get_evolution_analysis_service(
 
 def get_explain_service(
     settings: Settings = Depends(get_settings_dep),
-    chroma_client: ChromaClient = Depends(get_chroma_client),
+    chroma_client: VectorStoreClient = Depends(get_chroma_client),
     embedder: NemotronEmbedder = Depends(get_embedder),
     llm_gateway: NemotronGateway = Depends(get_nemotron_gateway),
     rag_optimizer: RAGOptimizer = Depends(get_rag_optimizer),
@@ -425,7 +426,10 @@ async def _chroma_readiness_check() -> bool:
     return await get_chroma_client().health_check()
 
 
-register_readiness_check("chromadb", _chroma_readiness_check)
+register_readiness_check(
+    "qdrant" if get_settings().vector_store_backend == "qdrant" else "chromadb",
+    _chroma_readiness_check,
+)
 
 
 async def _redis_readiness_check() -> bool:

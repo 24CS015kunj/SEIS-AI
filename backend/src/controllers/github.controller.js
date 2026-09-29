@@ -1332,11 +1332,12 @@ export const makeIngestRepository = (deps = {}) => async (req, res, next) => {
 
         const forceReingest = Boolean(req.body?.force);
 
-        // Check if repository is stuck in processing for > 5 minutes
+        // Check if repository is stuck in processing for > 5 minutes without active heartbeat (Task T5)
+        const lastLivenessTime = repository.lastHeartbeatAt || repository.updatedAt;
         const isStuckProcessing =
             repository.ingestionStatus === "processing" &&
-            repository.updatedAt &&
-            Date.now() - new Date(repository.updatedAt).getTime() > 5 * 60 * 1000;
+            lastLivenessTime &&
+            Date.now() - new Date(lastLivenessTime).getTime() > 5 * 60 * 1000;
 
         // Idempotency Check 1: If repository is currently processing (and not stuck/forced), do not spawn duplicate jobs
         if (!forceReingest && !isStuckProcessing && repository.ingestionStatus === "processing") {
@@ -1381,22 +1382,90 @@ export const makeIngestRepository = (deps = {}) => async (req, res, next) => {
             return res.status(409).json({ success: false, ...result });
         }
 
+        const priorActiveJobId = repository.activeJobId || null;
+
         if (result.submittedJob) {
-            repository.ingestionStatus = "processing";
-            repository.ingestionStage = "queued";
-            repository.lastIngestedCommitSha = branch.latestCommitSha;
-            repository.ingestionError = null;
-            if (typeof repository.save === "function") {
-                await repository.save();
+            const submittedJobId = result.submittedJob.jobId || null;
+            let effectiveStatus = "processing";
+
+            if (mongoose.connection?.readyState === 1 && typeof Repository.findOneAndUpdate === "function") {
+                const query = {
+                    _id: repository._id,
+                    $or: [
+                        priorActiveJobId && priorActiveJobId !== submittedJobId
+                            ? { activeJobId: priorActiveJobId }
+                            : (!priorActiveJobId ? { $or: [{ activeJobId: null }, { activeJobId: { $exists: false } }] } : null),
+                        { activeJobId: submittedJobId, ingestionStatus: { $nin: ["completed", "failed"] } },
+                    ].filter(Boolean),
+                };
+
+                const updateSet = {
+                    activeJobId: submittedJobId,
+                    ingestionStatus: "processing",
+                    ingestionStage: "queued",
+                    lastIngestedCommitSha: branch.latestCommitSha,
+                    ingestionError: null,
+                    lastHeartbeatAt: new Date(),
+                };
+
+                const updated = await Repository.findOneAndUpdate(
+                    query,
+                    { $set: updateSet },
+                    { returnDocument: "after" }
+                );
+
+                if (updated) {
+                    effectiveStatus = updated.ingestionStatus;
+                } else {
+                    const current = await Repository.findById(repository._id);
+                    if (!current) {
+                        return res.status(404).json({
+                            success: false,
+                            message: "Repository was deleted during submission.",
+                        });
+                    }
+                    if (current.activeJobId === submittedJobId && ["completed", "failed"].includes(current.ingestionStatus)) {
+                        // Fast callback already completed or failed this attempt before submission bookkeeping
+                        effectiveStatus = current.ingestionStatus;
+                    } else if (current.activeJobId && current.activeJobId !== priorActiveJobId && current.activeJobId !== submittedJobId) {
+                        // Superseded by another active attempt
+                        return res.status(409).json({
+                            success: false,
+                            message: `Ingestion attempt '${submittedJobId}' was superseded by newer attempt '${current.activeJobId}'.`,
+                            activeJobId: current.activeJobId,
+                            ingestionStatus: current.ingestionStatus,
+                        });
+                    } else {
+                        return res.status(409).json({
+                            success: false,
+                            message: `Failed to atomically bind ingestion attempt '${submittedJobId}'.`,
+                            activeJobId: current.activeJobId,
+                            ingestionStatus: current.ingestionStatus,
+                        });
+                    }
+                }
+            } else {
+                // Disconnected unit testing doubles where Mongoose has no active connection
+                repository.activeJobId = submittedJobId;
+                repository.ingestionStatus = "processing";
+                repository.ingestionStage = "queued";
+                repository.lastIngestedCommitSha = branch.latestCommitSha;
+                repository.ingestionError = null;
+                repository.lastHeartbeatAt = new Date();
+                if (typeof repository.save === "function") {
+                    await repository.save();
+                }
             }
 
             return res.status(202).json({
                 success: true,
                 ...result,
-                ingestionStatus: "processing",
+                activeJobId: submittedJobId,
+                ingestionStatus: effectiveStatus,
                 lastIngestedCommitSha: branch.latestCommitSha,
             });
         }
+
 
         if (result.filesEligible === 0) {
             repository.ingestionStatus = "completed";

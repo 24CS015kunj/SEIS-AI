@@ -1,0 +1,24 @@
+# Dependency and build artifacts
+node_modules
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+# Environment secrets and runtime configuration
+.env
+.env.*
+!.env.example
+
+# Test suites and coverage reports
+tests
+coverage
+.nyc_output
+
+# Version control and local dev metadata
+.git
+.gitignore
+.gitattributes
+
+# OS-specific files
+.DS_Store
+Thumbs.db

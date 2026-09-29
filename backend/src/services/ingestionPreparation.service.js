@@ -32,22 +32,26 @@ import { getFastapiConfig } from "../config/fastapi.config.js";
 import Repository from "../models/repositories.model.js";
 
 /**
- * Auto-fails stuck ingestion jobs older than maxAgeMinutes (Task #7).
- * @param {number} [maxAgeMinutes=20]
+ * Auto-fails stuck ingestion jobs older than maxAgeMinutes (Task #7 / Task T5).
+ * Evaluates ingestion-specific liveness (`lastHeartbeatAt`) before falling back to `updatedAt`.
+ * @param {number} [maxAgeMinutes=5]
  * @returns {Promise<number>} Number of stuck jobs updated
  */
-export async function cleanupStuckIngestions(maxAgeMinutes = 20) {
+export async function cleanupStuckIngestions(maxAgeMinutes = 5) {
     try {
         const cutoff = new Date(Date.now() - maxAgeMinutes * 60 * 1000);
         const result = await Repository.updateMany(
             {
                 ingestionStatus: "processing",
-                updatedAt: { $lt: cutoff },
+                $or: [
+                    { lastHeartbeatAt: { $lt: cutoff } },
+                    { lastHeartbeatAt: null, updatedAt: { $lt: cutoff } },
+                ],
             },
             {
                 $set: {
                     ingestionStatus: "failed",
-                    ingestionError: `Ingestion job timed out after ${maxAgeMinutes} minutes.`,
+                    ingestionError: `Ingestion job timed out after ${maxAgeMinutes} minutes without active heartbeat.`,
                     ingestionStage: "failed",
                 },
             }

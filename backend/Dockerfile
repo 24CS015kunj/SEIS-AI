@@ -23,8 +23,8 @@ EXPOSE 5000
 ENV NODE_ENV=production
 ENV PORT=5000
 
-# Container health check querying Express gateway health endpoint
+# Container health check querying Express gateway health endpoint on actual runtime PORT
 HEALTHCHECK --interval=15s --timeout=5s --start-period=10s --retries=3 \
-  CMD curl -f http://localhost:5000/api/health || exit 1
+  CMD curl -f "http://localhost:${PORT:-5000}/api/health" || exit 1
 
 CMD ["node", "src/server.js"]

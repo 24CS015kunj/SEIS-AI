@@ -1,112 +1,45 @@
-"""Repository Processing Service orchestration (Task 30, §6.1, §22).
+"""Repository Processing Service orchestration (Task 30, Task T5, §6.1, §22).
 
-Orchestrates repository ingestion job submission and status tracking:
-Redis distributed locking (Task 10, ADR-005) guards against
-double-submission, Celery (Task 11, ADR-005) is where the actual
-document-processing/chunking/embedding/indexing pipeline (Tasks 13-17,
-Phase 3) eventually runs, once a background worker exists to consume
-it (Task 40, Phase 8).
-
-Lock vs. status -- two distinct Redis-backed concepts, not one:
-``RedisClient.acquire_lock`` (Task 10) is a short-lived, non-blocking,
-context-manager-scoped primitive -- by design it cannot represent
-"this repository is undergoing processing" for the multi-minute
-duration of a real ingestion job, because nothing holds it open that
-long (the request that calls :meth:`submit_ingestion_job` returns
-immediately, per this task's own Validation criterion). Here, the lock
-is held only for the brief atomic "check current status, then persist
-a new PENDING one" critical section inside
-:meth:`RepositoryProcessingService.submit_ingestion_job` -- it prevents
-two concurrent submissions from racing past the status check
-simultaneously. The actual "is this repository currently processing"
-signal that survives across requests (and across the lock's own short
-lifetime) is the persisted :class:`~app.domain.models.ProcessingStatusRecord`
-JSON stored under a TTL-bound cache key -- the TTL itself is what
-satisfies this task's own "Common Mistakes: leaving repository state
-stuck in PROCESSING if background tasks crash" warning, since a crashed
-worker that never updates the record still has it expire eventually
-rather than blocking resubmission forever.
-
-Celery task name -- forward reference to Task 40: no
-``@celery_app.task``-decorated function exists anywhere in this
-codebase yet (Task 11's ``app.infra.queue.task_queue`` module docstring
-is explicit that task *bodies* are out of its scope, and Phase 6's own
-Phase Scope excludes "Celery background worker execution loops (Phase
-8)"). Celery's producer API does not require the task to be locally
-registered to dispatch it -- ``Celery.send_task(name, args=...)``
-enqueues a message addressed to ``name`` on the broker; a worker only
-needs that registration to *consume* it. ``_INGESTION_TASK_NAME`` below
-is therefore a contract this module enqueues against today and Task 40
-must register a worker task under, exactly matching
-``task_queue.py``'s existing ``"app.tasks.ingestion.*"`` queue-routing
-pattern so the dispatched message lands on the right queue immediately,
-without Task 40 needing to touch routing config.
-
-Sync/async boundary: ``Celery.send_task`` is a blocking call (kombu has
-no asyncio transport -- see ``task_queue.py``'s own module docstring).
-Dispatched via ``asyncio.to_thread``, the same pattern
-``check_broker_connection`` already established, so a slow/unreachable
-broker never blocks the event loop.
-
-Naming reconciliation: Task 30's own spec text names its dependencies
-as ``app.infra.queue.celery_redis``/``app.infra.cache.redis_client``
-and its status method's return type as ``ProcessingStatusResponse``.
-The real modules are ``app.infra.queue.task_queue``/
-``app.infra.cache.cache_client`` (Tasks 11/10's actual frozen file
-names), and :class:`~app.domain.models.ProcessingStatusRecord` (Task 7)
-already models exactly what a status response needs (repository_id,
-status, stage, commit_sha, timestamps, error, file/chunk counts) --
-reused here rather than defining a near-duplicate
-``ProcessingStatusResponse`` alongside it, the same "don't invent a
-parallel shape for something that already exists" reasoning used
-throughout this codebase for genuine gaps in the other direction.
+Orchestrates repository ingestion job submission, bounded admission, attempt fencing,
+and status tracking using managed in-process asynchronous execution (Architecture E):
+- Redis distributed locking guards against concurrent double-submission races.
+- IngestionJobManager executes the document-processing/chunking/embedding/indexing
+  pipeline in-process within FastAPI lifespan with bounded concurrency.
+- Atomic persistence-before-execution guarantees the initial PENDING status and
+  attempt identity (job_id) are durable before execution starts.
+- Renewable heartbeat leases fence stale attempts and enable automated recovery.
+- Bounded active-job indexing in Redis allows fast reconciliation without KEYS scans.
 """
 
 from __future__ import annotations
 
-import asyncio
+import contextlib
+import json
+import uuid
 from datetime import UTC, datetime
+from typing import TYPE_CHECKING
 
 import structlog
-from celery import Celery  # type: ignore[import-untyped]
 
 from app.config.settings import Settings, get_settings
 from app.domain.enums import ProcessingStatus
 from app.domain.exceptions import BusinessError, QueueError, RepositoryNotFoundError
 from app.domain.models import JobSubmissionResult, ProcessingStatusRecord, RepositoryManifest
 from app.infra.cache.cache_client import RedisClient
+from app.infra.http.express_client import ExpressCallbackClient
+
+if TYPE_CHECKING:
+    from app.services.job_manager import IngestionJobManager
 
 logger = structlog.get_logger("seis.services.repository_processing")
 
-# Forward reference to the Celery task Task 40's worker must register
-# (see module docstring). Matches task_queue.py's "app.tasks.ingestion.*"
-# routing pattern so this message is routed onto the "ingestion" queue
-# even though no consumer exists yet.
-_INGESTION_TASK_NAME = "app.tasks.ingestion.process_repository"
-_INGESTION_QUEUE_NAME = "ingestion"
-
-# Redis key namespacing (cache_client.py explicitly leaves this to
-# callers -- no convention is defined at the adapter level).
 _LOCK_KEY_PREFIX = "seis:repo-processing-lock:"
 _STATUS_KEY_PREFIX = "seis:repo-processing-status:"
+_ACTIVE_INGESTIONS_KEY = "seis:active-ingestions"
 
-# Held only long enough to check-then-set the status record atomically
-# (see module docstring) -- not the duration of the ingestion job itself.
 _LOCK_TIMEOUT_SECONDS = 10
-
-# Safety-net TTL on the persisted status record itself: bounds how long
-# a repository can appear "stuck" in PENDING/PROCESSING if the worker
-# that was supposed to update it (Task 40) crashes without ever writing
-# a terminal READY/FAILED status. Deliberately generous (6h) -- large
-# repositories may legitimately take a while to process; this is a
-# ceiling against permanent staleness, not a normal-path timeout.
 _STATUS_TTL_SECONDS = 21_600
 
-# Statuses that mean "a submission already exists and is still live" --
-# resubmission is rejected while status is one of these. READY/FAILED/
-# ARCHIVED/DELETED/RECOVERY/ROLLBACK are all terminal or otherwise not
-# "currently processing" and must not block a fresh submission (e.g.
-# retrying after FAILED).
 _IN_FLIGHT_STATUSES = frozenset(
     {
         ProcessingStatus.PENDING,
@@ -119,30 +52,33 @@ _IN_FLIGHT_STATUSES = frozenset(
 
 class RepositoryProcessingService:
     """Orchestrates repository ingestion job submission and status queries
-    (Task 30 subtasks 1-5)."""
+    with in-process execution and attempt fencing."""
 
     def __init__(
         self,
         cache_client: RedisClient,
-        task_queue: Celery,
+        job_manager: IngestionJobManager | None = None,
+        express_callback_client: ExpressCallbackClient | None = None,
         settings: Settings | None = None,
     ) -> None:
         self._cache_client = cache_client
-        self._task_queue = task_queue
+        self._job_manager = job_manager
+        self._express_callback_client = express_callback_client
         self.settings = settings or get_settings()
         self._log = logger.bind(component="repository_processing_service")
 
     # ------------------------------------------------------------------
-    # Subtasks 2-4: submit_ingestion_job
+    # Subtasks: submit_ingestion_job
     # ------------------------------------------------------------------
     async def submit_ingestion_job(self, manifest: RepositoryManifest) -> JobSubmissionResult:
-        """Enqueues a repository for ingestion (Task 30 subtasks 2-4).
+        """Enqueues a repository for in-process background ingestion.
 
-        Raises:
-            BusinessError: ``manifest.repository_id`` is already
-                undergoing processing (a concurrent submission holds the
-                lock, or a live status record already exists).
-            QueueError: The Celery broker rejected/failed the dispatch.
+        Guarantees:
+        1. Atomic submission guard: distributed lock prevents concurrent double-submission.
+        2. Stale attempt recovery: timed-out in-flight attempts are automatically reconciled.
+        3. Admission bounding: rejects work when capacity is exhausted or service is shutting down.
+        4. Persistence-before-execution: initial PENDING status and attempt ID are durably saved
+           in Redis before background task execution begins.
         """
         log = self._log.bind(repository_id=manifest.repository_id)
         lock_name = f"{_LOCK_KEY_PREFIX}{manifest.repository_id}"
@@ -160,36 +96,110 @@ class RepositoryProcessingService:
 
             existing = await self._read_status(manifest.repository_id)
             if existing is not None and existing.status in _IN_FLIGHT_STATUSES:
-                log.warning(
-                    "repository_processing.submission_conflict",
-                    reason="status_in_flight",
-                    current_status=existing.status.value,
-                )
-                raise BusinessError(
-                    f"Repository {manifest.repository_id!r} is already "
-                    f"{existing.status.value} -- resubmit once it reaches a terminal status.",
-                    details={
-                        "repository_id": manifest.repository_id,
-                        "current_status": existing.status.value,
-                    },
-                )
+                if self._is_attempt_stale(existing):
+                    log.info(
+                        "repository_processing.stale_attempt_detected",
+                        stale_job_id=existing.job_id,
+                        status=existing.status.value,
+                    )
+                    await self._reconcile_stale_record(existing)
+                else:
+                    log.warning(
+                        "repository_processing.submission_conflict",
+                        reason="status_in_flight",
+                        current_status=existing.status.value,
+                        job_id=existing.job_id,
+                    )
+                    raise BusinessError(
+                        f"Repository {manifest.repository_id!r} is already "
+                        f"{existing.status.value} -- resubmit once it reaches a terminal status.",
+                        details={
+                            "repository_id": manifest.repository_id,
+                            "current_status": existing.status.value,
+                            "job_id": existing.job_id,
+                        },
+                    )
 
-            job_id = await self._enqueue(manifest)
+            # 1. Mint a unique attempt identity
+            job_id = f"job_{uuid.uuid4().hex[:16]}"
             now = datetime.now(UTC)
+
+            # 2. Reserve admission capacity in JobManager first
+            if self._job_manager is not None:
+                self._job_manager.reserve_admission(manifest.repository_id, job_id)
+
             record = ProcessingStatusRecord(
                 repository_id=manifest.repository_id,
+                job_id=job_id,
                 status=ProcessingStatus.PENDING,
                 stage=None,
                 commit_sha=manifest.commit_sha,
                 started_at=now,
                 updated_at=now,
+                heartbeat_at=now,
                 error=None,
                 file_count=len(manifest.files),
                 chunk_count=None,
             )
-            await self._cache_client.set_cache(
-                status_key, record.model_dump_json(), _STATUS_TTL_SECONDS
-            )
+
+            # 3. Durably persist initial status in Redis BEFORE task execution via atomic CAS
+            try:
+                success, reason = await self._cache_client.eval_atomic_status_transition(
+                    status_key=status_key,
+                    active_set_key=_ACTIVE_INGESTIONS_KEY,
+                    expected_job_id="",
+                    new_record_json=record.model_dump_json(),
+                    ttl_seconds=_STATUS_TTL_SECONDS,
+                    is_terminal=False,
+                    repository_id=manifest.repository_id,
+                    mode="transition",
+                )
+                if not success:
+                    if reason == "job_already_in_flight":
+                        raise BusinessError(
+                            f"Repository {manifest.repository_id!r} is currently processing an active ingestion job.",
+                            details={"repository_id": manifest.repository_id},
+                        )
+                    msg = (
+                        f"Atomic persistence rejected for repository "
+                        f"{manifest.repository_id!r}: {reason}"
+                    )
+                    raise QueueError(msg)
+            except BusinessError:
+                if self._job_manager is not None:
+                    self._job_manager.release_admission(job_id)
+                raise
+            except Exception as exc:
+                if self._job_manager is not None:
+                    self._job_manager.release_admission(job_id)
+                log.error("repository_processing.initial_persistence_failed", error=str(exc))
+                raise QueueError(
+                    f"Failed to persist initial status for repository {manifest.repository_id!r}",
+                    details={"repository_id": manifest.repository_id},
+                ) from exc
+
+            # 4. Dispatch to IngestionJobManager
+            if self._job_manager is not None:
+                try:
+                    self._job_manager.submit_job(manifest, job_id)
+                except Exception as exc:
+                    self._job_manager.release_admission(job_id)
+                    with contextlib.suppress(Exception):
+                        await self._cache_client.eval_atomic_delete_attempt(
+                            status_key=status_key,
+                            active_set_key=_ACTIVE_INGESTIONS_KEY,
+                            expected_job_id=job_id,
+                            repository_id=manifest.repository_id,
+                        )
+                    log.error("repository_processing.dispatch_failed", error=str(exc))
+                    msg = (
+                        f"Failed to dispatch ingestion job for repository "
+                        f"{manifest.repository_id!r}"
+                    )
+                    raise QueueError(
+                        msg,
+                        details={"repository_id": manifest.repository_id},
+                    ) from exc
 
         log.info("repository_processing.job_submitted", job_id=job_id)
         return JobSubmissionResult(
@@ -199,42 +209,224 @@ class RepositoryProcessingService:
             submitted_at=now,
         )
 
-    async def _enqueue(self, manifest: RepositoryManifest) -> str:
-        """Dispatches the ingestion job to Celery off-thread (module
-        docstring: ``send_task`` is a blocking kombu call)."""
+    # ------------------------------------------------------------------
+    # Liveness & Reconciliation
+    # ------------------------------------------------------------------
+    def _is_attempt_stale(self, record: ProcessingStatusRecord) -> bool:
+        """Determines if an in-flight status record is considered timed out."""
+        now = datetime.now(UTC)
+        if record.heartbeat_at is not None:
+            elapsed = (now - record.heartbeat_at).total_seconds()
+            return elapsed > self.settings.ingestion_heartbeat_timeout_seconds
+        # Fallback for legacy records without heartbeat
+        elapsed = (now - record.updated_at).total_seconds()
+        return elapsed > 300.0
 
-        def _dispatch() -> str:
-            result = self._task_queue.send_task(
-                _INGESTION_TASK_NAME,
-                args=[manifest.model_dump(mode="json")],
-                queue=_INGESTION_QUEUE_NAME,
+    async def _reconcile_stale_record(self, record: ProcessingStatusRecord) -> bool:
+        """Reconciles an expired attempt across Redis and Express using atomic CAS."""
+        now = datetime.now(UTC)
+        timeout_msg = (
+            "Previous ingestion attempt timed out or was interrupted by service restart."
+        )
+        failed_record = record.model_copy(
+            update={
+                "status": ProcessingStatus.FAILED,
+                "stage": None,
+                "updated_at": now,
+                "error": timeout_msg,
+            }
+        )
+        status_key = f"{_STATUS_KEY_PREFIX}{record.repository_id}"
+
+        callback_payload = {
+            "repository_id": record.repository_id,
+            "job_id": record.job_id,
+            "status": ProcessingStatus.FAILED.value,
+            "stage": None,
+            "chunk_count": record.chunk_count or 0,
+            "file_count": record.file_count or 0,
+            "error": timeout_msg,
+        }
+        callback_json = json.dumps(callback_payload)
+
+        # Atomic CAS with heartbeat lease check and atomic pending callback staging
+        expected_hb = record.heartbeat_at.isoformat() if record.heartbeat_at else ""
+        success, reason = await self._cache_client.eval_atomic_status_transition(
+            status_key=status_key,
+            active_set_key=_ACTIVE_INGESTIONS_KEY,
+            expected_job_id=record.job_id,
+            new_record_json=failed_record.model_dump_json(),
+            ttl_seconds=_STATUS_TTL_SECONDS,
+            is_terminal=True,
+            repository_id=record.repository_id,
+            mode="reconcile",
+            expected_heartbeat_at=expected_hb,
+            pending_callback_payload=callback_json,
+        )
+        if not success:
+            self._log.warning(
+                "repository_processing.reconciliation_cas_rejected",
+                repository_id=record.repository_id,
+                job_id=record.job_id,
+                reason=reason,
             )
-            return str(result.id)
+            return False
 
+        if self._express_callback_client is not None:
+            try:
+                sent = await self._express_callback_client.send_status_update(
+                    repository_id=record.repository_id,
+                    status=ProcessingStatus.FAILED.value,
+                    stage=None,
+                    chunk_count=record.chunk_count or 0,
+                    file_count=record.file_count or 0,
+                    error=timeout_msg,
+                    job_id=record.job_id,
+                )
+                if sent:
+                    with contextlib.suppress(Exception):
+                        await self._cache_client.acknowledge_pending_callback(
+                            record.repository_id, job_id=record.job_id
+                        )
+            except Exception as exc:
+                self._log.warning(
+                    "repository_processing.reconciliation_callback_failed",
+                    repository_id=record.repository_id,
+                    error=str(exc),
+                )
+        return True
+
+    async def reconcile_interrupted_jobs(self) -> int:
+        """Startup catch-up: discovers and reconciles genuinely orphaned jobs using cursor SSCAN."""
+        reconciled = 0
         try:
-            return await asyncio.to_thread(_dispatch)
+            cursor = 0
+            while True:
+                cursor, members = await self._cache_client.sscan_members(
+                    _ACTIVE_INGESTIONS_KEY, cursor=cursor, count=100
+                )
+                for member in members:
+                    repo_id = str(member)
+                    existing = await self._read_status(repo_id)
+                    if existing is not None and existing.status in _IN_FLIGHT_STATUSES:
+                        # Ownership & Liveness Check: Reconcile ONLY genuinely stale jobs
+                        if self._is_attempt_stale(existing):
+                            self._log.info(
+                                "repository_processing.reconciling_orphaned_job",
+                                repository_id=repo_id,
+                                job_id=existing.job_id,
+                            )
+                            reconciled_ok = await self._reconcile_stale_record(existing)
+                            if reconciled_ok:
+                                reconciled += 1
+                        else:
+                            self._log.debug(
+                                "repository_processing.skipping_fresh_active_job",
+                                repository_id=repo_id,
+                                job_id=existing.job_id,
+                            )
+                    else:
+                        with contextlib.suppress(Exception):
+                            await self._cache_client.remove_from_set(
+                                _ACTIVE_INGESTIONS_KEY, repo_id
+                            )
+                if cursor == 0:
+                    break
         except Exception as exc:
-            self._log.error(
-                "repository_processing.enqueue_failed",
-                repository_id=manifest.repository_id,
-                error=str(exc),
+            self._log.error("repository_processing.startup_reconciliation_failed", error=str(exc))
+
+        # Durable callback delivery catch-up: flush any undelivered callbacks staged in Redis
+        with contextlib.suppress(Exception):
+            flushed = await self.flush_pending_callbacks()
+            if flushed:
+                self._log.info("repository_processing.flushed_pending_callbacks", count=flushed)
+
+        return reconciled
+
+    async def flush_pending_callbacks(self) -> int:
+        """Flushes and retries pending undelivered terminal callbacks from Redis."""
+        flushed = 0
+        if self._express_callback_client is None:
+            return 0
+
+        pending_set_key = "seis:pending-callback-deliveries"
+        cursor = 0
+        while True:
+            cursor, members = await self._cache_client.sscan_members(
+                pending_set_key, cursor=cursor, count=100
             )
-            raise QueueError(
-                f"Failed to enqueue ingestion job for repository {manifest.repository_id!r}",
-                details={"repository_id": manifest.repository_id},
-            ) from exc
+            for member in members:
+                delivery_id = str(member)
+                if ":" in delivery_id:
+                    repo_id, job_id_from_member = delivery_id.split(":", 1)
+                else:
+                    repo_id, job_id_from_member = delivery_id, None
+
+                raw_payload = await self._cache_client.get_pending_callback(
+                    repo_id, job_id=job_id_from_member
+                )
+                if not raw_payload:
+                    with contextlib.suppress(Exception):
+                        await self._cache_client.acknowledge_pending_callback(
+                            repo_id, job_id=job_id_from_member
+                        )
+                    continue
+
+                try:
+                    payload = json.loads(raw_payload)
+                    job_id = payload.get("job_id") or job_id_from_member
+
+                    # Verify attempt ownership: if current record has a newer job, drop stale
+                    # callback
+                    current_status = await self._read_status(repo_id)
+                    if (
+                        current_status is not None
+                        and job_id is not None
+                        and current_status.job_id is not None
+                        and current_status.job_id != job_id
+                    ):
+                        self._log.info(
+                            "repository_processing.pending_callback_superseded",
+                            repository_id=repo_id,
+                            stale_job_id=job_id,
+                            current_job_id=current_status.job_id,
+                        )
+                        await self._cache_client.acknowledge_pending_callback(
+                            repo_id, job_id=job_id
+                        )
+                        continue
+
+                    sent = await self._express_callback_client.send_status_update(
+                        repository_id=repo_id,
+                        status=payload.get("status", ProcessingStatus.FAILED.value),
+                        stage=payload.get("stage"),
+                        chunk_count=payload.get("chunk_count", 0),
+                        file_count=payload.get("file_count", 0),
+                        error=payload.get("error"),
+                        job_id=job_id,
+                    )
+                    if sent:
+                        await self._cache_client.acknowledge_pending_callback(
+                            repo_id, job_id=job_id
+                        )
+                        flushed += 1
+                except Exception as flush_err:
+                    self._log.warning(
+                        "repository_processing.flush_pending_callback_failed",
+                        repository_id=repo_id,
+                        error=str(flush_err),
+                    )
+
+            if cursor == 0:
+                break
+
+        return flushed
 
     # ------------------------------------------------------------------
-    # Subtask 5: get_processing_status
+    # Status Queries
     # ------------------------------------------------------------------
     async def get_processing_status(self, repository_id: str) -> ProcessingStatusRecord:
-        """Returns the persisted processing status for ``repository_id``.
-
-        Raises:
-            RepositoryNotFoundError: No status record exists -- the
-                repository was never submitted, or its record's TTL
-                (:data:`_STATUS_TTL_SECONDS`) already expired.
-        """
+        """Returns the persisted processing status for ``repository_id``."""
         record = await self._read_status(repository_id)
         if record is None:
             self._log.info("repository_processing.status_not_found", repository_id=repository_id)
@@ -246,6 +438,7 @@ class RepositoryProcessingService:
             "repository_processing.status_queried",
             repository_id=repository_id,
             status=record.status.value,
+            job_id=record.job_id,
         )
         return record
 

@@ -1,17 +1,39 @@
+# Virtual environments
 .venv
+venv/
+env/
+.Python
+
+# Environment files: exclude real secrets and local configs, keep example template
 .env
+.env.*
+!.env.example
+
+# Python bytecode and caches
 __pycache__/
 *.pyc
 *.pyo
 *.pyd
-.Python
-env/
-venv/
 .pytest_cache/
 .mypy_cache/
 .ruff_cache/
+
+# Test coverage and reports
 .coverage
 htmlcov/
+
+# Local databases, vectors, and runtime state
 .chroma/
 logs/
+*.log
+
+# Version control
 .git/
+.gitignore
+
+# OS artifacts
+.DS_Store
+Thumbs.db
+
+# Private rollback archives must never enter image layers
+.migration/

@@ -166,22 +166,31 @@ const runAllTests = async () => {
     // Restore User.findById
     User.findById = originalFindById;
 
-    // 4. Testing Email Service
+    // 4. Testing Email Service (Isolated SMTP to prevent external dispatch)
     console.log("\n4. Testing Email Service & Graceful Fallbacks...");
-    
-    const welcomeResult = await emailService.sendWelcomeEmail("developer@seis-ai.local", "Super Developer");
-    assert(welcomeResult != null && typeof welcomeResult.success === "boolean", "sendWelcomeEmail executes safely without unhandled errors");
+    const savedMailHost = process.env.MAIL_HOST;
+    const savedMailUser = process.env.MAIL_USER;
+    delete process.env.MAIL_HOST;
+    delete process.env.MAIL_USER;
 
-    const syncResult = await emailService.sendRepositorySyncEmail("developer@seis-ai.local", {
-        repositoryCount: 3,
-        branchesCount: 8,
-        commitsCount: 95,
-        filesCount: 312,
-    });
-    assert(syncResult != null && typeof syncResult.success === "boolean", "sendRepositorySyncEmail executes safely without throwing");
+    try {
+        const welcomeResult = await emailService.sendWelcomeEmail("developer@seis-ai.local", "Super Developer");
+        assert(welcomeResult != null && typeof welcomeResult.success === "boolean", "sendWelcomeEmail executes safely without unhandled errors");
 
-    const noEmailResult = await emailService.sendEmail({ to: "", subject: "Test", text: "Hello" });
-    assert(noEmailResult.success === false && noEmailResult.error.includes("missing"), "sendEmail handles missing recipient address cleanly");
+        const syncResult = await emailService.sendRepositorySyncEmail("developer@seis-ai.local", {
+            repositoryCount: 3,
+            branchesCount: 8,
+            commitsCount: 95,
+            filesCount: 312,
+        });
+        assert(syncResult != null && typeof syncResult.success === "boolean", "sendRepositorySyncEmail executes safely without throwing");
+
+        const noEmailResult = await emailService.sendEmail({ to: "", subject: "Test", text: "Hello" });
+        assert(noEmailResult.success === false && noEmailResult.error.includes("missing"), "sendEmail handles missing recipient address cleanly");
+    } finally {
+        if (savedMailHost !== undefined) process.env.MAIL_HOST = savedMailHost;
+        if (savedMailUser !== undefined) process.env.MAIL_USER = savedMailUser;
+    }
 
     // 5. Testing GitHub Service Error Handling & Function Exports
     console.log("\n5. Testing GitHub Service Interfaces...");
