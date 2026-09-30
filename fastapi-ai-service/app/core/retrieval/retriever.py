@@ -16,7 +16,7 @@ Naming note: the task spec's own signature returns
 ``list[RetrievedChunk]``, but no such domain model exists -- Task 7's
 frozen :class:`~app.domain.models.SearchResultItem` (``chunk_id``,
 ``content``, ``score``, ``metadata``) already has exactly that shape,
-and is already what :meth:`ChromaClient.query_similarity` returns. This
+and is already what :meth:`VectorStoreClient.query_similarity` returns. This
 is the same class of filename/name reconciliation already applied
 throughout Phases 2-3 (e.g. ``redis_client`` -> ``cache_client``): used
 as-is rather than defining a duplicate model for an identical shape.
@@ -28,7 +28,7 @@ import structlog
 
 from app.core.embedding.embedder import NemotronEmbedder
 from app.domain.models import SearchResultItem
-from app.infra.vectorstore.chroma_client import ChromaClient
+from app.infra.vectorstore.client import VectorStoreClient
 
 logger = structlog.get_logger("seis.core.retrieval")
 
@@ -36,7 +36,7 @@ logger = structlog.get_logger("seis.core.retrieval")
 class VectorRetriever:
     """Repository-scoped vector similarity search (Task 19, §5.6)."""
 
-    def __init__(self, chroma_client: ChromaClient, embedder: NemotronEmbedder) -> None:
+    def __init__(self, chroma_client: VectorStoreClient, embedder: NemotronEmbedder) -> None:
         self._chroma = chroma_client
         self._embedder = embedder
         self._log = logger.bind(component="vector_retriever")
@@ -53,7 +53,7 @@ class VectorRetriever:
         (§Common Mistakes: never hand the LLM low-similarity noise).
 
         Repository isolation is inherited from
-        :meth:`ChromaClient.query_similarity`'s own collection-per-
+        :meth:`VectorStoreClient.query_similarity`'s own collection-per-
         repository design (§12, §17, ADR-004) -- every result is
         already confined to ``repository_id``'s own collection before
         the score filter ever runs.

@@ -7,7 +7,7 @@ the repository's own already-indexed chunk metadata, never from a
 relevance judgment.
 
 Source-of-truth decision: this service reads
-:meth:`ChromaClient.get_all_chunks` -- the exact same repository-scoped,
+:meth:`VectorStoreClient.get_all_chunks` -- the exact same repository-scoped,
 already-existing method :class:`~app.core.retrieval.lexical_retriever.
 LexicalRetriever` already uses (Task 63) -- rather than Express's own
 ``File`` Mongoose model. Inspection confirmed FastAPI has **no MongoDB
@@ -56,11 +56,11 @@ import structlog
 
 from app.core.retrieval.structure_intent import StructureIntent, StructureIntentKind
 from app.domain.models import Chunk
-from app.infra.vectorstore.chroma_client import ChromaClient
+from app.infra.vectorstore.client import VectorStoreClient
 
 logger = structlog.get_logger("seis.core.retrieval")
 
-# Same safety cap ChromaClient.get_all_chunks already documents as its
+# Same safety cap VectorStoreClient.get_all_chunks already documents as its
 # own default -- no new bound invented here.
 _MAX_CHUNKS_SCANNED = 2000
 
@@ -86,14 +86,14 @@ class RepositoryStructureService:
     """Deterministic file/directory lookup over one repository's already-
     indexed chunk metadata (Task 67)."""
 
-    def __init__(self, chroma_client: ChromaClient) -> None:
+    def __init__(self, chroma_client: VectorStoreClient) -> None:
         self._chroma = chroma_client
         self._log = logger.bind(component="repository_structure_service")
 
     async def resolve(self, repository_id: str, intent: StructureIntent) -> StructureQueryResult:
         """Answers ``intent`` for ``repository_id`` -- the only I/O this
         service performs is the one repository-scoped ChromaDB read
-        (:meth:`ChromaClient.get_all_chunks`); no embedding call, no
+        (:meth:`VectorStoreClient.get_all_chunks`); no embedding call, no
         reranking call, no LLM call.
         """
         chunks = await self._chroma.get_all_chunks(repository_id, limit=_MAX_CHUNKS_SCANNED)

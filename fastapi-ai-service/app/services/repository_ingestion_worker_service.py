@@ -52,14 +52,18 @@ retried, bounded, inside its own adapter before it ever reaches here.
 
 from __future__ import annotations
 
+import asyncio
+import contextlib
+import json
+import time
 from collections.abc import Mapping
 from datetime import UTC, datetime
-import time
 from typing import Any
 
 import structlog
 from pydantic import ValidationError
 
+from app.config.settings import Settings
 from app.core.embedding.embedder import NemotronEmbedder
 from app.core.embedding.embedding_cache import EmbeddingCache, embed_with_cache
 from app.core.processing.chunker import ASTChunker, build_chunks_for_documents
@@ -69,10 +73,22 @@ from app.domain.enums import ProcessingStage, ProcessingStatus
 from app.domain.models import ProcessingStatusRecord, RepositoryManifest
 from app.infra.cache.cache_client import RedisClient
 from app.infra.http.express_client import ExpressCallbackClient
-from app.infra.vectorstore.chroma_client import ChromaClient
+from app.infra.vectorstore.client import VectorStoreClient
 from app.services.repository_processing_service import _STATUS_KEY_PREFIX, _STATUS_TTL_SECONDS
 
 logger = structlog.get_logger("seis.services.repository_ingestion_worker")
+
+
+class AttemptSupersededError(Exception):
+    """Raised when an ingestion attempt has been superseded or lost ownership in Redis."""
+
+    def __init__(self, repository_id: str, job_id: str | None, reason: str) -> None:
+        super().__init__(
+            f"Attempt {job_id!r} for repository {repository_id!r} was superseded ({reason})"
+        )
+        self.repository_id = repository_id
+        self.job_id = job_id
+        self.reason = reason
 
 
 class RepositoryIngestionWorkerService:
@@ -80,7 +96,7 @@ class RepositoryIngestionWorkerService:
 
     def __init__(
         self,
-        chroma_client: ChromaClient,
+        chroma_client: VectorStoreClient,
         document_processor: DocumentProcessor,
         chunker: ASTChunker,
         metadata_generator: MetadataGenerator,
@@ -88,6 +104,7 @@ class RepositoryIngestionWorkerService:
         embedding_cache: EmbeddingCache,
         cache_client: RedisClient,
         express_callback_client: ExpressCallbackClient | None = None,
+        settings: Settings | None = None,
     ) -> None:
         self._chroma = chroma_client
         self._document_processor = document_processor
@@ -97,6 +114,7 @@ class RepositoryIngestionWorkerService:
         self._embedding_cache = embedding_cache
         self._cache_client = cache_client
         self._express_callback_client = express_callback_client
+        self._settings = settings
         self._log = logger.bind(component="repository_ingestion_worker")
 
     async def process_ingestion_job(
@@ -104,18 +122,10 @@ class RepositoryIngestionWorkerService:
     ) -> None:
         """Processes one Task 30-dispatched ingestion payload.
 
-        Never swallows an exception: every failure path marks the
+        Never swallows an unexpected exception: every failure path marks the
         repository's status record FAILED (when a ``repository_id`` is
-        determinable) and then re-raises, so Celery's own task-failure
-        bookkeeping/logging sees it too.
-
-        Raises:
-            pydantic.ValidationError | TypeError: ``payload`` cannot be
-                reconstructed into a valid :class:`RepositoryManifest`.
-            Exception: whatever the processing pipeline itself raised
-                (``RepositoryError``/``EmbeddingError``/``VectorDBError``/...
-                or any other failure) -- always re-raised after the
-                status record is marked FAILED, never swallowed.
+        determinable) and then re-raises. Handles ``asyncio.CancelledError``
+        explicitly on service shutdown.
         """
         log = self._log.bind(job_id=job_id)
         raw_repository_id = payload.get("repository_id") if isinstance(payload, Mapping) else None
@@ -126,7 +136,9 @@ class RepositoryIngestionWorkerService:
             log.error("ingestion_worker.invalid_manifest_payload", error=str(exc))
             if isinstance(raw_repository_id, str) and raw_repository_id.strip():
                 await self._mark_failed(
-                    raw_repository_id, error="Invalid repository manifest payload."
+                    raw_repository_id,
+                    job_id=job_id,
+                    error="Invalid repository manifest payload.",
                 )
             raise
 
@@ -139,17 +151,23 @@ class RepositoryIngestionWorkerService:
             files_discovered=len(manifest.files),
         )
 
+        heartbeat_stop = asyncio.Event()
+        heartbeat_task = asyncio.create_task(
+            self._heartbeat_loop(manifest.repository_id, job_id, heartbeat_stop)
+        )
+
         try:
-            # 1. Document Processing Stage
+            # 1. Document Processing Stage (offloaded to thread pool)
             t0 = time.monotonic()
             await self._transition(
                 manifest.repository_id,
+                job_id=job_id,
                 status=ProcessingStatus.PROCESSING,
                 stage=ProcessingStage.DOCUMENT_PROCESSING,
                 commit_sha=manifest.commit_sha,
                 file_count=len(manifest.files),
             )
-            documents = self._document_processor.process_manifest(manifest)
+            documents = await asyncio.to_thread(self._document_processor.process_manifest, manifest)
             doc_duration = round((time.monotonic() - t0) * 1000, 2)
             log.info(
                 "document_processing_completed",
@@ -158,14 +176,17 @@ class RepositoryIngestionWorkerService:
                 duration_ms=doc_duration,
             )
 
-            # 2. AST Chunking Stage
+            # 2. AST Chunking Stage (offloaded to thread pool)
             t0 = time.monotonic()
             await self._transition(
                 manifest.repository_id,
+                job_id=job_id,
                 status=ProcessingStatus.PROCESSING,
                 stage=ProcessingStage.CHUNKING,
             )
-            chunks = build_chunks_for_documents(documents, self._chunker, self._metadata_generator)
+            chunks = await asyncio.to_thread(
+                build_chunks_for_documents, documents, self._chunker, self._metadata_generator
+            )
             chunk_duration = round((time.monotonic() - t0) * 1000, 2)
             log.info(
                 "chunking_completed",
@@ -177,6 +198,7 @@ class RepositoryIngestionWorkerService:
             t0 = time.monotonic()
             await self._transition(
                 manifest.repository_id,
+                job_id=job_id,
                 status=ProcessingStatus.PROCESSING,
                 stage=ProcessingStage.EMBEDDING,
             )
@@ -192,6 +214,7 @@ class RepositoryIngestionWorkerService:
             t0 = time.monotonic()
             await self._transition(
                 manifest.repository_id,
+                job_id=job_id,
                 status=ProcessingStatus.PROCESSING,
                 stage=ProcessingStage.INDEXING,
             )
@@ -207,6 +230,7 @@ class RepositoryIngestionWorkerService:
             t0 = time.monotonic()
             await self._transition(
                 manifest.repository_id,
+                job_id=job_id,
                 status=ProcessingStatus.READY,
                 stage=None,
                 chunk_count=len(chunks),
@@ -223,6 +247,33 @@ class RepositoryIngestionWorkerService:
                 total_duration_ms=total_duration,
                 webhook_duration_ms=webhook_duration,
             )
+        except AttemptSupersededError as sup_exc:
+            total_duration = round((time.monotonic() - ingestion_start_time) * 1000, 2)
+            log.warning(
+                "ingestion_worker.attempt_superseded_aborted",
+                repository_id=manifest.repository_id,
+                job_id=job_id,
+                reason=str(sup_exc),
+                duration_ms=total_duration,
+            )
+            # Abort execution immediately and cleanly: do NOT mark FAILED
+            # because a newer attempt owns the repository.
+            return
+        except asyncio.CancelledError:
+            total_duration = round((time.monotonic() - ingestion_start_time) * 1000, 2)
+            log.warning(
+                "ingestion_worker.processing_cancelled",
+                repository_id=manifest.repository_id,
+                job_id=job_id,
+                duration_ms=total_duration,
+            )
+            with contextlib.suppress(BaseException):
+                await self._mark_failed(
+                    manifest.repository_id,
+                    job_id=job_id,
+                    error="Ingestion cancelled during service shutdown or restart.",
+                )
+            raise
         except Exception as exc:
             total_duration = round((time.monotonic() - ingestion_start_time) * 1000, 2)
             log.error(
@@ -230,18 +281,93 @@ class RepositoryIngestionWorkerService:
                 error=str(exc),
                 duration_ms=total_duration,
             )
-            await self._mark_failed(manifest.repository_id, error=str(exc))
+            with contextlib.suppress(AttemptSupersededError):
+                await self._mark_failed(manifest.repository_id, job_id=job_id, error=str(exc))
             raise
+        finally:
+            heartbeat_stop.set()
+            heartbeat_task.cancel()
+            with contextlib.suppress(asyncio.CancelledError, Exception):
+                await heartbeat_task
 
-    async def _mark_failed(self, repository_id: str, *, error: str) -> None:
+    async def _heartbeat_loop(
+        self, repository_id: str, job_id: str | None, stop_event: asyncio.Event
+    ) -> None:
+        """Periodically renews the liveness heartbeat lease in Redis and touches Express."""
+        interval = (
+            self._settings.ingestion_heartbeat_interval_seconds
+            if self._settings is not None
+            else 15.0
+        )
+        while not stop_event.is_set():
+            try:
+                await asyncio.sleep(interval)
+                if stop_event.is_set():
+                    break
+                existing = await self._read_status(repository_id)
+                if existing is None or (
+                    job_id is not None and existing.job_id is not None and existing.job_id != job_id
+                ):
+                    # Superseded by newer attempt or record deleted
+                    break
+                now = datetime.now(UTC)
+
+                success, reason = await self._cache_client.eval_atomic_status_transition(
+                    status_key=f"{_STATUS_KEY_PREFIX}{repository_id}",
+                    active_set_key="seis:active-ingestions",
+                    expected_job_id=job_id,
+                    new_record_json="",
+                    ttl_seconds=_STATUS_TTL_SECONDS,
+                    is_terminal=False,
+                    repository_id=repository_id,
+                    mode="heartbeat",
+                    new_heartbeat_at=now.isoformat(),
+                )
+                if not success:
+                    self._log.debug(
+                        "ingestion_worker.heartbeat_rejected",
+                        repository_id=repository_id,
+                        job_id=job_id,
+                        reason=reason,
+                    )
+                    break
+
+                # Propagate heartbeat touch to Express/Mongo to prevent watchdog
+                # timeout during long jobs
+                if self._express_callback_client is not None:
+                    with contextlib.suppress(Exception):
+                        await self._express_callback_client.send_status_update(
+                            repository_id=repository_id,
+                            status=existing.status.value,
+                            stage=existing.stage.value if existing.stage else None,
+                            job_id=job_id,
+                        )
+            except asyncio.CancelledError:
+                break
+            except Exception as hb_exc:
+                self._log.warning(
+                    "ingestion_worker.heartbeat_update_failed",
+                    repository_id=repository_id,
+                    job_id=job_id,
+                    error=str(hb_exc),
+                )
+
+    async def _mark_failed(
+        self, repository_id: str, *, job_id: str | None = None, error: str
+    ) -> None:
         await self._transition(
-            repository_id, status=ProcessingStatus.FAILED, stage=None, error=error
+            repository_id,
+            job_id=job_id,
+            status=ProcessingStatus.FAILED,
+            stage=None,
+            error=error,
         )
 
     async def _transition(
         self,
         repository_id: str,
         *,
+        job_id: str | None = None,
         status: ProcessingStatus,
         stage: ProcessingStage | None,
         commit_sha: str | None = None,
@@ -249,15 +375,31 @@ class RepositoryIngestionWorkerService:
         file_count: int | None = None,
         chunk_count: int | None = None,
     ) -> None:
-        """Updates the SAME status record Task 30 created (never a new
-        key), preserving whichever fields aren't part of this
-        transition and refreshing the existing TTL policy on every
-        write so a long-running job's record doesn't expire mid-run.
-        """
+        """Updates the status record with atomic Lua CAS attempt fencing and
+        durable callback staging."""
         existing = await self._read_status(repository_id)
+
+        # Attempt Fencing: Fast local pre-check against superseding attempt
+        if (
+            existing is not None
+            and job_id is not None
+            and existing.job_id is not None
+            and existing.job_id != job_id
+        ):
+            self._log.warning(
+                "ingestion_worker.attempt_superseded",
+                repository_id=repository_id,
+                current_job_id=job_id,
+                newer_job_id=existing.job_id,
+                status=existing.status.value,
+            )
+            raise AttemptSupersededError(repository_id, job_id, "local_job_id_mismatch")
+
         now = datetime.now(UTC)
+        effective_job_id = job_id or (existing.job_id if existing else None)
         record = ProcessingStatusRecord(
             repository_id=repository_id,
+            job_id=effective_job_id,
             status=status,
             stage=stage,
             commit_sha=commit_sha
@@ -265,6 +407,7 @@ class RepositoryIngestionWorkerService:
             else (existing.commit_sha if existing else ""),
             started_at=existing.started_at if existing else now,
             updated_at=now,
+            heartbeat_at=now,
             error=error,
             file_count=file_count
             if file_count is not None
@@ -273,19 +416,60 @@ class RepositoryIngestionWorkerService:
             if chunk_count is not None
             else (existing.chunk_count if existing else None),
         )
-        await self._cache_client.set_cache(
-            f"{_STATUS_KEY_PREFIX}{repository_id}", record.model_dump_json(), _STATUS_TTL_SECONDS
+
+        is_terminal = status in (ProcessingStatus.READY, ProcessingStatus.FAILED)
+        status_key = f"{_STATUS_KEY_PREFIX}{repository_id}"
+        active_set_key = "seis:active-ingestions"
+
+        callback_payload = {
+            "repository_id": repository_id,
+            "job_id": record.job_id,
+            "status": status.value,
+            "stage": stage.value if stage else None,
+            "chunk_count": record.chunk_count or 0,
+            "file_count": record.file_count or 0,
+            "error": record.error,
+        }
+        callback_json = json.dumps(callback_payload) if is_terminal else None
+
+        # Atomic CAS via Lua script with atomic pending callback staging
+        success, reason = await self._cache_client.eval_atomic_status_transition(
+            status_key=status_key,
+            active_set_key=active_set_key,
+            expected_job_id=effective_job_id,
+            new_record_json=record.model_dump_json(),
+            ttl_seconds=_STATUS_TTL_SECONDS,
+            is_terminal=is_terminal,
+            repository_id=repository_id,
+            mode="transition",
+            pending_callback_payload=callback_json,
         )
+
+        if not success:
+            self._log.warning(
+                "ingestion_worker.transition_rejected_by_redis",
+                repository_id=repository_id,
+                job_id=effective_job_id,
+                reason=reason,
+            )
+            raise AttemptSupersededError(repository_id, effective_job_id, reason)
+
         if self._express_callback_client is not None:
             try:
-                await self._express_callback_client.send_status_update(
+                sent = await self._express_callback_client.send_status_update(
                     repository_id=repository_id,
                     status=status.value,
                     stage=stage.value if stage else None,
                     chunk_count=record.chunk_count or 0,
                     file_count=record.file_count or 0,
                     error=record.error,
+                    job_id=record.job_id,
                 )
+                if sent and is_terminal:
+                    with contextlib.suppress(Exception):
+                        await self._cache_client.acknowledge_pending_callback(
+                            repository_id, job_id=record.job_id
+                        )
             except Exception as exc:
                 self._log.warning("ingestion_worker.express_callback_failed", error=str(exc))
 

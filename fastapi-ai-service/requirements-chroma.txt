@@ -1,0 +1,4 @@
+# Optional legacy Chroma client for explicit rollback/local Chroma development.
+# Its hnswlib dependency requires native build tools on Windows.
+# Excluded from the default Qdrant runtime and Docker image.
+chromadb==0.6.2

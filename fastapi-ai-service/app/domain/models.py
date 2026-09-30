@@ -186,6 +186,8 @@ class ProcessingStatusRecord(BaseModel):
     error: str | None = None
     file_count: int | None = None
     chunk_count: int | None = None
+    job_id: str | None = None
+    heartbeat_at: datetime | None = None
 
 
 class TokenUsage(BaseModel):

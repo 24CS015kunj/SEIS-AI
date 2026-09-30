@@ -48,6 +48,7 @@ class Harness:
         self.embed_calls: list[list[Chunk]] = []
         self.process_manifest_calls = 0
         self.store: dict[str, str] = {}
+        self.pending_callbacks: dict[str, str] = {}
         self.fail_upsert = False
 
         self.chroma = ChromaClient(settings=Settings())
@@ -86,12 +87,71 @@ class Harness:
             self.process_manifest_calls += 1
             return real_process_manifest(manifest)
 
+        async def _eval_atomic_status_transition(
+            status_key: str,
+            active_set_key: str,
+            expected_job_id: str | None,
+            new_record_json: str,
+            ttl_seconds: int,
+            is_terminal: bool,
+            repository_id: str,
+            mode: str = "transition",
+            expected_heartbeat_at: str | None = None,
+            pending_callback_payload: str | None = None,
+        ) -> tuple[bool, str]:
+            current = self.store.get(status_key)
+            if current:
+                import json
+                cur_obj = json.loads(current)
+                cur_job_id = cur_obj.get("job_id")
+                cur_status = cur_obj.get("status")
+                if expected_job_id and cur_job_id and cur_job_id != expected_job_id:
+                    return (False, "stale_attempt_mismatch")
+                if mode == "heartbeat" and cur_status in ("ready", "failed"):
+                    return (False, "already_terminal")
+                if mode == "reconcile" and cur_status not in ("pending", "queued", "processing"):
+                    return (False, "not_in_flight")
+
+            await self.cache_client.set_cache(status_key, new_record_json, ttl_seconds)
+            if is_terminal and pending_callback_payload:
+                self.pending_callbacks[repository_id] = pending_callback_payload
+            return (True, "ok")
+
+        async def _record_pending_callback(
+            repository_id: str,
+            payload_json: str,
+            job_id: str | None = None,
+            ttl_seconds: int = 86400,
+        ) -> None:
+            self.pending_callbacks[repository_id] = payload_json
+
+        async def _acknowledge_pending_callback(
+            repository_id: str, job_id: str | None = None
+        ) -> None:
+            self.pending_callbacks.pop(repository_id, None)
+
+        async def _get_pending_callback(
+            repository_id: str, job_id: str | None = None
+        ) -> str | None:
+            return self.pending_callbacks.get(repository_id)
+
         monkeypatch.setattr(self.chroma, "upsert_chunks", _upsert_chunks)
         monkeypatch.setattr(self.embedder, "embed_chunks", _embed_chunks)
         monkeypatch.setattr(self.embedding_cache, "get_cached_embeddings", _get_cached_embeddings)
         monkeypatch.setattr(self.embedding_cache, "cache_embeddings", _cache_embeddings)
         monkeypatch.setattr(self.cache_client, "get_cache", _get_cache)
         monkeypatch.setattr(self.cache_client, "set_cache", _set_cache)
+        monkeypatch.setattr(
+            self.cache_client,
+            "eval_atomic_status_transition",
+            _eval_atomic_status_transition,
+        )
+        monkeypatch.setattr(self.cache_client, "record_pending_callback", _record_pending_callback)
+        monkeypatch.setattr(
+            self.cache_client,
+            "acknowledge_pending_callback",
+            _acknowledge_pending_callback,
+        )
         monkeypatch.setattr(self.document_processor, "process_manifest", _counting_process_manifest)
 
         return RepositoryIngestionWorkerService(

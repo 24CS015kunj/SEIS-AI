@@ -92,6 +92,28 @@ class ExpressCallbackClient:
             try:
                 response = await client.post(url, json=payload)
                 if response.status_code < 400:
+                    try:
+                        data = response.json()
+                        if isinstance(data, dict) and data.get("ignored"):
+                            reason = data.get("reason")
+                            if reason in ("stale_attempt_superseded", "terminal_state_preserved"):
+                                self._log.info(
+                                    "express_callback.ignored_verified",
+                                    repository_id=repository_id,
+                                    job_id=job_id,
+                                    reason=reason,
+                                )
+                                return True
+                            self._log.warning(
+                                "express_callback.ignored_unverified",
+                                repository_id=repository_id,
+                                job_id=job_id,
+                                reason=reason,
+                            )
+                            return False
+                    except Exception:
+                        pass
+
                     self._log.info(
                         "express_callback.success",
                         repository_id=repository_id,

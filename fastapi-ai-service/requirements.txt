@@ -9,25 +9,11 @@
 # to pin for Gemini generation was removed in Task 60: nothing in the
 # codebase calls it anymore).
 #
-# ChromaDB is intentionally NOT listed here — see requirements-vectorstore.txt
-# and the "Local Environment vs. Container Environment" note in the Task 2
-# writeup for why it is installed only inside the Linux container (Task 14),
-# not in the native Windows venv.
-#
-# redis (Task 10), unlike chromadb, IS listed here: redis-py is pure
-# Python with no native/C-extension build step, so it installs cleanly
-# in the native Windows venv. Only the Redis *server* needs Docker
-# (ADR-005) — the client library does not.
-#
-# celery (Task 11): configures the task-queue application object only --
-# this task does not run a worker process. The historical Windows
-# limitation is the *worker's* default prefork (multiprocessing) pool,
-# not the client/producer side used here, so the package installs and
-# the app configures/connects cleanly in this native Windows venv.
-#
-# Pinned to exact versions verified against Python 3.13.4 in this
-# environment. Bump deliberately, one dependency at a time, re-running the
-# test suite (§27 Testing) after each bump.
+# Qdrant is the managed vector-store runtime client on Windows and Linux.
+# Legacy Chroma support is optional: requirements-chroma.txt and the
+# INSTALL_LEGACY_CHROMA Docker build argument retain the rollback path.
+# redis-py supports either the retained local server or a managed TCP/TLS server.
+# Ingestion runs in-process; no Celery worker or local inference model is required.
 
 fastapi==0.115.6
 uvicorn[standard]==0.34.0
@@ -37,4 +23,4 @@ httpx==0.28.1
 structlog==24.4.0
 tenacity==9.0.0
 redis==5.2.1
-celery==5.4.0
+qdrant-client==1.19.1

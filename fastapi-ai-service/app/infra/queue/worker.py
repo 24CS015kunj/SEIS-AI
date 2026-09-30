@@ -1,5 +1,5 @@
-"""Worker.
+"""Worker (superseded by Task T5, Architecture E).
 
-Background process consuming queued repository-processing jobs and
-driving them through the pipeline stages (§6.2, §8).
+Background repository processing is executed in-process by IngestionJobManager
+inside the FastAPI web service, eliminating the separate Celery worker container.
 """

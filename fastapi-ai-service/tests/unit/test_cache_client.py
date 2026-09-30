@@ -12,6 +12,7 @@ implementation.
 
 from __future__ import annotations
 
+import asyncio
 from typing import Any
 
 import pytest
@@ -342,3 +343,56 @@ async def test_close_releases_the_constructed_client(fake_redis: dict[str, FakeR
 
     assert client._client is None
     assert fake_redis["client"].closed is True
+
+
+async def test_managed_connection_requires_verified_tls_and_bounded_pool(
+    fake_redis: dict[str, FakeRedis],
+) -> None:
+    settings = Settings(redis_url="rediss://:fixture-password@example.invalid:6379/0")
+    client = RedisClient(settings)
+    await client.get_cache("key")
+    options = fake_redis["client"].kwargs
+    assert options["ssl_cert_reqs"] == "required"
+    assert options["ssl_check_hostname"] is True
+    assert options["max_connections"] == 16
+    assert options["socket_timeout"] == 1.0
+    assert options["socket_connect_timeout"] == 1.0
+
+
+async def test_readiness_cancels_a_stalled_ping_without_retries(
+    fake_redis: dict[str, FakeRedis],
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    client = RedisClient(Settings(redis_readiness_timeout_seconds=0.02))
+    await client.get_cache("init")
+    cancelled = asyncio.Event()
+
+    async def stalled_ping() -> bool:
+        try:
+            await asyncio.sleep(10)
+            return True
+        finally:
+            cancelled.set()
+
+    monkeypatch.setattr(fake_redis["client"], "ping", stalled_ping)
+    assert await client.health_check() is False
+    assert cancelled.is_set()
+
+
+async def test_cross_loop_reuse_does_not_discard_an_unclosed_pool(
+    fake_redis: dict[str, FakeRedis],
+) -> None:
+    client = RedisClient(Settings())
+    await client.get_cache("init")
+    owning_loop = asyncio.get_running_loop()
+    other_loop = asyncio.new_event_loop()
+    client._created_loop = other_loop
+    try:
+        with pytest.raises(CacheError, match="owning event loop"):
+            await client.get_cache("key")
+        assert client._client is fake_redis["client"]
+        assert not fake_redis["client"].closed
+    finally:
+        client._created_loop = owning_loop
+        other_loop.close()
+        await client.close()

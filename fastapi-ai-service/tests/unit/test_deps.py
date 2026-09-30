@@ -1,23 +1,23 @@
 """Unit tests for app/api/deps.py (Task 8 Dependency Injection)."""
 
 import pytest
-from celery import Celery  # type: ignore[import-untyped]
 from fastapi.security import HTTPAuthorizationCredentials
 from pydantic import SecretStr
 
+from app.api import deps
 from app.api.deps import (
     get_cache_client,
     get_chroma_client,
     get_correlation_id_dep,
     get_evaluation_service,
     get_evolution_analysis_service,
+    get_job_manager,
     get_logger_dep,
     get_nemotron_gateway,
     get_repository_chat_service,
     get_repository_processing_service,
     get_semantic_search_service,
     get_settings_dep,
-    get_task_queue,
     verify_service_token,
 )
 from app.api.v1 import health_routes
@@ -25,8 +25,8 @@ from app.config.settings import Settings
 from app.domain.exceptions import SEISAuthorizationError
 from app.infra.cache.cache_client import RedisClient
 from app.infra.llm.gemini_client import NemotronGateway
-from app.infra.queue.task_queue import celery_app
 from app.infra.vectorstore.chroma_client import ChromaClient
+from app.infra.vectorstore.qdrant_client import QdrantVectorClient
 from app.services.evaluation_service import EvaluationService
 from app.services.evolution_analysis_service import EvolutionAnalysisService
 from app.services.repository_chat_service import RepositoryChatService
@@ -102,35 +102,34 @@ def test_service_dependency_providers() -> None:
     assert isinstance(eval_svc, EvaluationService)
 
 
-def test_get_chroma_client_returns_chroma_client_instance() -> None:
-    client = get_chroma_client()
-    assert isinstance(client, ChromaClient)
+@pytest.mark.parametrize(
+    "backend, adapter", [("chroma", ChromaClient), ("qdrant", QdrantVectorClient)]
+)
+def test_vector_provider_selects_configured_adapter(monkeypatch, backend, adapter) -> None:
+    settings = Settings(_env_file=None, vector_store_backend=backend)
+    monkeypatch.setattr(deps, "get_settings", lambda: settings)
+    get_chroma_client.cache_clear()
+    try:
+        client = get_chroma_client()
+        assert isinstance(client, adapter)
+        assert get_chroma_client() is client
+    finally:
+        get_chroma_client.cache_clear()
 
 
-def test_get_chroma_client_is_a_process_lifetime_singleton() -> None:
-    """`lru_cache` must yield the same instance across calls (Task 9 §Client Lifetime) --
-    a new ChromaDB SDK client per request/operation would defeat connection reuse."""
-    first = get_chroma_client()
-    second = get_chroma_client()
-    assert first is second
-
-
-def test_chroma_readiness_check_registered_on_import() -> None:
-    """Importing app.api.deps must register a "chromadb" readiness check
-    (Task 9 §Readiness) -- otherwise `/health/ready` never reflects ChromaDB
-    connectivity, silently defeating the readiness-integration requirement."""
-    assert "chromadb" in health_routes._readiness_checks
+def test_vector_readiness_check_registered_on_import() -> None:
+    name = "qdrant" if get_settings_dep().vector_store_backend == "qdrant" else "chromadb"
+    assert name in health_routes._readiness_checks
 
 
 @pytest.mark.asyncio
-async def test_chroma_readiness_check_never_raises() -> None:
-    """No live ChromaDB server is reachable in this unit-test environment
-    (chromadb is intentionally not installed on Windows -- see
-    requirements-vectorstore.txt); the registered check must degrade to
-    `False`, never propagate an exception into the readiness endpoint."""
-    check = health_routes._readiness_checks["chromadb"]
-    result = await check()
-    assert result is False
+async def test_vector_readiness_reports_unavailable_without_external_calls(monkeypatch) -> None:
+    class UnavailableStore:
+        async def health_check(self) -> bool:
+            return False
+
+    monkeypatch.setattr(deps, "get_chroma_client", lambda: UnavailableStore())
+    assert await deps._chroma_readiness_check() is False
 
 
 def test_get_cache_client_returns_redis_client_instance() -> None:
@@ -163,19 +162,17 @@ async def test_redis_readiness_check_never_raises() -> None:
     assert isinstance(result, bool)
 
 
-def test_get_task_queue_returns_celery_app_instance() -> None:
-    queue = get_task_queue()
-    assert isinstance(queue, Celery)
+def test_get_job_manager_returns_job_manager_instance() -> None:
+    from app.services.job_manager import IngestionJobManager
+
+    manager = get_job_manager()
+    assert isinstance(manager, IngestionJobManager)
 
 
-def test_get_task_queue_returns_the_process_singleton() -> None:
-    """Unlike `get_chroma_client`/`get_cache_client`, `get_task_queue` has no
-    `lru_cache` of its own -- it must still yield the same object every time,
-    because `celery_app` (Task 11) is already a single process-wide instance."""
-    first = get_task_queue()
-    second = get_task_queue()
+def test_get_job_manager_returns_the_process_singleton() -> None:
+    first = get_job_manager()
+    second = get_job_manager()
     assert first is second
-    assert first is celery_app
 
 
 def test_get_nemotron_gateway_returns_nemotron_gateway_instance() -> None:

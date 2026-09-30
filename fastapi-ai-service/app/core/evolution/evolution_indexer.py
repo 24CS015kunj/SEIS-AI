@@ -72,7 +72,7 @@ from app.domain.models import (
     HotspotMetrics,
     StructuralTrends,
 )
-from app.infra.vectorstore.chroma_client import ChromaClient
+from app.infra.vectorstore.client import VectorStoreClient
 
 logger = structlog.get_logger("seis.core.evolution")
 
@@ -148,7 +148,7 @@ def _format_recommendations_section(insights: list[EngineeringInsight]) -> str:
 class EvolutionIndexer:
     """Compiles and indexes a Software Evolution report (Task 29, §7.5)."""
 
-    def __init__(self, chroma_client: ChromaClient, embedder: NemotronEmbedder) -> None:
+    def __init__(self, chroma_client: VectorStoreClient, embedder: NemotronEmbedder) -> None:
         self._chroma_client = chroma_client
         self._embedder = embedder
         self._log = logger.bind(component="evolution_indexer")

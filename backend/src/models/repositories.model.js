@@ -163,6 +163,16 @@ const RepositorySchema = new mongoose.Schema(
         lastIngestedCommitSha: {
             type: String,
             default: null
+        },
+
+        activeJobId: {
+            type: String,
+            default: null
+        },
+
+        lastHeartbeatAt: {
+            type: Date,
+            default: null
         }
     },
     {

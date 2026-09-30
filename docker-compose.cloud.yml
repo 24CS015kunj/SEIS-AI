@@ -1,0 +1,17 @@
+# Qdrant Cloud + managed Redis, without local database containers.
+# Use with the base Compose file; requires Compose >= 2.24.4.
+services:
+  api:
+    build:
+      args:
+        INSTALL_LEGACY_CHROMA: "false"
+    environment:
+      VECTOR_STORE_BACKEND: qdrant
+      QDRANT_URL: ${QDRANT_URL:?Set the Qdrant Cloud HTTPS endpoint}
+      QDRANT_API_KEY: ${QDRANT_API_KEY:?Set the cluster data API key securely}
+      REDIS_URL: ${REDIS_URL:?Set the managed Redis TCP TLS URL}
+    depends_on: !override {}
+  chromadb:
+    profiles: [legacy-chroma]
+  redis:
+    profiles: [local-redis]

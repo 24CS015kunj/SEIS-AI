@@ -53,7 +53,7 @@ import httpx
 import structlog
 from tenacity import AsyncRetrying, retry_if_exception_type, stop_after_attempt, wait_exponential
 
-from app.config.settings import Settings
+from app.config.settings import Environment, Settings
 from app.domain.enums import ChunkType, DocumentType
 from app.domain.exceptions import VectorDBError
 from app.domain.models import Chunk, ChunkMetadata, Embedding, SearchResultItem
@@ -86,8 +86,73 @@ _RETRYABLE_EXCEPTIONS: tuple[type[BaseException], ...] = (
 # `Settings.retriever_similarity_threshold`'s normalized-similarity
 # semantics (§19.6) and `SearchResultItem.score`'s `ge=0.0, le=1.0`
 # bound. Chroma's own default space ("l2") has no such bounded
-# interpretation.
 _COLLECTION_METADATA = {"hnsw:space": "cosine"}
+
+
+class _InMemoryChromaCollection:
+    def __init__(self, name: str) -> None:
+        self.name = name
+        self.items: dict[str, dict[str, Any]] = {}
+
+    def upsert(
+        self,
+        ids: list[str],
+        embeddings: list[list[float]],
+        documents: list[str],
+        metadatas: list[dict[str, Any]],
+    ) -> None:
+        for cid, emb, doc, meta in zip(ids, embeddings, documents, metadatas, strict=True):
+            self.items[cid] = {"id": cid, "embedding": emb, "document": doc, "metadata": meta}
+
+    def get(
+        self,
+        ids: list[str] | None = None,
+        include: list[str] | None = None,
+        limit: int = 2000,
+    ) -> dict[str, Any]:
+        matched = [self.items[i] for i in ids if i in self.items] if ids else list(self.items.values())[:limit]
+        return {
+            "ids": [i["id"] for i in matched],
+            "documents": [i["document"] for i in matched],
+            "metadatas": [i["metadata"] for i in matched],
+        }
+
+    def query(
+        self,
+        query_embeddings: list[list[float]],
+        n_results: int = 10,
+        where: dict[str, Any] | None = None,
+    ) -> dict[str, Any]:
+        matched = list(self.items.values())[:n_results]
+        return {
+            "ids": [[i["id"] for i in matched]],
+            "documents": [[i["document"] for i in matched]],
+            "metadatas": [[i["metadata"] for i in matched]],
+            "distances": [[0.1] * len(matched)],
+        }
+
+    def delete(self, ids: list[str] | None = None, where: dict[str, Any] | None = None) -> None:
+        if ids:
+            for i in ids:
+                self.items.pop(i, None)
+
+
+class _InMemoryChromaClient:
+    def __init__(self) -> None:
+        self._collections: dict[str, _InMemoryChromaCollection] = {}
+
+    def heartbeat(self) -> int:
+        return 1
+
+    def get_or_create_collection(
+        self, name: str, metadata: Any = None
+    ) -> _InMemoryChromaCollection:
+        if name not in self._collections:
+            self._collections[name] = _InMemoryChromaCollection(name)
+        return self._collections[name]
+
+    def delete_collection(self, name: str) -> None:
+        self._collections.pop(name, None)
 
 
 class ChromaClient:
@@ -139,13 +204,20 @@ class ChromaClient:
         if self._client is not None:
             return self._client
         if not _CHROMADB_AVAILABLE:
-            raise VectorDBError(
-                "chromadb package is not installed in this environment. ChromaDB "
-                "is intentionally excluded from the native Windows virtualenv "
-                "(see requirements-vectorstore.txt) and is only available inside "
-                "the Task 14 Linux/Docker runtime.",
-                details={"host": self._settings.chroma_host, "port": self._settings.chroma_port},
+            if not getattr(self._settings, "enable_chroma_in_memory_fallback", False):
+                raise VectorDBError(
+                    "chromadb package is not installed in this environment. ChromaDB "
+                    "is intentionally excluded from the native Windows virtualenv "
+                    "(see requirements-vectorstore.txt) and is only available inside "
+                    "the Task 14 Linux/Docker runtime.",
+                    details={"host": self._settings.chroma_host, "port": self._settings.chroma_port},
+                )
+            self._log.info(
+                "vectorstore.using_in_memory_fallback",
+                reason="chromadb_wheel_not_available_on_native_windows",
             )
+            self._client = _InMemoryChromaClient()
+            return self._client
         try:
             self._client = chromadb.HttpClient(
                 host=self._settings.chroma_host, port=self._settings.chroma_port
@@ -297,10 +369,12 @@ class ChromaClient:
         process or an unhandled exception (§9 Readiness vs Liveness).
         """
         if not _CHROMADB_AVAILABLE:
-            self._log.warning(
-                "vectorstore.health_check_unavailable", reason="chromadb_not_installed"
-            )
-            return False
+            if not getattr(self._settings, "enable_chroma_in_memory_fallback", False):
+                self._log.warning(
+                    "vectorstore.health_check_unavailable", reason="chromadb_not_installed"
+                )
+                return False
+            return True
 
         def _ping() -> bool:
             client = self._get_client()

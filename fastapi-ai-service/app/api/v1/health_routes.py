@@ -10,6 +10,7 @@ Docker health checks (Task 14), not a business API consumed by Express,
 so they deliberately sit outside ``API_V1_PREFIX``.
 """
 
+import asyncio
 import time
 from collections.abc import Awaitable, Callable
 
@@ -92,16 +93,22 @@ async def readiness(response: Response) -> ReadinessResponse:
     dependency_statuses: list[DependencyStatus] = []
     all_healthy = True
 
-    for name, check in _readiness_checks.items():
+    async def bounded_check(name: str, check: ReadinessCheck) -> DependencyStatus:
         try:
-            healthy = await check()
+            healthy = await asyncio.wait_for(check(), timeout=2.0)
         except Exception:
             # A failing/erroring dependency check must never crash the
             # probe itself -- it must be reported as an unhealthy
             # dependency (§14 Error Handling Strategy).
             healthy = False
-        dependency_statuses.append(DependencyStatus(name=name, healthy=healthy))
-        all_healthy = all_healthy and healthy
+        return DependencyStatus(name=name, healthy=healthy)
+
+    dependency_statuses = list(
+        await asyncio.gather(
+            *(bounded_check(name, check) for name, check in _readiness_checks.items())
+        )
+    )
+    all_healthy = all(item.healthy for item in dependency_statuses)
 
     response.status_code = (
         status.HTTP_200_OK if all_healthy else status.HTTP_503_SERVICE_UNAVAILABLE
