@@ -15,7 +15,8 @@ export function requestLoggerMiddleware(req, res, next) {
                 JSON.stringify({
                     event: "express.request",
                     method: req.method,
-                    path: req.originalUrl || req.url,
+                    // Query strings can contain OAuth codes and other credentials.
+                    path: req.path || (req.originalUrl || req.url || "").split("?")[0],
                     status: res.statusCode,
                     durationMs,
                     correlationId,

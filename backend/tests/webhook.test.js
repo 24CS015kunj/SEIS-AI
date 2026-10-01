@@ -34,8 +34,12 @@ function mockRes() {
 
 const TEST_REPOSITORY_ID = new mongoose.Types.ObjectId().toString();
 const TEST_USER_ID = new mongoose.Types.ObjectId().toString();
+const TEST_INTERNAL_API_KEY = "test-webhook-internal-key";
+const authHeaders = { authorization: `Bearer ${TEST_INTERNAL_API_KEY}` };
 
 const runAllTests = async () => {
+    const originalInternalApiKey = process.env.FASTAPI_INTERNAL_API_KEY;
+    process.env.FASTAPI_INTERNAL_API_KEY = TEST_INTERNAL_API_KEY;
     console.log("\n========================================================");
     console.log("   SEIS-AI FASTAPI WEBHOOK & ATTEMPT FENCING SUITE (T5)");
     console.log("========================================================\n");
@@ -80,9 +84,13 @@ const runAllTests = async () => {
     };
 
     try {
+        const unauthorized = mockRes();
+        await handleFastApiIngestionStatus({ body: {}, headers: {} }, unauthorized, () => {});
+        assert(unauthorized.statusCode === 401, "Webhook rejects a missing service key");
+
         console.log("1. Testing webhook rejects request missing repository_id...");
         {
-            const req = { body: { status: "READY" }, headers: {} };
+            const req = { body: { status: "READY" }, headers: authHeaders };
             const res = mockRes();
             await handleFastApiIngestionStatus(req, res, () => {});
 
@@ -97,7 +105,7 @@ const runAllTests = async () => {
                     repository_id: TEST_REPOSITORY_ID,
                     status: "INVALID_UNKNOWN_STATUS",
                 },
-                headers: {},
+                headers: authHeaders,
             };
             const res = mockRes();
             await handleFastApiIngestionStatus(req, res, () => {});
@@ -114,7 +122,7 @@ const runAllTests = async () => {
                     status: "PROCESSING",
                     timestamp: "not-a-valid-date-time",
                 },
-                headers: {},
+                headers: authHeaders,
             };
             const res = mockRes();
             await handleFastApiIngestionStatus(req, res, () => {});
@@ -135,7 +143,7 @@ const runAllTests = async () => {
                     stage: "CHUNKING",
                     timestamp: new Date().toISOString(),
                 },
-                headers: {},
+                headers: authHeaders,
             };
             const res = mockRes();
             await handleFastApiIngestionStatus(req, res, () => {});
@@ -159,7 +167,7 @@ const runAllTests = async () => {
                     status: "PROCESSING",
                     stage: "EMBEDDING",
                 },
-                headers: {},
+                headers: authHeaders,
             };
             const res = mockRes();
             await handleFastApiIngestionStatus(req, res, () => {});
@@ -179,7 +187,7 @@ const runAllTests = async () => {
                     repository_id: TEST_REPOSITORY_ID,
                     status: "PROCESSING", // Missing job_id
                 },
-                headers: {},
+                headers: authHeaders,
             };
             const res = mockRes();
             await handleFastApiIngestionStatus(req, res, () => {});
@@ -202,7 +210,7 @@ const runAllTests = async () => {
                     chunk_count: 55,
                     timestamp: new Date().toISOString(),
                 },
-                headers: {},
+                headers: authHeaders,
             };
             const res = mockRes();
             await handleFastApiIngestionStatus(req, res, () => {});
@@ -227,7 +235,7 @@ const runAllTests = async () => {
                     status: "PROCESSING", // Delayed progress callback
                     stage: "INDEXING",
                 },
-                headers: {},
+                headers: authHeaders,
             };
             const res = mockRes();
             await handleFastApiIngestionStatus(req, res, () => {});
@@ -250,7 +258,7 @@ const runAllTests = async () => {
                     status: "FAILED",
                     error: "Parsing syntax error in main.py",
                 },
-                headers: {},
+                headers: authHeaders,
             };
             const res = mockRes();
             await handleFastApiIngestionStatus(req, res, () => {});
@@ -267,7 +275,7 @@ const runAllTests = async () => {
                     repository_id: new mongoose.Types.ObjectId().toString(),
                     status: "READY",
                 },
-                headers: {},
+                headers: authHeaders,
             };
             const res = mockRes();
             await handleFastApiIngestionStatus(req, res, () => {});
@@ -289,7 +297,7 @@ const runAllTests = async () => {
                     status: "QUEUED",
                     timestamp: heartbeatTime,
                 },
-                headers: {},
+                headers: authHeaders,
             };
             const res = mockRes();
             await handleFastApiIngestionStatus(req, res, () => {});
@@ -315,7 +323,7 @@ const runAllTests = async () => {
                     status: "QUEUED",
                     timestamp: newHeartbeatTime,
                 },
-                headers: {},
+                headers: authHeaders,
             };
             const res = mockRes();
             await handleFastApiIngestionStatus(req, res, () => {});
@@ -338,7 +346,7 @@ const runAllTests = async () => {
                     status: "QUEUED",
                     timestamp: new Date().toISOString(),
                 },
-                headers: {},
+                headers: authHeaders,
             };
             const res = mockRes();
             await handleFastApiIngestionStatus(req, res, () => {});
@@ -350,6 +358,8 @@ const runAllTests = async () => {
         }
 
     } finally {
+        if (originalInternalApiKey === undefined) delete process.env.FASTAPI_INTERNAL_API_KEY;
+        else process.env.FASTAPI_INTERNAL_API_KEY = originalInternalApiKey;
         Repository.findById = originalFindById;
         Repository.findOneAndUpdate = originalFindOneAndUpdate;
     }

@@ -2,6 +2,15 @@ import User from "../models/user.model.js";
 import { generateToken, generateRefreshToken, verifyRefreshToken } from "../utils/jwt.util.js";
 import * as githubService from "../services/github.service.js";
 import * as emailService from "../services/email.service.js";
+import { randomBytes, timingSafeEqual } from "node:crypto";
+
+const oauthStateCookie = "github_oauth_state";
+const oauthStateCookieOptions = () => ({
+    httpOnly: true,
+    secure: process.env.NODE_ENV === "production",
+    sameSite: "lax", // GitHub returns by top-level navigation.
+    maxAge: 10 * 60 * 1000,
+});
 
 /**
  * Redirects the user to GitHub's OAuth authorization page
@@ -9,17 +18,19 @@ import * as emailService from "../services/email.service.js";
  */
 export const redirectToGithub = (req, res) => {
     const clientId = process.env.GITHUB_CLIENT_ID;
-    const redirectUri = encodeURIComponent(process.env.GITHUB_CALLBACK_URL);
+    const callbackUrl = process.env.GITHUB_CALLBACK_URL;
     const scope = encodeURIComponent("repo read:user user:email");
 
-    if (!clientId) {
+    if (!clientId || !callbackUrl) {
         return res.status(500).json({
             success: false,
-            message: "GITHUB_CLIENT_ID is not configured in server environment.",
+            message: "GitHub OAuth is not configured in server environment.",
         });
     }
 
-    const githubAuthUrl = `https://github.com/login/oauth/authorize?client_id=${clientId}&redirect_uri=${redirectUri}&scope=${scope}`;
+    const state = randomBytes(32).toString("base64url");
+    res.cookie(oauthStateCookie, state, oauthStateCookieOptions());
+    const githubAuthUrl = `https://github.com/login/oauth/authorize?client_id=${encodeURIComponent(clientId)}&redirect_uri=${encodeURIComponent(callbackUrl)}&scope=${scope}&state=${state}`;
     
     // If request asks for json or has query param json=true, return URL
     if (req.query.json === "true" || req.headers.accept?.includes("application/json")) {
@@ -41,10 +52,25 @@ export const githubCallback = async (req, res, next) => {
     try {
         const { code } = req.query;
 
-        if (!code) {
+        if (typeof code !== "string" || !code) {
             return res.status(400).json({
                 success: false,
                 message: "Authorization code is required in query parameters.",
+            });
+        }
+
+        const expectedState = req.cookies?.[oauthStateCookie];
+        const receivedState = req.query.state;
+        const { maxAge, ...clearStateCookieOptions } = oauthStateCookieOptions();
+        res.clearCookie(oauthStateCookie, clearStateCookieOptions);
+        const expectedBytes = Buffer.from(typeof expectedState === "string" ? expectedState : "");
+        const receivedBytes = Buffer.from(typeof receivedState === "string" ? receivedState : "");
+        if (typeof expectedState !== "string" || typeof receivedState !== "string" ||
+            expectedBytes.length === 0 || expectedBytes.length !== receivedBytes.length ||
+            !timingSafeEqual(expectedBytes, receivedBytes)) {
+            return res.status(400).json({
+                success: false,
+                message: "Invalid or expired GitHub OAuth state.",
             });
         }
 
@@ -121,7 +147,7 @@ export const githubCallback = async (req, res, next) => {
 
         // If redirect query or browser navigation is preferred
         if (req.query.redirect === "true" && process.env.FRONTEND_URL) {
-            return res.redirect(`${process.env.FRONTEND_URL}?token=${token}`);
+            return res.redirect(`${process.env.FRONTEND_URL}#token=${encodeURIComponent(token)}`);
         }
 
         return res.status(isNewUser ? 201 : 200).json({

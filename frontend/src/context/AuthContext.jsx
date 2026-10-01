@@ -18,10 +18,11 @@ export function AuthProvider({ children }) {
 
   useEffect(() => {
     // Read before the first API request fires -- `apiClient.js`'s
-    // `getAuthToken()` strips `?token=` from the URL as soon as it's read,
+    // `getAuthToken()` strips the OAuth token from the URL as soon as it's read,
     // so this is the only point where "did we just arrive from Express's
     // real GitHub OAuth redirect" is still observable.
-    const arrivedWithToken = new URLSearchParams(window.location.search).has('token');
+    const arrivedWithToken = new URLSearchParams(window.location.hash.slice(1)).has('token') ||
+      new URLSearchParams(window.location.search).has('token');
 
     fetchCurrentUser()
       .then((fetchedUser) => {

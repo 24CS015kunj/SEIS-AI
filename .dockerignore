@@ -1,0 +1,14 @@
+# Only applies if a future Docker build uses the repository root as context.
+.git/
+.env
+.env.*
+docs/
+node_modules/
+**/node_modules/
+**/.venv/
+**/__pycache__/
+**/.pytest_cache/
+**/.ruff_cache/
+**/.migration/
+**/dist/
+*.log

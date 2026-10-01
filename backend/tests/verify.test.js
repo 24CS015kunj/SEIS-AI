@@ -257,6 +257,45 @@ const runAllTests = async () => {
         // Auth GitHub URL generation
         const authRes = await axios.get(`${baseUrl}/api/auth/github?json=true`);
         assert(authRes.status === 200 && authRes.data.authUrl.includes("github.com/login/oauth/authorize"), "GET /api/auth/github returns valid GitHub OAuth URL");
+        const oauthState = new URL(authRes.data.authUrl).searchParams.get("state");
+        const stateCookie = authRes.headers["set-cookie"]?.find((cookie) => cookie.startsWith("github_oauth_state="));
+        assert(oauthState && stateCookie?.includes(`github_oauth_state=${oauthState}`) && stateCookie.includes("HttpOnly") && stateCookie.includes("SameSite=Lax"), "GitHub OAuth binds authorization to an HTTP-only state cookie");
+
+        const previousNodeEnv = process.env.NODE_ENV;
+        try {
+            process.env.NODE_ENV = "production";
+            const productionAuthRes = await axios.get(`${baseUrl}/api/auth/github?json=true`);
+            const productionStateCookie = productionAuthRes.headers["set-cookie"]?.find((cookie) => cookie.startsWith("github_oauth_state="));
+            assert(productionStateCookie?.includes("Secure") && productionStateCookie.includes("HttpOnly") && productionStateCookie.includes("SameSite=Lax"), "Production GitHub OAuth state cookie is secure and accepted on the callback navigation");
+        } finally {
+            if (previousNodeEnv === undefined) delete process.env.NODE_ENV;
+            else process.env.NODE_ENV = previousNodeEnv;
+        }
+
+        try {
+            await axios.get(`${baseUrl}/api/auth/github/callback?code=unused&state=wrong`, {
+                headers: { Cookie: stateCookie.split(";")[0] },
+            });
+            assert(false, "Mismatched GitHub OAuth state must be rejected");
+        } catch (err) {
+            assert(err.response?.status === 400 && err.response.data.message.includes("OAuth state"), "GitHub OAuth callback rejects mismatched state before token exchange");
+        }
+
+        try {
+            await axios.get(`${baseUrl}/api/auth/github/callback?code=unused&state=${encodeURIComponent("é".repeat(oauthState.length))}`, {
+                headers: { Cookie: stateCookie.split(";")[0] },
+            });
+            assert(false, "Non-ASCII GitHub OAuth state must be rejected");
+        } catch (err) {
+            assert(err.response?.status === 400 && err.response.data.message.includes("OAuth state"), "GitHub OAuth callback rejects malformed state without a server error");
+        }
+
+        try {
+            await axios.get(`${baseUrl}/api/auth/github/callback?code=unused&state=${oauthState}`);
+            assert(false, "Missing GitHub OAuth state cookie must be rejected");
+        } catch (err) {
+            assert(err.response?.status === 400 && err.response.data.message.includes("OAuth state"), "GitHub OAuth callback rejects missing state cookie before token exchange");
+        }
 
         // Callback missing code validation
         try {

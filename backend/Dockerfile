@@ -9,7 +9,7 @@ RUN apk add --no-cache curl
 # Copy package manifests first to leverage Docker layer caching
 COPY package*.json ./
 
-RUN npm ci --only=production
+RUN npm ci --omit=dev
 
 # Copy application source code, plus constant.js (repo-root-level file --
 # src/config/db.js imports it as "../../constant.js") which a src/-only

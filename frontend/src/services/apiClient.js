@@ -17,28 +17,28 @@ const AUTH_TOKEN_STORAGE_KEY = 'seis_auth_token';
  *
  * Two sources, in order:
  *  1. `localStorage` -- where a previously-established session persists.
- *  2. The `?token=` query parameter -- the exact hand-off shape Express's
- *     `githubCallback` already produces when invoked with `redirect=true`
- *     (`res.redirect(`${FRONTEND_URL}?token=${token}`)`, `auth.controller.js`).
- *     Picking it up here (and persisting it) is the minimal, already-
- *     backend-supported bootstrap for whenever the real GitHub OAuth
- *     button is wired up -- no backend change needed for that to work.
+ *  2. The `#token=` fragment from the backend OAuth redirect. Fragments are
+ *     not sent in HTTP requests or Referer headers. The old `?token=` form
+ *     is accepted during the frontend/backend deployment transition.
  */
 export function getAuthToken() {
   if (typeof window === 'undefined') return null;
 
-  const params = new URLSearchParams(window.location.search);
-  const tokenFromUrl = params.get('token');
+  const fragmentParams = new URLSearchParams(window.location.hash.slice(1));
+  const queryParams = new URLSearchParams(window.location.search);
+  const tokenFromFragment = fragmentParams.get('token');
+  const tokenFromQuery = queryParams.get('token');
+  const tokenFromUrl = tokenFromFragment || tokenFromQuery;
   if (tokenFromUrl) {
     window.localStorage.setItem(AUTH_TOKEN_STORAGE_KEY, tokenFromUrl);
-    // Strip the token out of the visible URL so it isn't left in browser
-    // history/referrer headers once it's safely persisted.
-    params.delete('token');
-    const cleanedSearch = params.toString();
+    fragmentParams.delete('token');
+    queryParams.delete('token');
+    const cleanedSearch = queryParams.toString();
+    const cleanedHash = tokenFromFragment ? fragmentParams.toString() : window.location.hash.slice(1);
     window.history.replaceState(
       {},
       '',
-      window.location.pathname + (cleanedSearch ? `?${cleanedSearch}` : '') + window.location.hash
+      window.location.pathname + (cleanedSearch ? `?${cleanedSearch}` : '') + (cleanedHash ? `#${cleanedHash}` : '')
     );
     return tokenFromUrl;
   }
