@@ -15,6 +15,8 @@ import CommandCenterHeader from '../components/commandCenter/CommandCenterHeader
 import CopilotDrawer from '../components/commandCenter/CopilotDrawer';
 import FileCodePreviewDrawer from '../components/common/FileCodePreviewDrawer';
 import EngineeringBackground from '../components/common/EngineeringBackground';
+import EmptyRepositoryState from '../components/common/EmptyRepositoryState';
+import { useAutoResolveDefaultRepository } from '../hooks/useAutoResolveDefaultRepository';
 
 const SUGGESTED_QUESTIONS = [
   'What does this repository do?',
@@ -119,6 +121,7 @@ const GRANULARITY_LABEL = { day: 'day', week: 'week', month: 'month' };
  */
 export default function SoftwareEvolutionPage() {
   const { repositoryId } = useParams();
+  useAutoResolveDefaultRepository(repositoryId, '/software-evolution');
   return <SoftwareEvolutionPageContent key={repositoryId ?? 'none'} repositoryId={repositoryId} />;
 }
 
@@ -851,11 +854,11 @@ function RecentCommitsSection({ status, error, commits, totalWithFiles, reposito
 
 function NoRepositoryState() {
   return (
-    <div className="max-w-[560px] mx-auto mt-16 text-center">
-      <p className="text-[13.5px] text-slate-500 leading-relaxed">
-        Open this page from a real, synced repository (via Source Control or the Dashboard) to see its evolution.
-      </p>
-    </div>
+    <EmptyRepositoryState
+      pageTitle="Software Evolution"
+      pageDescription="Select an active repository from your workspace or import a new one from GitHub to analyze commit churn velocity, risk hotspots, and engineering trends."
+      destinationPrefix="/software-evolution"
+    />
   );
 }
 

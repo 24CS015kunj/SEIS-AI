@@ -19,8 +19,11 @@ import ArchitectureOverviewCards from '../components/architecture/ArchitectureOv
 import RepositoryTree from '../components/architecture/RepositoryTree';
 import ModuleDetailsPanel from '../components/architecture/ModuleDetailsPanel';
 import DependencyAnalysisPanel from '../components/architecture/DependencyAnalysisPanel';
+import FileCodePreviewDrawer from '../components/common/FileCodePreviewDrawer';
 import CitationDrawer from '../components/chat/CitationDrawer';
 import EngineeringBackground from '../components/common/EngineeringBackground';
+import EmptyRepositoryState from '../components/common/EmptyRepositoryState';
+import { useAutoResolveDefaultRepository } from '../hooks/useAutoResolveDefaultRepository';
 
 const SUGGESTED_QUESTIONS = [
   'What does this repository do?',
@@ -52,6 +55,7 @@ export default function ArchitecturePage() {
   // full, clean remount (selected module, retry counters, Copilot
   // conversation) whenever the active repository actually changes.
   const { repositoryId } = useParams();
+  useAutoResolveDefaultRepository(repositoryId, '/architecture');
   return <ArchitecturePageContent key={repositoryId ?? 'none'} repositoryId={repositoryId} />;
 }
 
@@ -61,6 +65,7 @@ function ArchitecturePageContent({ repositoryId }) {
 
   const [mobileNavOpen, setMobileNavOpen] = useState(false);
   const [copilotOpen, setCopilotOpen] = useState(false);
+  const [previewFilePath, setPreviewFilePath] = useState(null);
   const [selectedNode, setSelectedNode] = useState(null);
   const [citationDrawerOpen, setCitationDrawerOpen] = useState(false);
   const [activeCitation, setActiveCitation] = useState(null);
@@ -469,6 +474,11 @@ function ArchitecturePageContent({ repositoryId }) {
         />
       )}
 
+      <FileCodePreviewDrawer
+        repositoryId={repositoryId}
+        filePath={previewFilePath}
+        onClose={() => setPreviewFilePath(null)}
+      />
       <CitationDrawer
         repositoryId={repositoryId}
         citation={activeCitation}
@@ -481,11 +491,11 @@ function ArchitecturePageContent({ repositoryId }) {
 
 function NoRepositoryState() {
   return (
-    <div className="max-w-[560px] mx-auto mt-16 text-center">
-      <p className="text-[13.5px] text-slate-500 leading-relaxed">
-        Open this page from a real, synced repository (via Source Control or the Dashboard) to see its architecture.
-      </p>
-    </div>
+    <EmptyRepositoryState
+      pageTitle="Architecture Map"
+      pageDescription="Select an active repository from your workspace or import a new one from GitHub to explore directed module dependency graphs, circular loops, and file tree models."
+      destinationPrefix="/architecture"
+    />
   );
 }
 

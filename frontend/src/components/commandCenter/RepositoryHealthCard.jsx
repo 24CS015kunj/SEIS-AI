@@ -37,7 +37,7 @@ export default function RepositoryHealthCard({ status, analysis }) {
   return (
     <div
       id="health-score-card"
-      className="bg-white border border-slate-200 rounded-xl shadow-sm px-5 py-4 flex items-center gap-5"
+      className="apple-card p-5 rounded-[20px] flex items-center gap-5"
       aria-label={`Repository health score: ${score} out of 100`}
     >
       {/* Gauge ring */}
@@ -47,15 +47,15 @@ export default function RepositoryHealthCard({ status, analysis }) {
       <div className="flex-1 min-w-0">
         <div className="flex items-center gap-2 mb-1">
           <TierIcon tier={tier} />
-          <span className="text-[13.5px] font-bold text-slate-900">Repository Health</span>
+          <span className="text-[14px] font-semibold text-[#1D1D1F]">Repository Health</span>
           <span
-            className={`text-[11px] font-bold uppercase tracking-wider px-2 py-0.5 rounded-full border ${tier.badge}`}
+            className={`text-[11px] font-medium px-2.5 py-0.5 rounded-full ${tier.badge}`}
           >
             {tier.label}
           </span>
         </div>
 
-        <p className="text-[12px] text-slate-500 m-0 mb-2 leading-snug">{tier.description}</p>
+        <p className="text-[12.5px] text-[#86868B] m-0 mb-2 leading-snug">{tier.description}</p>
 
         {/* Deduction breakdown — only shown if there are any */}
         {deductions.length > 0 && (
@@ -148,22 +148,22 @@ function scoreTier(score) {
   if (score >= 85) return {
     label: 'Healthy',
     description: 'No significant risk factors detected in the latest analysis.',
-    ring: '#22c55e',  // green-500
-    badge: 'text-emerald-700 bg-emerald-50 border-emerald-200',
+    ring: '#34C759', // Apple System Green
+    badge: 'text-[#34C759] bg-[#34C759]/10 border border-[#34C759]/20',
     icon: 'green',
   };
   if (score >= 65) return {
     label: 'Fair',
     description: 'Some risk factors present — review flagged findings below.',
-    ring: '#f59e0b',  // amber-500
-    badge: 'text-amber-700 bg-amber-50 border-amber-200',
+    ring: '#FF9500', // Apple System Orange
+    badge: 'text-[#FF9500] bg-[#FF9500]/10 border border-[#FF9500]/20',
     icon: 'amber',
   };
   return {
     label: 'Needs Attention',
     description: 'Multiple high-severity findings require action.',
-    ring: '#ef4444',  // red-500
-    badge: 'text-rose-700 bg-rose-50 border-rose-200',
+    ring: '#FF3B30', // Apple System Red
+    badge: 'text-[#FF3B30] bg-[#FF3B30]/10 border border-[#FF3B30]/20',
     icon: 'red',
   };
 }
@@ -186,7 +186,7 @@ function ScoreRing({ score, tier }) {
           cy={SIZE / 2}
           r={R}
           fill="none"
-          stroke="#e2e8f0"
+          stroke="#E5E5EA"
           strokeWidth={STROKE}
         />
         {/* Progress */}

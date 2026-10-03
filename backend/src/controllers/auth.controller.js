@@ -20,6 +20,7 @@ export const redirectToGithub = (req, res) => {
     const clientId = process.env.GITHUB_CLIENT_ID;
     const callbackUrl = process.env.GITHUB_CALLBACK_URL;
     const scope = encodeURIComponent("repo read:user user:email");
+    const stayLoggedIn = req.query.stayLoggedIn !== "false";
 
     if (!clientId || !callbackUrl) {
         return res.status(500).json({
@@ -30,6 +31,7 @@ export const redirectToGithub = (req, res) => {
 
     const state = randomBytes(32).toString("base64url");
     res.cookie(oauthStateCookie, state, oauthStateCookieOptions());
+    res.cookie("github_oauth_stay_logged_in", stayLoggedIn ? "1" : "0", oauthStateCookieOptions());
     const githubAuthUrl = `https://github.com/login/oauth/authorize?client_id=${encodeURIComponent(clientId)}&redirect_uri=${encodeURIComponent(callbackUrl)}&scope=${scope}&state=${state}`;
     
     // If request asks for json or has query param json=true, return URL
@@ -37,6 +39,7 @@ export const redirectToGithub = (req, res) => {
         return res.json({
             success: true,
             authUrl: githubAuthUrl,
+            state,
         });
     }
 
@@ -61,8 +64,10 @@ export const githubCallback = async (req, res, next) => {
 
         const expectedState = req.cookies?.[oauthStateCookie];
         const receivedState = req.query.state;
+        const stayLoggedInCookie = req.cookies?.github_oauth_stay_logged_in;
         const { maxAge, ...clearStateCookieOptions } = oauthStateCookieOptions();
         res.clearCookie(oauthStateCookie, clearStateCookieOptions);
+        res.clearCookie("github_oauth_stay_logged_in", clearStateCookieOptions);
         const expectedBytes = Buffer.from(typeof expectedState === "string" ? expectedState : "");
         const receivedBytes = Buffer.from(typeof receivedState === "string" ? receivedState : "");
         if (typeof expectedState !== "string" || typeof receivedState !== "string" ||
@@ -121,23 +126,37 @@ export const githubCallback = async (req, res, next) => {
             }
         }
 
-        // 4. Generate SEIS-AI Access & Refresh JWTs
-        const token = generateToken(user._id);
+        // 4. Determine session persistence preference
+        let stayLoggedIn = true;
+        if (stayLoggedInCookie !== undefined) {
+            stayLoggedIn = stayLoggedInCookie !== "0";
+        }
+        if (req.query.stayLoggedIn !== undefined) {
+            stayLoggedIn = req.query.stayLoggedIn !== "false";
+        }
+        if (req.body?.stayLoggedIn !== undefined) {
+            stayLoggedIn = req.body.stayLoggedIn !== false;
+        }
+
+        // Generate SEIS-AI Access & Refresh JWTs
+        const tokenExpiresIn = stayLoggedIn ? "30d" : "1d";
+        const token = generateToken(user._id, { expiresIn: tokenExpiresIn });
         const refreshToken = generateRefreshToken(user._id);
 
         // 5. Set HTTP-only Cookies
         const isProduction = process.env.NODE_ENV === "production";
+        const cookieMaxAge = stayLoggedIn ? 30 * 24 * 60 * 60 * 1000 : 24 * 60 * 60 * 1000;
         res.cookie("token", token, {
             httpOnly: true,
             secure: isProduction,
             sameSite: isProduction ? "none" : "lax",
-            maxAge: 15 * 60 * 1000, // 15 minutes
+            maxAge: cookieMaxAge,
         });
         res.cookie("refreshToken", refreshToken, {
             httpOnly: true,
             secure: isProduction,
             sameSite: isProduction ? "none" : "lax",
-            maxAge: 7 * 24 * 60 * 60 * 1000, // 7 days
+            maxAge: 30 * 24 * 60 * 60 * 1000,
         });
 
         // 6. Return response without sensitive fields
@@ -147,7 +166,8 @@ export const githubCallback = async (req, res, next) => {
 
         // If redirect query or browser navigation is preferred
         if (req.query.redirect === "true" && process.env.FRONTEND_URL) {
-            return res.redirect(`${process.env.FRONTEND_URL}#token=${encodeURIComponent(token)}`);
+            const redirectBase = process.env.FRONTEND_URL.replace(/\/+$/, '');
+            return res.redirect(`${redirectBase}/login#token=${encodeURIComponent(token)}&stayLoggedIn=${stayLoggedIn}`);
         }
 
         return res.status(isNewUser ? 201 : 200).json({
@@ -155,6 +175,7 @@ export const githubCallback = async (req, res, next) => {
             message: isNewUser ? "User registered and authenticated successfully" : "User authenticated successfully",
             token,
             refreshToken,
+            stayLoggedIn,
             user: sanitizedUser,
         });
     } catch (error) {
@@ -200,22 +221,24 @@ export const refreshAuthToken = async (req, res, next) => {
             });
         }
 
-        const newAccessToken = generateToken(user._id);
+        const stayLoggedIn = req.body?.stayLoggedIn !== false;
+        const newAccessToken = generateToken(user._id, { expiresIn: stayLoggedIn ? "30d" : "1d" });
         const newRefreshToken = generateRefreshToken(user._id);
 
         const isProduction = process.env.NODE_ENV === "production";
+        const cookieMaxAge = stayLoggedIn ? 30 * 24 * 60 * 60 * 1000 : 24 * 60 * 60 * 1000;
         res.cookie("token", newAccessToken, {
             httpOnly: true,
             secure: isProduction,
             sameSite: isProduction ? "none" : "lax",
-            maxAge: 15 * 60 * 1000,
+            maxAge: cookieMaxAge,
         });
 
         res.cookie("refreshToken", newRefreshToken, {
             httpOnly: true,
             secure: isProduction,
             sameSite: isProduction ? "none" : "lax",
-            maxAge: 7 * 24 * 60 * 60 * 1000,
+            maxAge: 30 * 24 * 60 * 60 * 1000,
         });
 
         return res.json({

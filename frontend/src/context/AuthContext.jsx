@@ -29,7 +29,7 @@ export function AuthProvider({ children }) {
         setUser(fetchedUser);
         setStatus('authenticated');
         if (arrivedWithToken) {
-          navigate('/workspace', { replace: true });
+          navigate('/login', { replace: true });
         }
       })
       .catch(() => {

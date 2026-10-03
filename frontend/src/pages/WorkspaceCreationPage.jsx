@@ -18,14 +18,15 @@ import {
 } from 'lucide-react';
 import BrandMark, { BrandGlyph } from '../components/common/BrandMark';
 import FadeIn from '../components/common/FadeIn';
-import { createWorkspace, listWorkspaces } from '../services/workspaceService';
-
-const STEPS = [
-  { number: 1, status: 'complete' },
-  { number: 2, status: 'current' },
-  { number: 3, status: 'upcoming' },
-  { number: 4, status: 'upcoming' },
-];
+import OnboardingStepper from '../components/onboarding/OnboardingStepper';
+import { useAuth } from '../context/AuthContext';
+import {
+  createWorkspace,
+  listWorkspaces,
+  setActiveWorkspace,
+  getDefaultRepositoryForWorkspace,
+  getDefaultRepositoryDetailsForWorkspace,
+} from '../services/workspaceService';
 
 const WORKSPACE_TYPES = [
   { value: 'personal', label: 'Personal Workspace' },
@@ -50,7 +51,8 @@ function validateWorkspaceName(raw) {
 }
 
 export default function WorkspaceCreationPage() {
-  const [name, setName] = useState('AI Research Lab');
+  const { user } = useAuth();
+  const [name, setName] = useState(() => (user?.githubUsername ? `${user.githubUsername}'s Engineering Lab` : 'Engineering Workspace'));
   const [nameError, setNameError] = useState(null);
   const [description, setDescription] = useState('');
   const [workspaceType, setWorkspaceType] = useState('team');
@@ -58,11 +60,9 @@ export default function WorkspaceCreationPage() {
   const [submitStatus, setSubmitStatus] = useState('idle'); // idle | submitting | success
   const [submitError, setSubmitError] = useState(null);
   const [createdWorkspace, setCreatedWorkspace] = useState(null);
+  const [activeTab, setActiveTab] = useState('existing'); // existing | create
 
-  // Existing workspaces (Task 45 §4): the smallest possible integration of
-  // "authenticated user can see their own workspace" -- checked once, on
-  // this page, rather than a separate dashboard/switcher that doesn't
-  // exist anywhere in this application yet.
+  // Existing workspaces (Task 45 §4):
   const [existingWorkspaces, setExistingWorkspaces] = useState([]);
   const [existingWorkspacesStatus, setExistingWorkspacesStatus] = useState('loading'); // loading | ready | error
 
@@ -71,26 +71,47 @@ export default function WorkspaceCreationPage() {
   const nameErrorId = useId();
 
   useEffect(() => {
+    if (user?.githubUsername && name === 'Engineering Workspace') {
+      setName(`${user.githubUsername}'s Engineering Lab`);
+    }
+  }, [user, name]);
+
+  useEffect(() => {
     let cancelled = false;
     listWorkspaces()
       .then((workspaces) => {
         if (!cancelled) {
           setExistingWorkspaces(workspaces);
           setExistingWorkspacesStatus('ready');
+          if (!workspaces || workspaces.length === 0) {
+            setActiveTab('create');
+          }
         }
       })
       .catch(() => {
-        // Not authenticated yet, or the request otherwise failed -- this is
-        // not fatal to the page: the user can still fill out the creation
-        // form below. No error is shown for this background check.
-        if (!cancelled) setExistingWorkspacesStatus('error');
+        if (!cancelled) {
+          setExistingWorkspacesStatus('error');
+          setActiveTab('create');
+        }
       });
     return () => {
       cancelled = true;
     };
   }, []);
 
-  const useExistingWorkspace = (workspace) => {
+  const handleOpenWorkspace = (workspace, defaultRepoId) => {
+    setActiveWorkspace(workspace);
+    if (defaultRepoId) {
+      navigate(`/command-center/${defaultRepoId}`);
+    } else {
+      navigate('/import-repository', {
+        state: { workspaceId: workspace._id, workspaceName: workspace.name },
+      });
+    }
+  };
+
+  const handleChangeRepo = (workspace) => {
+    setActiveWorkspace(workspace);
     navigate('/import-repository', {
       state: { workspaceId: workspace._id, workspaceName: workspace.name },
     });
@@ -120,6 +141,7 @@ export default function WorkspaceCreationPage() {
     setSubmitStatus('submitting');
     try {
       const workspace = await createWorkspace(name.trim());
+      setActiveWorkspace(workspace);
       setCreatedWorkspace(workspace);
       setSubmitStatus('success');
     } catch (err) {
@@ -250,26 +272,54 @@ export default function WorkspaceCreationPage() {
               <div className="bg-white border border-[#E2E8F0] rounded-2xl shadow-[0_8px_30px_rgba(15,23,42,0.06)] p-6 sm:p-9 lg:px-[41px] lg:py-10">
 
                 {/* ---- Header + stepper ---- */}
-                <div className="mb-8">
-                  <h2 className="text-xl sm:text-2xl font-bold text-slate-900 mb-1.5">Create Your Workspace</h2>
+                <div className="mb-6">
+                  <h2 className="text-xl sm:text-2xl font-bold text-slate-900 mb-1.5">Workspace Setup</h2>
                   <p className="text-sm text-slate-500 mb-6">
-                    Your workspace is where repositories, projects, AI insights and team members live.
+                    Set up or choose the engineering workspace where your repositories and AI insights live.
                   </p>
-                  <Stepper />
+                  <OnboardingStepper currentStep={1} />
                 </div>
 
                 {existingWorkspacesStatus === 'ready' && existingWorkspaces.length > 0 && (
-                  <ExistingWorkspacesPanel
-                    workspaces={existingWorkspaces}
-                    onSelect={useExistingWorkspace}
-                  />
+                  <div className="flex border-b border-slate-200 mb-6 gap-6">
+                    <button
+                      type="button"
+                      onClick={() => setActiveTab('existing')}
+                      className={`pb-3 text-[13.5px] font-bold border-b-2 transition-colors cursor-pointer ${
+                        activeTab === 'existing'
+                          ? 'border-blue-600 text-blue-600'
+                          : 'border-transparent text-slate-500 hover:text-slate-800'
+                      }`}
+                    >
+                      Choose Existing Workspace ({existingWorkspaces.length})
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setActiveTab('create')}
+                      className={`pb-3 text-[13.5px] font-bold border-b-2 transition-colors cursor-pointer ${
+                        activeTab === 'create'
+                          ? 'border-blue-600 text-blue-600'
+                          : 'border-transparent text-slate-500 hover:text-slate-800'
+                      }`}
+                    >
+                      + Create New Workspace
+                    </button>
+                  </div>
                 )}
 
-                <form onSubmit={handleSubmit} noValidate>
-                  {/* ---- Logo upload ---- */}
-                  <div className="mb-7">
-                    <LogoUpload />
-                  </div>
+                {existingWorkspacesStatus === 'ready' && existingWorkspaces.length > 0 && activeTab === 'existing' ? (
+                  <ExistingWorkspacesPanel
+                    workspaces={existingWorkspaces}
+                    onOpen={handleOpenWorkspace}
+                    onChangeRepo={handleChangeRepo}
+                    onCreateNew={() => setActiveTab('create')}
+                  />
+                ) : (
+                  <form onSubmit={handleSubmit} noValidate>
+                    {/* ---- Logo upload ---- */}
+                    <div className="mb-7">
+                      <LogoUpload />
+                    </div>
 
                   {/* ---- Workspace name ---- */}
                   <div className="mb-5">
@@ -396,6 +446,7 @@ export default function WorkspaceCreationPage() {
                     {submitStatus === 'submitting' ? 'Creating your workspace, please wait.' : ''}
                   </span>
                 </form>
+                )}
               </div>
             </FadeIn>
 
@@ -411,61 +462,7 @@ export default function WorkspaceCreationPage() {
   );
 }
 
-/**
- * 4-node stepper matching Figma's unlabeled numeral/checkmark design.
- * No product-specific names exist anywhere in Figma or the project brief for
- * steps 3–4, so none are invented — per this phase's instructions, the visual
- * numbering is preserved and only an accessible name ("Step X of 4, ...") is
- * added so screen-reader users get the same information sighted users infer
- * from position + color.
- */
-function Stepper() {
-  return (
-    <div>
-      <div className="text-[11px] font-bold uppercase tracking-wider text-blue-600 mb-3">
-        Step 2 of 4
-      </div>
-      <ol className="flex items-center" aria-label="Onboarding progress">
-        {STEPS.map((step, idx) => {
-          const isLast = idx === STEPS.length - 1;
-          const isComplete = step.status === 'complete';
-          const isCurrent = step.status === 'current';
-          return (
-            <li key={step.number} className={`flex items-center ${isLast ? '' : 'flex-1'}`}>
-              <div
-                aria-current={isCurrent ? 'step' : undefined}
-                className={`shrink-0 w-8 h-8 rounded-full flex items-center justify-center text-[13px] font-bold border-2 transition-colors ${
-                  isComplete
-                    ? 'bg-blue-600 border-blue-600 text-white'
-                    : isCurrent
-                      ? 'bg-blue-600 border-blue-600 text-white ring-4 ring-blue-100'
-                      : 'bg-white border-[#E2E8F0] text-slate-400'
-                }`}
-              >
-                {isComplete ? <Check size={15} aria-hidden="true" /> : step.number}
-                <span className="sr-only">
-                  {isComplete
-                    ? `Step ${step.number} of 4, completed`
-                    : isCurrent
-                      ? `Step ${step.number} of 4, current step`
-                      : `Step ${step.number} of 4, upcoming`}
-                </span>
-              </div>
-              {!isLast && (
-                <div
-                  aria-hidden="true"
-                  className={`h-0.5 flex-1 mx-2 rounded-full transition-colors ${
-                    isComplete ? 'bg-blue-600' : 'bg-[#E2E8F0]'
-                  }`}
-                />
-              )}
-            </li>
-          );
-        })}
-      </ol>
-    </div>
-  );
-}
+
 
 function LogoUpload() {
   const [file, setFile] = useState(null);
@@ -591,37 +588,100 @@ function LogoUpload() {
   );
 }
 
-/**
- * Task 45 §4 -- the smallest possible "see and use your own workspace"
- * surface: a plain list with a "Use this workspace" action per row, shown
- * only when GET /api/workspaces actually returns at least one. Not a
- * workspace switcher (no persisted "current workspace" concept, no nav
- * integration) -- just enough for the immediate requirement.
- */
-function ExistingWorkspacesPanel({ workspaces, onSelect }) {
+function ExistingWorkspacesPanel({ workspaces, onOpen, onChangeRepo, onCreateNew }) {
   return (
-    <div className="mb-7 rounded-xl border border-[#E2E8F0] bg-slate-50/60 p-4">
-      <span className="block text-[11px] font-bold uppercase tracking-wider text-slate-500 mb-3">
-        You already have {workspaces.length === 1 ? 'a workspace' : 'workspaces'}
-      </span>
-      <ul className="flex flex-col gap-2">
-        {workspaces.map((workspace) => (
-          <li
-            key={workspace._id}
-            className="flex items-center justify-between gap-3 bg-white border border-[#E2E8F0] rounded-lg px-3.5 py-2.5"
+    <div className="mb-7">
+      <div className="flex items-center justify-between gap-2 mb-3">
+        <span className="text-[11px] font-bold uppercase tracking-wider text-slate-500">
+          Your Workspaces ({workspaces.length})
+        </span>
+        {onCreateNew && (
+          <button
+            type="button"
+            onClick={onCreateNew}
+            className="text-[12px] font-semibold text-blue-600 hover:text-blue-700 cursor-pointer"
           >
-            <span className="text-[14px] font-semibold text-slate-900 truncate">{workspace.name}</span>
-            <button
-              type="button"
-              onClick={() => onSelect(workspace)}
-              className="shrink-0 h-8 px-3 rounded-md bg-blue-600 text-white text-[12.5px] font-semibold border-0 cursor-pointer transition-colors hover:bg-blue-700"
+            + Create New
+          </button>
+        )}
+      </div>
+
+      <div className="grid grid-cols-1 gap-3">
+        {workspaces.map((workspace) => {
+          const defaultRepoId =
+            typeof workspace.defaultRepositoryId === 'object'
+              ? workspace.defaultRepositoryId?._id
+              : (workspace.defaultRepositoryId || getDefaultRepositoryForWorkspace(workspace._id));
+
+          const defaultRepoDetails = getDefaultRepositoryDetailsForWorkspace(workspace._id);
+          const defaultRepoName =
+            typeof workspace.defaultRepositoryId === 'object'
+              ? (workspace.defaultRepositoryId?.fullName || workspace.defaultRepositoryId?.name)
+              : (defaultRepoDetails?.repositoryName || null);
+
+          return (
+            <div
+              key={workspace._id}
+              className="group flex flex-col sm:flex-row sm:items-center justify-between gap-3 bg-white border border-slate-200 hover:border-blue-400 hover:shadow-md rounded-xl p-4 transition-all"
             >
-              Use this workspace
-            </button>
-          </li>
-        ))}
-      </ul>
-      <p className="text-[12.5px] text-slate-500 mt-3 mb-0">Or create another one below.</p>
+              <div className="flex items-center gap-3 min-w-0">
+                <div className="w-10 h-10 rounded-xl bg-blue-50 text-blue-600 flex items-center justify-center shrink-0">
+                  <LayoutGrid size={18} />
+                </div>
+                <div className="min-w-0">
+                  <h4 className="text-[14.5px] font-bold text-slate-900 truncate m-0">
+                    {workspace.name}
+                  </h4>
+                  {defaultRepoName ? (
+                    <div className="flex items-center gap-1.5 text-[12px] text-slate-500 font-mono mt-0.5 truncate" title={`Default: ${defaultRepoName}`}>
+                      <FolderGit2 size={12} className="text-blue-600 shrink-0" />
+                      <span className="truncate">Default: <strong className="text-slate-800 font-semibold">{defaultRepoName}</strong></span>
+                    </div>
+                  ) : (
+                    <span className="text-[12px] text-slate-400 block mt-0.5">
+                      No repository linked yet
+                    </span>
+                  )}
+                </div>
+              </div>
+
+              <div className="flex items-center gap-2 shrink-0 self-end sm:self-auto">
+                {defaultRepoId ? (
+                  <>
+                    <button
+                      type="button"
+                      onClick={() => onChangeRepo(workspace)}
+                      className="inline-flex items-center gap-1.5 h-9 px-3 rounded-lg bg-slate-100 hover:bg-slate-200 text-slate-700 hover:text-slate-900 text-[12px] font-semibold border border-slate-200 cursor-pointer transition-colors"
+                      title="Switch or choose a different repository for this workspace"
+                    >
+                      <FolderGit2 size={13} className="text-slate-500" />
+                      <span>Switch Repo</span>
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => onOpen(workspace, defaultRepoId)}
+                      className="inline-flex items-center gap-1.5 h-9 px-4 rounded-lg bg-blue-600 hover:bg-blue-700 text-white text-[13px] font-semibold border-0 cursor-pointer transition-colors shadow-xs"
+                      title="Directly open Command Center with default repository"
+                    >
+                      <span>Open Workspace</span>
+                      <ArrowRight size={14} />
+                    </button>
+                  </>
+                ) : (
+                  <button
+                    type="button"
+                    onClick={() => onChangeRepo(workspace)}
+                    className="inline-flex items-center gap-1.5 h-9 px-4 rounded-lg bg-blue-600 hover:bg-blue-700 text-white text-[13px] font-semibold border-0 cursor-pointer transition-colors shadow-xs"
+                  >
+                    <span>Select Repository</span>
+                    <ArrowRight size={14} />
+                  </button>
+                )}
+              </div>
+            </div>
+          );
+        })}
+      </div>
     </div>
   );
 }
@@ -639,11 +699,9 @@ function WorkspacePreview({ name }) {
         <div className="min-w-0">
           <div className="text-[14px] font-bold text-slate-900 truncate">{name}</div>
           <div className="flex flex-wrap items-center gap-x-1.5 gap-y-0.5 text-[12.5px] text-slate-500 mt-0.5">
-            <span className="whitespace-nowrap">0 Projects</span>
+            <span className="whitespace-nowrap">Engineering Space</span>
             <span aria-hidden="true">·</span>
-            <span className="flex items-center gap-1 whitespace-nowrap"><FolderGit2 size={11} aria-hidden="true" />0 Repos</span>
-            <span aria-hidden="true">·</span>
-            <span className="flex items-center gap-1 whitespace-nowrap"><Users size={11} aria-hidden="true" />1 Member</span>
+            <span className="flex items-center gap-1 whitespace-nowrap"><FolderGit2 size={11} aria-hidden="true" />Ready for Repos</span>
           </div>
         </div>
       </div>
@@ -654,18 +712,16 @@ function WorkspacePreview({ name }) {
 function SuccessScreen({ workspace }) {
   const navigate = useNavigate();
 
-  // Task 45: the real, persisted workspace._id now travels forward via
-  // router state -- this is what lets the repository sync step (Import
-  // Repository page) associate synced repositories with this exact
-  // workspace, instead of no workspace concept existing at all.
+  const handleContinue = () => {
+    navigate('/import-repository', {
+      state: { workspaceId: workspace._id, workspaceName: workspace.name },
+    });
+  };
+
   useEffect(() => {
-    const timer = window.setTimeout(() => {
-      navigate('/import-repository', {
-        state: { workspaceId: workspace._id, workspaceName: workspace.name },
-      });
-    }, 1600);
+    const timer = window.setTimeout(handleContinue, 800);
     return () => window.clearTimeout(timer);
-  }, [navigate, workspace]);
+  }, [workspace]);
 
   return (
     <div className="min-h-screen w-full bg-[#F5F6FA] flex items-center justify-center px-6 py-16">
@@ -673,22 +729,23 @@ function SuccessScreen({ workspace }) {
         <div
           role="status"
           aria-live="polite"
-          className="w-full max-w-[440px] bg-white border border-[#E2E8F0] rounded-2xl shadow-[0_8px_30px_rgba(15,23,42,0.08)] px-8 py-12 sm:px-[57px] sm:py-[57px] text-center"
+          className="w-full max-w-[460px] bg-white border border-[#E2E8F0] rounded-2xl shadow-[0_8px_30px_rgba(15,23,42,0.08)] px-8 py-10 text-center"
         >
-          <div className="w-16 h-16 rounded-2xl bg-emerald-50 flex items-center justify-center mx-auto mb-6">
-            <CheckCircle2 size={30} className="text-emerald-500" aria-hidden="true" />
+          <div className="w-16 h-16 rounded-2xl bg-emerald-50 text-emerald-600 flex items-center justify-center mx-auto mb-5 shadow-inner">
+            <CheckCircle2 size={32} />
           </div>
           <h1 className="text-xl font-bold text-slate-900 mb-2">Workspace Created Successfully</h1>
-          <p className="text-sm text-slate-500 leading-relaxed mb-2">
-            <span className="font-semibold text-slate-700">{workspace.name}</span> is ready to go.
-          </p>
           <p className="text-sm text-slate-500 leading-relaxed mb-6">
-            Next, you'll connect a repository for SEIS to analyze.
+            <span className="font-semibold text-slate-700">{workspace.name}</span> is ready. Moving to repository selection…
           </p>
-          <div className="flex items-center justify-center gap-2 text-slate-400 text-[13px]">
-            <Loader2 size={16} className="animate-spin" aria-hidden="true" />
-            Preparing repository import…
-          </div>
+          <button
+            type="button"
+            onClick={handleContinue}
+            className="w-full inline-flex items-center justify-center gap-2 h-11 px-6 rounded-xl bg-blue-600 hover:bg-blue-700 text-white text-[14px] font-semibold transition-colors cursor-pointer"
+          >
+            Continue to Repository Setup
+            <ArrowRight size={15} />
+          </button>
         </div>
       </FadeIn>
     </div>

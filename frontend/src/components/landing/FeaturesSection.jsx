@@ -3,12 +3,12 @@ import { GitPullRequest, Layers, BookOpen, History, Activity, Brain } from 'luci
 import FadeIn from '../common/FadeIn';
 
 const features = [
-  { icon: GitPullRequest, iconColor: '#475569', bg: '#F1F5F9', title: 'SOURCE CONTROL', body: 'Understand commits, branches, pull requests, issues, releases and contributors.' },
-  { icon: Layers, iconColor: '#2563EB', bg: '#EFF6FF', title: 'ARCHITECTURE', body: 'Explore modules, dependencies, APIs and relationships across the system.' },
-  { icon: BookOpen, iconColor: '#7C3AED', bg: '#F3E8FF', title: 'PROJECT UNDERSTANDING', body: 'Build a structured understanding of the repository and its components.' },
-  { icon: History, iconColor: '#10B981', bg: '#ECFDF5', title: 'SOFTWARE EVOLUTION', body: 'Understand how the project has changed over time.' },
-  { icon: Activity, iconColor: '#2563EB', bg: '#EFF6FF', title: 'ENGINEERING INSIGHTS', body: 'Surface important patterns, risks and areas requiring attention.' },
-  { icon: Brain, iconColor: '#FFFFFF', bg: 'linear-gradient(135deg, #2563EB, #7C3AED)', title: 'INTELLIGENT ASSISTANCE', body: 'Get contextual explanations and answers about the project.' },
+  { icon: GitPullRequest, iconColor: '#0071E3', bg: 'rgba(0, 113, 227, 0.1)', title: 'Source Control', body: 'Understand commits, branches, pull requests, issues, releases, and contributors with complete context.' },
+  { icon: Layers, iconColor: '#5856D6', bg: 'rgba(88, 86, 214, 0.1)', title: 'Architecture Mapping', body: 'Explore modules, dependencies, APIs, and hierarchical relationships across your entire codebase.' },
+  { icon: BookOpen, iconColor: '#AF52DE', bg: 'rgba(175, 82, 222, 0.1)', title: 'Codebase Understanding', body: 'Build a deep, structured understanding of repositories without reading thousands of lines manually.' },
+  { icon: History, iconColor: '#34C759', bg: 'rgba(52, 199, 89, 0.1)', title: 'Software Evolution', body: 'Trace historical churn hotspots, architectural drift, and high-frequency code modifications over time.' },
+  { icon: Activity, iconColor: '#FF9500', bg: 'rgba(255, 149, 0, 0.1)', title: 'Engineering Insights', body: 'Surface technical debt, anti-patterns, circular dependencies, and critical areas requiring attention.' },
+  { icon: Brain, iconColor: '#FFFFFF', bg: 'linear-gradient(135deg, #0071E3, #AF52DE)', title: 'Intelligent Copilot', body: 'Ask questions in natural language and receive grounded, accurate explanations with file references.' },
 ];
 
 export default function FeaturesSection() {
@@ -18,10 +18,12 @@ export default function FeaturesSection() {
         
         <FadeIn direction="up">
           <div className="section-header-centered mb-16 max-w-[800px] mx-auto text-center">
-            <div className="eyebrow mb-3">PLATFORM CAPABILITIES</div>
-            <h2 className="headline-lg">
-              Everything You Need to <br/>
-              <span className="text-transparent bg-clip-text bg-gradient-to-r from-blue-600 to-indigo-600">Understand a Software Project.</span>
+            <div className="eyebrow mb-3">CAPABILITIES</div>
+            <h2 className="headline-lg font-bold tracking-tight text-[#1D1D1F]">
+              Everything You Need to <br />
+              <span className="text-transparent bg-clip-text bg-gradient-to-r from-[#0071E3] via-[#5856D6] to-[#AF52DE]">
+                Master Any Repository.
+              </span>
             </h2>
           </div>
         </FadeIn>
@@ -30,21 +32,19 @@ export default function FeaturesSection() {
           {features.map((feat, i) => {
             const Icon = feat.icon;
             return (
-              <FadeIn key={feat.title} direction="up" delay={i * 100}>
-                <div className="group bg-white border border-slate-200 hover:border-indigo-200 rounded-2xl p-8 shadow-sm hover:shadow-xl hover:shadow-indigo-500/10 transition-all duration-300 hover:-translate-y-1 flex flex-col items-start h-full cursor-pointer relative overflow-hidden">
-                  {/* Subtle top gradient glow on hover */}
-                  <div className="absolute top-0 left-0 right-0 h-1 bg-gradient-to-r from-blue-500 to-indigo-500 opacity-0 group-hover:opacity-100 transition-opacity duration-300" />
-                  
+              <FadeIn key={feat.title} direction="up" delay={i * 70}>
+                <div className="apple-card p-7 rounded-[22px] flex flex-col items-start h-full cursor-pointer relative group">
                   <div
-                    className="w-14 h-14 rounded-xl flex items-center justify-center shadow-sm mb-6 transition-transform duration-300 group-hover:scale-110"
+                    className="w-12 h-12 rounded-2xl flex items-center justify-center mb-5 transition-transform duration-300 group-hover:scale-108"
                     style={{ background: feat.bg }}
                   >
-                    <Icon size={24} color={feat.iconColor} />
+                    <Icon size={22} color={feat.iconColor} />
                   </div>
-                  <h3 className="text-[14px] font-bold text-slate-900 tracking-wider uppercase mb-3">
+                  
+                  <h3 className="text-[17px] font-semibold text-[#1D1D1F] tracking-tight mb-2">
                     {feat.title}
                   </h3>
-                  <p className="text-[15px] text-slate-500 leading-relaxed m-0">
+                  <p className="text-[14px] text-[#86868B] leading-relaxed m-0">
                     {feat.body}
                   </p>
                 </div>

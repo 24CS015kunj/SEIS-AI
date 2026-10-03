@@ -218,6 +218,12 @@ export const syncRepositories = async (req, res, next) => {
             }
 
             resolvedWorkspaceId = workspace._id;
+        } else {
+            // Auto-assign user's most recent workspace if available so repositories are never orphaned
+            const defaultWorkspace = await Workspace.findOne({ ownerId: userId }).sort({ createdAt: -1 });
+            if (defaultWorkspace) {
+                resolvedWorkspaceId = defaultWorkspace._id;
+            }
         }
 
         // Fetch repositories from GitHub API
@@ -263,7 +269,7 @@ export const syncRepositories = async (req, res, next) => {
             const saved = await Repository.findOneAndUpdate(
                 { userId, githubRepoId: String(repo.id) },
                 mappedRepo,
-                { upsert: true, new: true, setDefaultsOnInsert: true }
+                { upsert: true, returnDocument: "after", setDefaultsOnInsert: true }
             );
 
             syncedRepositories.push(saved);
@@ -348,7 +354,7 @@ export const makeGetBranches = (deps = {}) => async (req, res, next) => {
             const savedBranch = await Branch.findOneAndUpdate(
                 { repositoryId: repository._id, name: branch.name },
                 mappedBranch,
-                { upsert: true, new: true, setDefaultsOnInsert: true }
+                { upsert: true, returnDocument: "after", setDefaultsOnInsert: true }
             );
 
             branches.push(savedBranch);
@@ -531,7 +537,7 @@ export const makeGetCommits = (deps = {}) => async (req, res, next) => {
             await Commit.findOneAndUpdate(
                 { repositoryId: repository._id, githubSha: item.sha },
                 mappedCommit,
-                { upsert: true, new: true, setDefaultsOnInsert: true }
+                { upsert: true, returnDocument: "after", setDefaultsOnInsert: true }
             );
         }
 
@@ -636,7 +642,7 @@ export const getFiles = async (req, res, next) => {
                 const saved = await File.findOneAndUpdate(
                     { repositoryId: repository._id, branchId: branch._id, path: item.path },
                     mappedFile,
-                    { upsert: true, new: true, setDefaultsOnInsert: true }
+                    { upsert: true, returnDocument: "after", setDefaultsOnInsert: true }
                 );
 
                 savedFiles.push(saved);
@@ -768,7 +774,7 @@ async function resolveOrSyncDefaultBranch({ repository, accessToken, getReposito
                     latestCommitSha: b.commit?.sha || null,
                     lastFetchedAt: now,
                 },
-                { upsert: true, new: true, setDefaultsOnInsert: true }
+                { upsert: true, returnDocument: "after", setDefaultsOnInsert: true }
             );
             branches.push(saved);
         }
@@ -887,7 +893,7 @@ export const makeGetDashboard = (deps = {}) => async (req, res, next) => {
                             language: fileType === "file" ? detectLanguage(item.path) : null,
                             lastFetchedAt: now,
                         },
-                        { upsert: true, new: true, setDefaultsOnInsert: true }
+                        { upsert: true, returnDocument: "after", setDefaultsOnInsert: true }
                     );
                     files.push(saved);
                 }
@@ -1569,6 +1575,7 @@ export const makeChatWithRepository = (deps = {}) => async (req, res, next) => {
                     : 502;
             return res.status(statusCode).json({
                 success: false,
+                code: result.errorCode || "AI_CHAT_ERROR",
                 message: result.reason || "The AI service could not answer this question.",
             });
         }
@@ -1635,10 +1642,6 @@ export const streamChatWithRepository = async (req, res, next) => {
     }
 };
 
-// ---------------------------------------------------------------------------
-// Task 93: AI Code Explanation + Architecture Summary
-// ---------------------------------------------------------------------------
-
 /**
  * POST /api/github/repositories/:repositoryId/explain
  *
@@ -1646,10 +1649,6 @@ export const streamChatWithRepository = async (req, res, next) => {
  * same RAG/LLM pipeline as chat but with task-scoped prompt templates:
  *  - task_type='code_explanation' explains a specific file (file_path required)
  *  - task_type='architecture_summary' summarises the whole repository
- *
- * Validation mirrors chatWithRepository: repository ownership first, then
- * body shape, then FastAPI call.  File-path safety (no '../' traversal) is
- * checked here so a malformed path never reaches the AI service.
  */
 export const explainRepository = async (req, res, next) => {
     try {
@@ -1663,11 +1662,10 @@ export const explainRepository = async (req, res, next) => {
             });
         }
 
-        const allowedTaskTypes = ["code_explanation", "architecture_summary"];
-        if (!allowedTaskTypes.includes(taskType)) {
+        if (taskType !== "code_explanation" && taskType !== "architecture_summary") {
             return res.status(400).json({
                 success: false,
-                message: `task_type must be one of: ${allowedTaskTypes.join(", ")}.`,
+                message: "task_type must be 'code_explanation' or 'architecture_summary'.",
             });
         }
 
@@ -1675,21 +1673,17 @@ export const explainRepository = async (req, res, next) => {
             if (typeof filePath !== "string" || filePath.trim().length === 0) {
                 return res.status(400).json({
                     success: false,
-                    message: "file_path is required for task_type 'code_explanation'.",
+                    message: "file_path is required when task_type is 'code_explanation'.",
                 });
             }
-            // Path-traversal guard -- file_path must be repository-relative.
-            const normalised = filePath.replace(/\\/g, "/");
-            if (normalised.startsWith("/") || normalised.includes("..")) {
+            if (filePath.includes("..")) {
                 return res.status(400).json({
                     success: false,
-                    message: "file_path must be a relative path with no '..' components.",
+                    message: "Directory traversal sequences (..) are not allowed in file_path.",
                 });
             }
         }
 
-        // Verify repository ownership -- same pattern as every other repository-
-        // scoped action in this controller.
         const repository = await Repository.findOne({
             _id: repositoryId,
             userId: req.user._id,
@@ -1702,19 +1696,18 @@ export const explainRepository = async (req, res, next) => {
             });
         }
 
-        const fastapiPayload = { task_type: taskType };
-        if (filePath) fastapiPayload.file_path = filePath;
+        const payload = {
+            task_type: taskType,
+            ...(taskType === "code_explanation" ? { file_path: filePath.trim() } : {}),
+        };
 
-        const result = await submitExplanation(repositoryId, fastapiPayload);
+        const result = await submitExplanation(repositoryId, payload);
 
         if (!result.success) {
-            const statusCode =
-                result.statusCode && result.statusCode >= 400 && result.statusCode < 600
-                    ? result.statusCode
-                    : 502;
-            return res.status(statusCode).json({
+            return res.status(result.statusCode || 502).json({
                 success: false,
-                message: result.reason || "The AI service could not generate an explanation.",
+                errorCode: result.errorCode || "FASTAPI_EXPLAIN_ERROR",
+                message: result.reason || "FastAPI repository explanation service failed.",
             });
         }
 
@@ -2021,6 +2014,5 @@ export const makeGenerateEvolutionAnalysis = (deps = {}) => async (req, res, nex
 };
 
 export const generateEvolutionAnalysis = makeGenerateEvolutionAnalysis();
-
 
 

@@ -1,175 +1,617 @@
 @import "tailwindcss";
 
+@custom-variant dark (&:where(.dark, .dark *));
+
 @theme {
-  --font-sans: 'Inter', -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+  --font-sans: -apple-system, BlinkMacSystemFont, "SF Pro Display", "SF Pro Text", "SF Pro", "Helvetica Neue", Helvetica, Arial, sans-serif;
+  --font-mono: "SF Mono", SFMono-Regular, ui-monospace, Menlo, Monaco, Consolas, monospace;
 }
 
 @layer base {
   html {
     scroll-behavior: smooth;
+    background-color: #F5F5F7;
+    color-scheme: light;
   }
+
+  html.dark {
+    background-color: #0B0F19;
+    color-scheme: dark;
+  }
+
   body {
     font-family: var(--font-sans);
     -webkit-font-smoothing: antialiased;
     -moz-osx-font-smoothing: grayscale;
+    background-color: #F5F5F7;
+    color: #1D1D1F;
+    letter-spacing: -0.01em;
+    transition: background-color 0.2s ease, color 0.2s ease;
+  }
+
+  html.dark body {
+    background-color: #0B0F19;
+    color: #F8FAFC;
+  }
+
+  /* Sleek Apple-style translucent scrollbar */
+  ::-webkit-scrollbar {
+    width: 8px;
+    height: 8px;
+  }
+  ::-webkit-scrollbar-track {
+    background: transparent;
+  }
+  ::-webkit-scrollbar-thumb {
+    background: rgba(0, 0, 0, 0.18);
+    border-radius: 9999px;
+    border: 2px solid transparent;
+    background-clip: padding-box;
+  }
+  ::-webkit-scrollbar-thumb:hover {
+    background: rgba(0, 0, 0, 0.32);
+    border: 2px solid transparent;
+    background-clip: padding-box;
+  }
+
+  html.dark ::-webkit-scrollbar-thumb {
+    background: rgba(255, 255, 255, 0.2);
+  }
+  html.dark ::-webkit-scrollbar-thumb:hover {
+    background: rgba(255, 255, 255, 0.35);
   }
 }
 
 @layer components {
-  /* Typography Scale */
+  /* Apple Typography Hierarchy */
   .headline-xl {
     font-size: 3rem;
-    line-height: 1.1;
+    line-height: 1.08;
     font-weight: 800;
-    color: #0f172a;
-    letter-spacing: -0.025em;
+    color: #1D1D1F;
+    letter-spacing: -0.035em;
   }
   @media (min-width: 768px) {
     .headline-xl {
       font-size: 3.75rem;
+      letter-spacing: -0.04em;
     }
   }
 
   .headline-lg {
-    font-size: 2.25rem;
+    font-size: 2.125rem;
     line-height: 1.15;
-    font-weight: 800;
-    color: #0f172a;
-    letter-spacing: -0.025em;
+    font-weight: 700;
+    color: #1D1D1F;
+    letter-spacing: -0.03em;
   }
   @media (min-width: 768px) {
     .headline-lg {
-      font-size: 3rem;
+      font-size: 2.75rem;
     }
   }
 
   .body-lg {
-    font-size: 1.25rem;
-    line-height: 1.625;
-    color: #475569;
+    font-size: 1.1875rem;
+    line-height: 1.55;
+    color: #86868B;
+    letter-spacing: -0.015em;
   }
 
   .body-base {
     font-size: 1rem;
-    line-height: 1.625;
-    color: #475569;
+    line-height: 1.55;
+    color: #86868B;
+    letter-spacing: -0.01em;
   }
 
   .body-sm {
     font-size: 0.875rem;
-    line-height: 1.625;
-    color: #64748b;
+    line-height: 1.5;
+    color: #86868B;
   }
 
   .eyebrow {
-    font-size: 13px;
-    font-weight: 700;
-    color: #2563eb;
-    letter-spacing: 0.1em;
+    font-size: 12px;
+    font-weight: 600;
+    color: #0071E3;
+    letter-spacing: 0.06em;
     text-transform: uppercase;
-    margin-bottom: 1rem;
+    margin-bottom: 0.75rem;
   }
 
-  /* Layout Spacing */
+  /* Crisp Developer Translucent Header Surface - Light */
+  html:not(.dark) .liquid-glass,
+  html:not(.dark) .tech-glass {
+    background: rgba(255, 255, 255, 0.94) !important;
+    backdrop-filter: blur(12px) !important;
+    -webkit-backdrop-filter: blur(12px) !important;
+    border-bottom: 1px solid #E2E8F0 !important;
+    box-shadow: 0 1px 2px 0 rgba(0, 0, 0, 0.03) !important;
+  }
+
+  html:not(.dark) .liquid-glass-clear {
+    background: rgba(255, 255, 255, 0.9) !important;
+    backdrop-filter: blur(10px) !important;
+    -webkit-backdrop-filter: blur(10px) !important;
+    border: 1px solid #E2E8F0 !important;
+    box-shadow: 0 1px 3px 0 rgba(0, 0, 0, 0.04) !important;
+  }
+
+  /* Crisp Developer Translucent Header Surface - Dark */
+  html.dark .liquid-glass,
+  html.dark .tech-glass {
+    background: rgba(11, 15, 25, 0.90) !important;
+    backdrop-filter: blur(16px) !important;
+    -webkit-backdrop-filter: blur(16px) !important;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.08) !important;
+    box-shadow: 0 1px 4px 0 rgba(0, 0, 0, 0.5) !important;
+  }
+
+  html.dark .liquid-glass-clear {
+    background: rgba(17, 24, 39, 0.85) !important;
+    backdrop-filter: blur(14px) !important;
+    -webkit-backdrop-filter: blur(14px) !important;
+    border: 1px solid rgba(255, 255, 255, 0.08) !important;
+    box-shadow: 0 1px 4px 0 rgba(0, 0, 0, 0.4) !important;
+  }
+
+  /* Content Cards - Light */
+  html:not(.dark) .apple-card,
+  html:not(.dark) .dev-card {
+    background-color: #FFFFFF !important;
+    border-radius: 12px !important;
+    border: 1px solid #E2E8F0 !important;
+    box-shadow: 0 1px 3px 0 rgba(0, 0, 0, 0.03), 0 1px 2px -1px rgba(0, 0, 0, 0.02) !important;
+    transition: border-color 0.15s ease, box-shadow 0.15s ease !important;
+  }
+  html:not(.dark) .apple-card:hover,
+  html:not(.dark) .dev-card:hover {
+    border-color: #CBD5E1 !important;
+    box-shadow: 0 3px 8px -1px rgba(0, 0, 0, 0.05), 0 1px 3px -1px rgba(0, 0, 0, 0.03) !important;
+  }
+
+  /* Content Cards - Dark */
+  html.dark .apple-card,
+  html.dark .dev-card {
+    background-color: #111827 !important;
+    border-radius: 12px !important;
+    border: 1px solid rgba(255, 255, 255, 0.08) !important;
+    box-shadow: 0 4px 20px rgba(0, 0, 0, 0.3) !important;
+    transition: border-color 0.15s ease, box-shadow 0.15s ease !important;
+  }
+  html.dark .apple-card:hover,
+  html.dark .dev-card:hover {
+    border-color: rgba(255, 255, 255, 0.18) !important;
+    box-shadow: 0 8px 30px rgba(0, 0, 0, 0.45) !important;
+  }
+
+  /* Light Borders */
+  html:not(.dark) .border-slate-200,
+  html:not(.dark) .border-slate-100 {
+    border-color: #E2E8F0 !important;
+  }
+
+  /* Dark Borders */
+  html.dark .border-slate-200,
+  html.dark .border-slate-100,
+  html.dark .border-slate-300,
+  html.dark .border-\[\#E2E8F0\],
+  html.dark [class*="border-slate-100"],
+  html.dark [class*="border-slate-200"],
+  html.dark [class*="border-slate-300"],
+  html.dark [class*="border-black/"] {
+    border-color: #1E293B !important;
+  }
+
+  /* Light Text Overrides */
+  html:not(.dark) .text-slate-900 {
+    color: #1D1D1F !important;
+  }
+  html:not(.dark) .text-slate-800 {
+    color: #2D2D30 !important;
+  }
+  html:not(.dark) .text-slate-700 {
+    color: #48484A !important;
+  }
+  html:not(.dark) .text-slate-600,
+  html:not(.dark) .text-slate-500 {
+    color: #86868B !important;
+  }
+  html:not(.dark) .text-slate-400 {
+    color: #A1A1A6 !important;
+  }
+
+  /* Dark Text & Typography — Clear visual hierarchy with zero washed-out white text */
+  html.dark .headline-xl,
+  html.dark .headline-lg {
+    color: #F8FAFC !important;
+  }
+  html.dark .body-lg,
+  html.dark .body-base {
+    color: #CBD5E1 !important;
+  }
+  html.dark .body-sm {
+    color: #94A3B8 !important;
+  }
+
+  html.dark .text-slate-900,
+  html.dark .text-\[\#1D1D1F\],
+  html.dark .text-\[\#0F172A\] {
+    color: #F8FAFC !important; /* Bold primary values and titles */
+  }
+  html.dark .text-slate-800,
+  html.dark .text-\[\#2D2D30\] {
+    color: #E2E8F0 !important; /* Section labels and card subheadings */
+  }
+  html.dark .text-slate-700,
+  html.dark .text-\[\#48484A\] {
+    color: #CBD5E1 !important; /* Readable body and item labels */
+  }
+  html.dark .text-slate-600,
+  html.dark .text-slate-500,
+  html.dark .text-\[\#86868B\] {
+    color: #94A3B8 !important; /* Secondary info, metadata */
+  }
+  html.dark .text-slate-400,
+  html.dark .text-\[\#A1A1A6\] {
+    color: #64748B !important; /* Muted hints, captions */
+  }
+
+  /* Dark Blue/Emerald/Amber/Rose readable text in Dark Mode */
+  html.dark .text-blue-700,
+  html.dark .text-blue-800 {
+    color: #60A5FA !important;
+  }
+  html.dark .text-emerald-700,
+  html.dark .text-emerald-800 {
+    color: #34D399 !important;
+  }
+  html.dark .text-amber-700,
+  html.dark .text-amber-800 {
+    color: #FBBF24 !important;
+  }
+  html.dark .text-rose-700,
+  html.dark .text-rose-800 {
+    color: #FB7185 !important;
+  }
+
+  html.dark .hover\:text-slate-900:hover,
+  html.dark .hover\:text-slate-950:hover,
+  html.dark .hover\:text-\[\#1D1D1F\]:hover {
+    color: #FFFFFF !important;
+  }
+
+  /* Light Backgrounds */
+  html:not(.dark) .bg-\[\#F8FAFC\],
+  html:not(.dark) .bg-\[\#FAFAFA\],
+  html:not(.dark) .bg-\[\#F5F6FA\],
+  html:not(.dark) .bg-\[\#F5F5F7\] {
+    background-color: #F5F5F7 !important;
+  }
+
+  /* Dark Canvas & Card Backgrounds */
+  html.dark .bg-\[\#F8FAFC\],
+  html.dark .bg-\[\#FAFAFA\],
+  html.dark .bg-\[\#F5F6FA\],
+  html.dark .bg-\[\#F5F5F7\] {
+    background-color: #0B0F19 !important;
+  }
+
+  html.dark .bg-white {
+    background-color: #111827 !important;
+  }
+
+  html.dark .bg-\[\#FBFBFD\],
+  html.dark .bg-\[\#FBFBFD\]\/80 {
+    background-color: #0F172A !important;
+  }
+
+  /* Sub-cards and Inset Wells in Dark Mode — Dark recessed containers, NEVER white/milky */
+  html.dark [class*="bg-slate-50"] {
+    background-color: #0B0F19 !important;
+  }
+  html.dark [class*="bg-slate-100"] {
+    background-color: #161F30 !important;
+  }
+  html.dark [class*="bg-slate-200"] {
+    background-color: #1E293B !important;
+  }
+
+  /* Soft Tinted Pill Badges in Dark Mode */
+  html.dark [class*="bg-blue-50"] {
+    background-color: rgba(30, 58, 138, 0.28) !important;
+    border-color: rgba(59, 130, 246, 0.35) !important;
+  }
+  html.dark [class*="bg-emerald-50"] {
+    background-color: rgba(6, 78, 59, 0.28) !important;
+    border-color: rgba(16, 185, 129, 0.35) !important;
+  }
+  html.dark [class*="bg-amber-50"] {
+    background-color: rgba(120, 53, 15, 0.28) !important;
+    border-color: rgba(245, 158, 11, 0.35) !important;
+  }
+  html.dark [class*="bg-rose-50"] {
+    background-color: rgba(136, 19, 55, 0.28) !important;
+    border-color: rgba(244, 63, 94, 0.35) !important;
+  }
+
+  html.dark .hover\:bg-slate-50:hover,
+  html.dark [class*="hover:bg-slate-50"]:hover {
+    background-color: #1A2436 !important;
+  }
+  html.dark .hover\:bg-slate-100:hover,
+  html.dark [class*="hover:bg-slate-100"]:hover {
+    background-color: #1E293B !important;
+  }
+  html.dark .hover\:bg-slate-200:hover,
+  html.dark [class*="hover:bg-slate-200"]:hover {
+    background-color: #2D3E57 !important;
+  }
+  html.dark [class*="hover:bg-black"]:hover {
+    background-color: rgba(255, 255, 255, 0.08) !important;
+  }
+  html.dark [class*="bg-black/"] {
+    background-color: rgba(255, 255, 255, 0.06) !important;
+  }
+
+  /* SVG fills & strokes in Dark Mode */
+  html.dark .fill-slate-400 {
+    fill: #64748B !important;
+  }
+  html.dark .fill-slate-500 {
+    fill: #64748B !important;
+  }
+  html.dark .stroke-slate-200 {
+    stroke: #1E293B !important;
+  }
+  html.dark .stroke-slate-300 {
+    stroke: #334155 !important;
+  }
+
+  /* Apple Buttons (Pill & Soft Tinted) */
+  .btn-primary,
+  .btn-apple-primary {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 0.5rem;
+    height: 44px;
+    padding: 0 1.5rem;
+    background-color: #0071E3 !important;
+    color: #FFFFFF !important;
+    font-size: 0.95rem;
+    font-weight: 500;
+    border-radius: 9999px !important;
+    border: none !important;
+    cursor: pointer;
+    box-shadow: 0 2px 8px 0 rgba(0, 113, 227, 0.32);
+    transition: all 0.2s cubic-bezier(0.16, 1, 0.3, 1);
+  }
+  .btn-primary:hover,
+  .btn-apple-primary:hover {
+    background-color: #0077ED !important;
+    box-shadow: 0 4px 16px 0 rgba(0, 113, 227, 0.42);
+    transform: scale(1.02);
+  }
+  .btn-primary:active,
+  .btn-apple-primary:active {
+    transform: scale(0.97);
+    background-color: #0062C4 !important;
+  }
+
+  /* Primary Dev Button */
+  html:not(.dark) .btn-dev-primary {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 0.625rem;
+    background-color: #0F172A !important;
+    color: #FFFFFF !important;
+    font-size: 0.95rem;
+    font-weight: 600;
+    border-radius: 12px !important;
+    border: 1px solid #1E293B !important;
+    cursor: pointer;
+    box-shadow: 0 4px 14px rgba(15, 23, 42, 0.16);
+    transition: all 0.2s cubic-bezier(0.16, 1, 0.3, 1);
+  }
+  html:not(.dark) .btn-dev-primary:hover {
+    background-color: #1E293B !important;
+    box-shadow: 0 6px 20px rgba(15, 23, 42, 0.24);
+    transform: translateY(-1px);
+  }
+  html:not(.dark) .btn-dev-primary:active {
+    transform: translateY(0);
+    background-color: #0B1120 !important;
+  }
+
+  html.dark .btn-dev-primary {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 0.625rem;
+    background-color: #1E293B !important;
+    color: #FFFFFF !important;
+    font-size: 0.95rem;
+    font-weight: 600;
+    border-radius: 12px !important;
+    border: 1px solid #334155 !important;
+    cursor: pointer;
+    box-shadow: 0 4px 14px rgba(0, 0, 0, 0.35);
+    transition: all 0.2s cubic-bezier(0.16, 1, 0.3, 1);
+  }
+  html.dark .btn-dev-primary:hover {
+    background-color: #2D3E57 !important;
+    box-shadow: 0 6px 20px rgba(0, 0, 0, 0.45);
+    transform: translateY(-1px);
+  }
+  html.dark .btn-dev-primary:active {
+    transform: translateY(0);
+    background-color: #151F30 !important;
+  }
+
+  /* Secondary Button - Light */
+  html:not(.dark) .btn-secondary,
+  html:not(.dark) .btn-apple-secondary {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 0.5rem;
+    height: 44px;
+    padding: 0 1.5rem;
+    background-color: rgba(0, 0, 0, 0.05) !important;
+    color: #1D1D1F !important;
+    font-size: 0.95rem;
+    font-weight: 500;
+    border-radius: 9999px !important;
+    border: 1px solid rgba(0, 0, 0, 0.06) !important;
+    cursor: pointer;
+    transition: all 0.2s cubic-bezier(0.16, 1, 0.3, 1);
+  }
+  html:not(.dark) .btn-secondary:hover,
+  html:not(.dark) .btn-apple-secondary:hover {
+    background-color: rgba(0, 0, 0, 0.08) !important;
+    transform: scale(1.02);
+  }
+  html:not(.dark) .btn-secondary:active,
+  html:not(.dark) .btn-apple-secondary:active {
+    transform: scale(0.97);
+  }
+
+  /* Secondary Button - Dark */
+  html.dark .btn-secondary,
+  html.dark .btn-apple-secondary {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 0.5rem;
+    height: 44px;
+    padding: 0 1.5rem;
+    background-color: rgba(255, 255, 255, 0.08) !important;
+    color: #F8FAFC !important;
+    font-size: 0.95rem;
+    font-weight: 500;
+    border-radius: 9999px !important;
+    border: 1px solid rgba(255, 255, 255, 0.12) !important;
+    cursor: pointer;
+    transition: all 0.2s cubic-bezier(0.16, 1, 0.3, 1);
+  }
+  html.dark .btn-secondary:hover,
+  html.dark .btn-apple-secondary:hover {
+    background-color: rgba(255, 255, 255, 0.14) !important;
+    transform: scale(1.02);
+  }
+  html.dark .btn-secondary:active,
+  html.dark .btn-apple-secondary:active {
+    transform: scale(0.97);
+  }
+
+  /* Developer Segmented Control */
+  .apple-segmented {
+    display: inline-flex;
+    align-items: center;
+    background: #F1F5F9;
+    border: 1px solid #E2E8F0;
+    border-radius: 8px;
+    padding: 2px;
+    gap: 2px;
+  }
+  .apple-segmented-item {
+    padding: 4px 10px;
+    font-size: 12px;
+    font-weight: 500;
+    border-radius: 6px;
+    color: #64748B;
+    transition: all 0.15s ease;
+    cursor: pointer;
+  }
+  .apple-segmented-item.active {
+    background: #FFFFFF;
+    color: #0F172A;
+    box-shadow: 0 1px 2px 0 rgba(0, 0, 0, 0.05);
+    font-weight: 600;
+  }
+
+  html.dark .apple-segmented {
+    background: #1E293B;
+    border-color: #334155;
+  }
+  html.dark .apple-segmented-item {
+    color: #94A3B8;
+  }
+  html.dark .apple-segmented-item.active {
+    background: #0F172A;
+    color: #F8FAFC;
+    box-shadow: 0 1px 2px 0 rgba(0, 0, 0, 0.3);
+  }
+
+  /* macOS Window Chrome */
+  html:not(.dark) .app-window {
+    border-radius: 22px !important;
+    overflow: hidden;
+    border: 1px solid rgba(0, 0, 0, 0.08) !important;
+    box-shadow: 0 25px 60px -15px rgba(0, 0, 0, 0.16), 0 0 0 1px rgba(0, 0, 0, 0.02) !important;
+  }
+
+  html:not(.dark) .app-titlebar {
+    height: 2.8rem;
+    padding: 0 1.25rem;
+    border-bottom: 1px solid rgba(0, 0, 0, 0.06);
+    display: flex;
+    align-items: center;
+    background: rgba(255, 255, 255, 0.88);
+    backdrop-filter: blur(20px);
+  }
+
+  html.dark .app-window {
+    border-radius: 22px !important;
+    overflow: hidden;
+    background-color: #0F172A !important;
+    border: 1px solid rgba(255, 255, 255, 0.1) !important;
+    box-shadow: 0 25px 60px -15px rgba(0, 0, 0, 0.7), 0 0 0 1px rgba(255, 255, 255, 0.05) !important;
+  }
+
+  html.dark .app-titlebar {
+    height: 2.8rem;
+    padding: 0 1.25rem;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+    display: flex;
+    align-items: center;
+    background: rgba(17, 24, 39, 0.95);
+    backdrop-filter: blur(20px);
+  }
+
+  /* Form Elements Dark */
+  html.dark input:not([type="checkbox"]):not([type="radio"]):not([type="submit"]):not([type="button"]),
+  html.dark textarea,
+  html.dark select {
+    background-color: #111827 !important;
+    color: #F8FAFC !important;
+    border-color: #1E293B !important;
+  }
+  html.dark input::placeholder,
+  html.dark textarea::placeholder {
+    color: #64748B !important;
+  }
+
+  /* Section Spacing */
   .section-padding {
-    padding-top: 6rem;
-    padding-bottom: 6rem;
+    padding-top: 5.5rem;
+    padding-bottom: 5.5rem;
   }
   @media (min-width: 768px) {
     .section-padding {
-      padding-top: 8rem;
-      padding-bottom: 8rem;
-    }
-  }
-
-  .section-padding-sm {
-    padding-top: 4rem;
-    padding-bottom: 4rem;
-  }
-  @media (min-width: 768px) {
-    .section-padding-sm {
-      padding-top: 6rem;
-      padding-bottom: 6rem;
+      padding-top: 7rem;
+      padding-bottom: 7rem;
     }
   }
 
   .section-header-centered {
     text-align: center;
-    max-width: 800px;
+    max-width: 840px;
     margin-left: auto;
     margin-right: auto;
-    margin-bottom: 4rem;
-  }
-  @media (min-width: 768px) {
-    .section-header-centered {
-      margin-bottom: 6rem;
-    }
-  }
-
-  .section-header-layout {
-    max-width: 800px;
-    margin-bottom: 4rem;
-  }
-  @media (min-width: 768px) {
-    .section-header-layout {
-      margin-bottom: 6rem;
-    }
-  }
-
-  /* Interactive Components */
-  .btn-primary {
-    display: inline-flex;
-    align-items: center;
-    justify-content: center;
-    gap: 0.5rem;
-    height: 48px;
-    padding: 0 1.5rem;
-    background-color: #4f46e5;
-    color: #ffffff;
-    font-size: 1rem;
-    font-weight: 600;
-    border-radius: 0.5rem;
-    border: none;
-    cursor: pointer;
-    transition: background-color 0.2s;
-  }
-  .btn-primary:hover {
-    background-color: #4338ca;
-  }
-
-  .btn-secondary {
-    display: inline-flex;
-    align-items: center;
-    justify-content: center;
-    gap: 0.5rem;
-    height: 48px;
-    padding: 0 1.5rem;
-    background-color: #ffffff;
-    color: #0f172a;
-    font-size: 1rem;
-    font-weight: 600;
-    border-radius: 0.5rem;
-    border: 1.5px solid #e2e8f0;
-    cursor: pointer;
-    transition: background-color 0.2s;
-  }
-  .btn-secondary:hover {
-    background-color: #f8fafc;
-  }
-
-  /* Utility Animations */
-  .app-window {
-    border-radius: 0.75rem;
-    overflow: hidden;
-    border: 1px solid #e2e8f0;
-    box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.25);
-  }
-
-  .app-titlebar {
-    height: 2.5rem;
-    padding: 0 1rem;
-    border-bottom: 1px solid #e2e8f0;
-    display: flex;
-    align-items: center;
+    margin-bottom: 3.5rem;
   }
 }

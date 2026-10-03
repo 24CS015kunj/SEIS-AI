@@ -13,10 +13,13 @@ import EngineeringHotspotsSection from '../components/commandCenter/EngineeringH
 import TechStackStrip from '../components/commandCenter/TechStackStrip';
 import AiInsightsPanel from '../components/commandCenter/AiInsightsPanel';
 import ArchitectureSection from '../components/commandCenter/ArchitectureSection';
+import HotspotsSection from '../components/commandCenter/HotspotsSection';
 import ActivitySection from '../components/commandCenter/ActivitySection';
 import CopilotDrawer from '../components/commandCenter/CopilotDrawer';
 import FileCodePreviewDrawer from '../components/common/FileCodePreviewDrawer';
 import EngineeringBackground from '../components/common/EngineeringBackground';
+import EmptyRepositoryState from '../components/common/EmptyRepositoryState';
+import { useAutoResolveDefaultRepository } from '../hooks/useAutoResolveDefaultRepository';
 
 /** No repository-specific suggested-question generation exists anywhere in
  * this codebase (confirmed by inspection) -- this is a fixed set of
@@ -39,6 +42,7 @@ export default function CommandCenterPage() {
   // active repository actually changes, rather than auditing every
   // individual `useState` for staleness one at a time.
   const { repositoryId } = useParams();
+  useAutoResolveDefaultRepository(repositoryId, '/command-center');
   return <CommandCenterPageContent key={repositoryId ?? 'none'} repositoryId={repositoryId} />;
 }
 
@@ -255,7 +259,7 @@ function CommandCenterPageContent({ repositoryId }) {
   const showSkeleton = identity.status === 'loading' || dashboardStatus === 'loading';
 
   return (
-    <div className="relative min-h-screen w-full bg-[#F5F6FA] flex">
+    <div className="relative min-h-screen w-full bg-[#F5F5F7] text-[#1D1D1F] flex">
       <EngineeringBackground />
       <CommandCenterSidebar
         repository={headerRepo}
@@ -264,7 +268,7 @@ function CommandCenterPageContent({ repositoryId }) {
         onCloseMobile={() => setMobileNavOpen(false)}
       />
 
-      <div className="flex-1 min-w-0 flex flex-col">
+      <div className="flex-1 min-w-0 flex flex-col relative z-10">
         <CommandCenterHeader
           repository={headerRepo}
           repositoryId={repositoryId}
@@ -288,8 +292,8 @@ function CommandCenterPageContent({ repositoryId }) {
           ) : dashboardStatus === 'error' ? (
             <DashboardErrorState message={dashboardError} onRetry={() => setDashboardRetryNonce((n) => n + 1)} />
           ) : (
-            <div className="lg:grid lg:grid-cols-[1fr_300px] lg:gap-6 lg:items-start max-w-[1240px] mx-auto">
-              <div className="flex flex-col gap-6 min-w-0">
+            <div className="lg:grid lg:grid-cols-[1fr_320px] lg:gap-5 lg:items-start max-w-[1280px] mx-auto">
+              <div className="flex flex-col gap-5 min-w-0">
                 <section aria-label="Key engineering overview">
                   <OverviewMetrics metrics={metrics} />
                 </section>
@@ -363,12 +367,11 @@ function CommandCenterPageContent({ repositoryId }) {
 
 function NoRepositoryState() {
   return (
-    <div className="max-w-[560px] mx-auto mt-16 text-center">
-      <p className="text-[13.5px] text-slate-500 leading-relaxed">
-        Open this page from a real, synced repository (via Source Control or Import Repository) to see its
-        dashboard.
-      </p>
-    </div>
+    <EmptyRepositoryState
+      pageTitle="Command Center"
+      pageDescription="Select an active repository from your workspace or import a new one from GitHub to activate health scoring, engineering hotspots, and AI Copilot."
+      destinationPrefix="/command-center"
+    />
   );
 }
 

@@ -3,10 +3,10 @@ import { Eye, Flame, Info, Sparkles, X } from 'lucide-react';
 import { calculateHotspotAnalytics } from '../../utils/hotspotAnalytics';
 
 const RISK_TIERS = {
-  Critical: { label: 'Critical', bg: 'bg-rose-50', text: 'text-rose-700', border: 'border-rose-200', dot: 'bg-rose-500' },
-  High: { label: 'High', bg: 'bg-amber-50', text: 'text-amber-700', border: 'border-amber-200', dot: 'bg-amber-500' },
-  Moderate: { label: 'Moderate', bg: 'bg-blue-50', text: 'text-blue-700', border: 'border-blue-200', dot: 'bg-blue-500' },
-  Low: { label: 'Low', bg: 'bg-slate-100', text: 'text-slate-700', border: 'border-slate-200', dot: 'bg-slate-400' },
+  Critical: { label: 'Critical', bg: 'bg-rose-50 dark:bg-rose-950/60', text: 'text-rose-700 dark:text-rose-300', border: 'border-rose-200 dark:border-rose-800/80', dot: 'bg-rose-500' },
+  High: { label: 'High', bg: 'bg-amber-50 dark:bg-amber-950/60', text: 'text-amber-700 dark:text-amber-300', border: 'border-amber-200 dark:border-amber-800/80', dot: 'bg-amber-500' },
+  Moderate: { label: 'Moderate', bg: 'bg-blue-50 dark:bg-blue-950/60', text: 'text-blue-700 dark:text-blue-300', border: 'border-blue-200 dark:border-blue-800/80', dot: 'bg-blue-500' },
+  Low: { label: 'Low', bg: 'bg-slate-100 dark:bg-slate-800', text: 'text-slate-700 dark:text-slate-300', border: 'border-slate-200 dark:border-slate-700', dot: 'bg-slate-400' },
 };
 
 /**
@@ -35,18 +35,20 @@ export default function EngineeringHotspotsSection({
     <section
       role="region"
       aria-label="Engineering Hotspots and Risk Areas"
-      className="bg-white border border-slate-200 rounded-xl shadow-sm p-5 flex flex-col gap-5"
+      className="apple-card p-5 rounded-xl border border-slate-200/90 dark:border-slate-800 bg-white dark:bg-[#111827] shadow-xs flex flex-col gap-4"
     >
       {/* Header & Controls */}
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-slate-100 pb-4">
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-slate-100 dark:border-slate-800 pb-3">
         <div>
           <div className="flex items-center gap-2">
-            <Flame size={18} className="text-amber-600 shrink-0" aria-hidden="true" />
-            <h2 className="text-[15px] font-bold text-slate-900 m-0 leading-tight">
+            <span className="w-6 h-6 rounded-md bg-amber-50 dark:bg-amber-950/60 text-[#FF9500] dark:text-amber-400 flex items-center justify-center shrink-0">
+              <Flame size={14} aria-hidden="true" />
+            </span>
+            <h2 className="text-[13.5px] font-semibold text-slate-800 dark:text-slate-200 m-0 leading-tight">
               Engineering Hotspots &amp; Risk Areas
             </h2>
           </div>
-          <p className="text-[12px] text-slate-500 m-0 mt-0.5">
+          <p className="text-[12px] font-mono text-slate-500 dark:text-slate-400 m-0 mt-1">
             Areas receiving the most engineering activity and technical attention.
           </p>
         </div>
@@ -55,17 +57,17 @@ export default function EngineeringHotspotsSection({
         <div
           role="group"
           aria-label="Select hotspot aggregation mode"
-          className="inline-flex items-center rounded-lg bg-slate-100 p-1 self-start sm:self-auto shrink-0"
+          className="inline-flex items-center rounded-lg bg-slate-100 dark:bg-[#0B0F19] p-0.5 border border-slate-200/80 dark:border-slate-800 self-start sm:self-auto shrink-0"
         >
           <button
             type="button"
             id="hotspot-mode-files"
             onClick={() => setViewMode('files')}
             aria-pressed={viewMode === 'files'}
-            className={`px-3 py-1 text-[12px] font-semibold rounded-md transition-colors ${
+            className={`px-2.5 py-1 text-[11.5px] font-mono font-medium rounded-md transition-all duration-150 cursor-pointer ${
               viewMode === 'files'
-                ? 'bg-blue-600 text-white shadow-xs'
-                : 'text-slate-600 hover:text-slate-900 hover:bg-slate-200/60'
+                ? 'bg-white dark:bg-slate-800 text-slate-900 dark:text-white shadow-2xs font-semibold'
+                : 'text-slate-500 dark:text-slate-400 hover:text-slate-800 dark:hover:text-slate-200'
             }`}
           >
             Hotspot Files
@@ -75,10 +77,10 @@ export default function EngineeringHotspotsSection({
             id="hotspot-mode-directories"
             onClick={() => setViewMode('directories')}
             aria-pressed={viewMode === 'directories'}
-            className={`px-3 py-1 text-[12px] font-semibold rounded-md transition-colors ${
+            className={`px-2.5 py-1 text-[11.5px] font-mono font-medium rounded-md transition-all duration-150 cursor-pointer ${
               viewMode === 'directories'
-                ? 'bg-blue-600 text-white shadow-xs'
-                : 'text-slate-600 hover:text-slate-900 hover:bg-slate-200/60'
+                ? 'bg-white dark:bg-slate-800 text-slate-900 dark:text-white shadow-2xs font-semibold'
+                : 'text-slate-500 dark:text-slate-400 hover:text-slate-800 dark:hover:text-slate-200'
             }`}
           >
             Hotspot Directories
@@ -89,82 +91,82 @@ export default function EngineeringHotspotsSection({
       {loading ? (
         <HotspotSkeleton />
       ) : !analytics.available ? (
-        <div className="p-8 text-center bg-slate-50 border border-slate-200 rounded-xl">
-          <p className="text-[13px] text-slate-500 m-0 font-medium">{analytics.reason}</p>
+        <div className="p-8 text-center bg-slate-50 dark:bg-[#0B0F19] border border-slate-200 dark:border-slate-800 rounded-xl">
+          <p className="text-[13px] text-slate-500 dark:text-slate-400 m-0 font-medium">{analytics.reason}</p>
         </div>
       ) : (
         <div className="flex flex-col gap-5">
           {analytics.isLimitedHistory && (
-            <div className="flex items-center gap-2 px-3.5 py-2 rounded-lg bg-blue-50/70 border border-blue-100 text-[12px] text-blue-800">
-              <Info size={14} className="text-blue-600 shrink-0" aria-hidden="true" />
+            <div className="flex items-center gap-2 px-3.5 py-2 rounded-lg bg-blue-50/70 dark:bg-blue-950/40 border border-blue-100 dark:border-blue-900/60 text-[12px] text-blue-800 dark:text-blue-300">
+              <Info size={14} className="text-blue-600 dark:text-blue-400 shrink-0" aria-hidden="true" />
               <span>{analytics.historyBannerMessage}</span>
             </div>
           )}
 
           {/* 4 Summary Stat Cards */}
           <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
-            <div className="bg-slate-50/60 border border-slate-200/80 rounded-xl p-3 flex flex-col justify-between">
-              <span className="text-[10.5px] font-bold uppercase tracking-wider text-slate-400">
+            <div className="bg-slate-50/60 dark:bg-[#0B0F19] border border-slate-200/80 dark:border-slate-800 rounded-xl p-3 flex flex-col justify-between">
+              <span className="text-[10.5px] font-bold uppercase tracking-wider text-slate-400 dark:text-slate-500">
                 Hotspots Detected
               </span>
-              <span className="text-[20px] font-bold font-mono text-slate-900 mt-1">
+              <span className="text-[20px] font-bold font-mono text-slate-900 dark:text-white mt-1">
                 {analytics.summary.totalHotspotsDetected}
               </span>
             </div>
 
-            <div className="bg-slate-50/60 border border-slate-200/80 rounded-xl p-3 flex flex-col justify-between">
-              <span className="text-[10.5px] font-bold uppercase tracking-wider text-slate-400">
+            <div className="bg-slate-50/60 dark:bg-[#0B0F19] border border-slate-200/80 dark:border-slate-800 rounded-xl p-3 flex flex-col justify-between">
+              <span className="text-[10.5px] font-bold uppercase tracking-wider text-slate-400 dark:text-slate-500">
                 High-Risk Areas
               </span>
               <div className="flex items-baseline gap-2 mt-1">
                 <span
                   className={`text-[20px] font-bold font-mono ${
-                    analytics.summary.highRiskAreasCount > 0 ? 'text-amber-600' : 'text-slate-900'
+                    analytics.summary.highRiskAreasCount > 0 ? 'text-amber-600 dark:text-amber-400' : 'text-slate-900 dark:text-white'
                   }`}
                 >
                   {analytics.summary.highRiskAreasCount}
                 </span>
-                <span className="text-[11px] text-slate-400">critical/high</span>
+                <span className="text-[11px] text-slate-400 dark:text-slate-500">critical/high</span>
               </div>
             </div>
 
-            <div className="bg-slate-50/60 border border-slate-200/80 rounded-xl p-3 flex flex-col justify-between">
-              <span className="text-[10.5px] font-bold uppercase tracking-wider text-slate-400">
+            <div className="bg-slate-50/60 dark:bg-[#0B0F19] border border-slate-200/80 dark:border-slate-800 rounded-xl p-3 flex flex-col justify-between">
+              <span className="text-[10.5px] font-bold uppercase tracking-wider text-slate-400 dark:text-slate-500">
                 Most Changed File
               </span>
-              <span className="text-[12px] font-mono font-semibold text-slate-800 truncate mt-1" title={analytics.summary.mostChangedPath}>
+              <span className="text-[12px] font-mono font-semibold text-slate-800 dark:text-slate-200 truncate mt-1" title={analytics.summary.mostChangedPath}>
                 {analytics.summary.mostChangedPath}
               </span>
-              <span className="text-[11px] font-mono text-blue-600">
+              <span className="text-[11px] font-mono text-blue-600 dark:text-blue-400">
                 {analytics.summary.mostChangedCount} changes
               </span>
             </div>
 
-            <div className="bg-slate-50/60 border border-slate-200/80 rounded-xl p-3 flex flex-col justify-between">
-              <span className="text-[10.5px] font-bold uppercase tracking-wider text-slate-400">
+            <div className="bg-slate-50/60 dark:bg-[#0B0F19] border border-slate-200/80 dark:border-slate-800 rounded-xl p-3 flex flex-col justify-between">
+              <span className="text-[10.5px] font-bold uppercase tracking-wider text-slate-400 dark:text-slate-500">
                 Highest Churn File
               </span>
-              <span className="text-[12px] font-mono font-semibold text-slate-800 truncate mt-1" title={analytics.summary.highestChurnPath}>
+              <span className="text-[12px] font-mono font-semibold text-slate-800 dark:text-slate-200 truncate mt-1" title={analytics.summary.highestChurnPath}>
                 {analytics.summary.highestChurnPath}
               </span>
-              <span className="text-[11px] font-mono text-emerald-600">
+              <span className="text-[11px] font-mono text-emerald-600 dark:text-emerald-400">
                 {analytics.summary.highestChurnVal.toLocaleString()} lines churn
               </span>
             </div>
           </div>
 
           {/* Risk Distribution Progress Bar */}
-          <div className="bg-slate-50/50 border border-slate-200 rounded-xl p-3 flex flex-col gap-2">
+          <div className="bg-slate-50/50 dark:bg-[#0B0F19] border border-slate-200 dark:border-slate-800 rounded-xl p-3 flex flex-col gap-2">
             <div className="flex items-center justify-between text-[11.5px]">
-              <span className="font-semibold text-slate-700">Risk Level Distribution</span>
+              <span className="font-semibold text-slate-700 dark:text-slate-300">Risk Level Distribution</span>
               <div className="flex items-center gap-3 font-mono text-[11px]">
-                <span className="text-rose-700">{analytics.summary.riskCounts.Critical || 0} Critical</span>
-                <span className="text-amber-700">{analytics.summary.riskCounts.High || 0} High</span>
-                <span className="text-blue-700">{analytics.summary.riskCounts.Moderate || 0} Moderate</span>
-                <span className="text-slate-600">{analytics.summary.riskCounts.Low || 0} Low</span>
+                <span className="text-rose-700 dark:text-rose-400">{analytics.summary.riskCounts.Critical || 0} Critical</span>
+                <span className="text-amber-700 dark:text-amber-400">{analytics.summary.riskCounts.High || 0} High</span>
+                <span className="text-blue-700 dark:text-blue-400">{analytics.summary.riskCounts.Moderate || 0} Moderate</span>
+                <span className="text-slate-600 dark:text-slate-400">{analytics.summary.riskCounts.Low || 0} Low</span>
               </div>
             </div>
-            <div className="w-full h-2 bg-slate-200 rounded-full overflow-hidden flex">
+            <div className="w-full h-2 bg-slate-200 dark:bg-slate-800 rounded-full overflow-hidden flex">
               {analytics.summary.totalHotspotsDetected > 0 && (
                 <>
                   <div
@@ -199,7 +201,7 @@ export default function EngineeringHotspotsSection({
           {/* Top Hotspot List */}
           <div className="space-y-2">
             {activeHotspots.length === 0 ? (
-              <p className="text-[12.5px] text-slate-500 p-4 text-center">
+              <p className="text-[12.5px] text-slate-500 dark:text-slate-400 p-4 text-center">
                 No active {viewMode} detected in selected date range.
               </p>
             ) : (
@@ -208,7 +210,7 @@ export default function EngineeringHotspotsSection({
                 return (
                   <div
                     key={hotspot.path}
-                    className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 p-3 rounded-xl bg-white border border-slate-200/90 hover:border-blue-300 transition-all shadow-2xs"
+                    className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 p-3 rounded-xl bg-white dark:bg-slate-900 border border-slate-200/90 dark:border-slate-800 hover:border-blue-300 dark:hover:border-blue-700 transition-all shadow-2xs"
                   >
                     {/* Left: Risk Tier & Path */}
                     <div className="flex items-start sm:items-center gap-3 min-w-0">
@@ -220,10 +222,10 @@ export default function EngineeringHotspotsSection({
                       </span>
 
                       <div className="flex flex-col min-w-0">
-                        <span className="font-mono text-[12.5px] font-bold text-slate-900 truncate" title={hotspot.path}>
+                        <span className="font-mono text-[12.5px] font-bold text-slate-900 dark:text-white truncate" title={hotspot.path}>
                           {hotspot.path}
                         </span>
-                        <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-[11px] text-slate-500 font-mono mt-0.5">
+                        <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-[11px] text-slate-500 dark:text-slate-400 font-mono mt-0.5">
                           <span>{hotspot.changeCount} changes</span>
                           <span>·</span>
                           <span>{hotspot.churn.toLocaleString()} lines churn</span>
@@ -238,7 +240,7 @@ export default function EngineeringHotspotsSection({
                     {/* Right: AI Signals & Action Buttons */}
                     <div className="flex items-center gap-2 shrink-0 self-end sm:self-auto">
                       {hotspot.aiInsights.length > 0 && (
-                        <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md bg-purple-50 text-purple-700 border border-purple-200 text-[11px] font-semibold">
+                        <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md bg-purple-50 dark:bg-purple-950/60 text-purple-700 dark:text-purple-300 border border-purple-200 dark:border-purple-800/80 text-[11px] font-semibold">
                           <Sparkles size={12} aria-hidden="true" />
                           {hotspot.aiInsights.length} AI Signal{hotspot.aiInsights.length === 1 ? '' : 's'}
                         </span>
@@ -247,7 +249,7 @@ export default function EngineeringHotspotsSection({
                       <button
                         type="button"
                         onClick={() => setSelectedHotspot(hotspot)}
-                        className="px-2.5 py-1 text-[11.5px] font-semibold text-slate-700 bg-slate-100 hover:bg-slate-200 rounded-md transition-colors"
+                        className="px-2.5 py-1 text-[11.5px] font-semibold text-slate-700 dark:text-slate-300 bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 rounded-md transition-colors"
                       >
                         Why?
                       </button>
@@ -256,7 +258,7 @@ export default function EngineeringHotspotsSection({
                         <button
                           type="button"
                           onClick={() => onPreviewFile(hotspot.path)}
-                          className="inline-flex items-center gap-1 px-2.5 py-1 text-[11.5px] font-semibold text-blue-700 bg-blue-50 hover:bg-blue-100 rounded-md transition-colors"
+                          className="inline-flex items-center gap-1 px-2.5 py-1 text-[11.5px] font-semibold text-blue-700 dark:text-blue-300 bg-blue-50 dark:bg-blue-950/60 hover:bg-blue-100 dark:hover:bg-blue-900/60 rounded-md transition-colors"
                         >
                           <Eye size={13} aria-hidden="true" />
                           Inspect
@@ -291,19 +293,19 @@ function HotspotExplanationModal({ hotspot, onClose, onPreviewFile }) {
     <div
       role="dialog"
       aria-label={`Hotspot analysis for ${hotspot.path}`}
-      className="fixed inset-0 z-50 bg-slate-900/40 backdrop-blur-xs flex items-center justify-center p-4"
+      className="fixed inset-0 z-50 bg-slate-900/60 backdrop-blur-xs flex items-center justify-center p-4"
     >
-      <div className="bg-white border border-slate-200 rounded-2xl shadow-2xl max-w-xl w-full max-h-[90vh] overflow-y-auto p-6 flex flex-col gap-4">
+      <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl shadow-2xl max-w-xl w-full max-h-[90vh] overflow-y-auto p-6 flex flex-col gap-4">
         {/* Modal Header */}
-        <div className="flex items-start justify-between gap-3 border-b border-slate-100 pb-3">
+        <div className="flex items-start justify-between gap-3 border-b border-slate-100 dark:border-slate-800 pb-3">
           <div>
             <div className="flex items-center gap-2 mb-1">
               <span className={`px-2 py-0.5 rounded text-[11px] font-bold border ${tier.bg} ${tier.text} ${tier.border}`}>
                 {hotspot.riskLevel} Risk ({hotspot.scores.total} / 100)
               </span>
-              <span className="text-[12px] font-mono text-slate-400 uppercase">{hotspot.type}</span>
+              <span className="text-[12px] font-mono text-slate-400 dark:text-slate-500 uppercase">{hotspot.type}</span>
             </div>
-            <h3 className="text-[15px] font-bold font-mono text-slate-900 m-0 break-all">
+            <h3 className="text-[15px] font-bold font-mono text-slate-900 dark:text-white m-0 break-all">
               {hotspot.path}
             </h3>
           </div>
@@ -312,7 +314,7 @@ function HotspotExplanationModal({ hotspot, onClose, onPreviewFile }) {
             type="button"
             onClick={onClose}
             aria-label="Close hotspot analysis"
-            className="p-1 rounded-lg text-slate-400 hover:text-slate-700 hover:bg-slate-100 transition-colors"
+            className="p-1 rounded-lg text-slate-400 hover:text-slate-700 dark:hover:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors"
           >
             <X size={18} />
           </button>
@@ -320,70 +322,70 @@ function HotspotExplanationModal({ hotspot, onClose, onPreviewFile }) {
 
         {/* Scoring Factor Breakdown */}
         <div className="space-y-2">
-          <span className="text-[11px] font-bold uppercase tracking-wider text-slate-400">
+          <span className="text-[11px] font-bold uppercase tracking-wider text-slate-400 dark:text-slate-500">
             Hotspot Score Breakdown
           </span>
 
           <div className="grid grid-cols-1 gap-2 text-[12px]">
-            <div className="p-2.5 rounded-lg bg-slate-50 border border-slate-200/70 flex justify-between items-center">
+            <div className="p-2.5 rounded-lg bg-slate-50 dark:bg-[#0B0F19] border border-slate-200/70 dark:border-slate-800 flex justify-between items-center">
               <div>
-                <span className="font-semibold text-slate-800 block">Change Frequency</span>
-                <span className="text-slate-500 text-[11px]">{hotspot.changeCount} commits modifying this area</span>
+                <span className="font-semibold text-slate-800 dark:text-slate-200 block">Change Frequency</span>
+                <span className="text-slate-500 dark:text-slate-400 text-[11px]">{hotspot.changeCount} commits modifying this area</span>
               </div>
-              <span className="font-mono font-bold text-blue-700">+{hotspot.scores.freqScore} / 25 pts</span>
+              <span className="font-mono font-bold text-blue-700 dark:text-blue-400">+{hotspot.scores.freqScore} / 25 pts</span>
             </div>
 
-            <div className="p-2.5 rounded-lg bg-slate-50 border border-slate-200/70 flex justify-between items-center">
+            <div className="p-2.5 rounded-lg bg-slate-50 dark:bg-[#0B0F19] border border-slate-200/70 dark:border-slate-800 flex justify-between items-center">
               <div>
-                <span className="font-semibold text-slate-800 block">Code Churn</span>
-                <span className="text-slate-500 text-[11px]">{hotspot.churn.toLocaleString()} total additions &amp; deletions</span>
+                <span className="font-semibold text-slate-800 dark:text-slate-200 block">Code Churn</span>
+                <span className="text-slate-500 dark:text-slate-400 text-[11px]">{hotspot.churn.toLocaleString()} total additions &amp; deletions</span>
               </div>
-              <span className="font-mono font-bold text-blue-700">+{hotspot.scores.churnScore} / 25 pts</span>
+              <span className="font-mono font-bold text-blue-700 dark:text-blue-400">+{hotspot.scores.churnScore} / 25 pts</span>
             </div>
 
-            <div className="p-2.5 rounded-lg bg-slate-50 border border-slate-200/70 flex justify-between items-center">
+            <div className="p-2.5 rounded-lg bg-slate-50 dark:bg-[#0B0F19] border border-slate-200/70 dark:border-slate-800 flex justify-between items-center">
               <div>
-                <span className="font-semibold text-slate-800 block">Modification Recency</span>
-                <span className="text-slate-500 text-[11px]">
+                <span className="font-semibold text-slate-800 dark:text-slate-200 block">Modification Recency</span>
+                <span className="text-slate-500 dark:text-slate-400 text-[11px]">
                   Last changed {hotspot.daysSinceModified <= 0 ? 'today' : `${hotspot.daysSinceModified} days ago`}
                 </span>
               </div>
-              <span className="font-mono font-bold text-blue-700">+{hotspot.scores.recencyScore} / 25 pts</span>
+              <span className="font-mono font-bold text-blue-700 dark:text-blue-400">+{hotspot.scores.recencyScore} / 25 pts</span>
             </div>
 
-            <div className="p-2.5 rounded-lg bg-slate-50 border border-slate-200/70 flex justify-between items-center">
+            <div className="p-2.5 rounded-lg bg-slate-50 dark:bg-[#0B0F19] border border-slate-200/70 dark:border-slate-800 flex justify-between items-center">
               <div>
-                <span className="font-semibold text-slate-800 block">Contributor Concentration</span>
-                <span className="text-slate-500 text-[11px]">{hotspot.contributorsCount} distinct active contributors</span>
+                <span className="font-semibold text-slate-800 dark:text-slate-200 block">Contributor Concentration</span>
+                <span className="text-slate-500 dark:text-slate-400 text-[11px]">{hotspot.contributorsCount} distinct active contributors</span>
               </div>
-              <span className="font-mono font-bold text-blue-700">+{hotspot.scores.contribScore} / 15 pts</span>
+              <span className="font-mono font-bold text-blue-700 dark:text-blue-400">+{hotspot.scores.contribScore} / 15 pts</span>
             </div>
 
-            <div className="p-2.5 rounded-lg bg-slate-50 border border-slate-200/70 flex justify-between items-center">
+            <div className="p-2.5 rounded-lg bg-slate-50 dark:bg-[#0B0F19] border border-slate-200/70 dark:border-slate-800 flex justify-between items-center">
               <div>
-                <span className="font-semibold text-slate-800 block">AI Risk Signals</span>
-                <span className="text-slate-500 text-[11px]">
+                <span className="font-semibold text-slate-800 dark:text-slate-200 block">AI Risk Signals</span>
+                <span className="text-slate-500 dark:text-slate-400 text-[11px]">
                   {hotspot.aiInsights.length} matching AI analysis finding{hotspot.aiInsights.length === 1 ? '' : 's'}
                 </span>
               </div>
-              <span className="font-mono font-bold text-purple-700">+{hotspot.scores.aiScore} / 10 pts</span>
+              <span className="font-mono font-bold text-purple-700 dark:text-purple-400">+{hotspot.scores.aiScore} / 10 pts</span>
             </div>
           </div>
         </div>
 
         {/* Associated AI Insights */}
         {hotspot.aiInsights.length > 0 && (
-          <div className="space-y-2 border-t border-slate-100 pt-3">
-            <span className="text-[11px] font-bold uppercase tracking-wider text-slate-400">
+          <div className="space-y-2 border-t border-slate-100 dark:border-slate-800 pt-3">
+            <span className="text-[11px] font-bold uppercase tracking-wider text-slate-400 dark:text-slate-500">
               Matching AI Insights ({hotspot.aiInsights.length})
             </span>
             <div className="space-y-2">
               {hotspot.aiInsights.map((insight, idx) => (
-                <div key={idx} className="p-3 rounded-xl bg-purple-50/60 border border-purple-200/80 text-[12px]">
-                  <div className="font-bold text-purple-900 mb-1">
+                <div key={idx} className="p-3 rounded-xl bg-purple-50/60 dark:bg-purple-950/40 border border-purple-200/80 dark:border-purple-800/70 text-[12px]">
+                  <div className="font-bold text-purple-900 dark:text-purple-200 mb-1">
                     {insight.category ? insight.category.replace(/_/g, ' ').toUpperCase() : 'AI RISK FINDING'}
                   </div>
-                  <p className="text-slate-700 m-0 leading-relaxed">{insight.summary || insight.recommendation}</p>
+                  <p className="text-slate-700 dark:text-slate-300 m-0 leading-relaxed">{insight.summary || insight.recommendation}</p>
                 </div>
               ))}
             </div>
@@ -391,11 +393,11 @@ function HotspotExplanationModal({ hotspot, onClose, onPreviewFile }) {
         )}
 
         {/* Footer Actions */}
-        <div className="flex items-center justify-end gap-2 border-t border-slate-100 pt-3 mt-2">
+        <div className="flex items-center justify-end gap-2 border-t border-slate-100 dark:border-slate-800 pt-3 mt-2">
           <button
             type="button"
             onClick={onClose}
-            className="px-3.5 py-1.5 text-[12px] font-semibold text-slate-600 bg-slate-100 hover:bg-slate-200 rounded-lg transition-colors"
+            className="px-3.5 py-1.5 text-[12px] font-semibold text-slate-600 dark:text-slate-300 bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 rounded-lg transition-colors"
           >
             Close
           </button>
@@ -422,12 +424,12 @@ function HotspotSkeleton() {
   return (
     <div className="space-y-3 animate-pulse" aria-hidden="true">
       <div className="grid grid-cols-4 gap-3">
-        <div className="h-16 bg-slate-100 rounded-xl" />
-        <div className="h-16 bg-slate-100 rounded-xl" />
-        <div className="h-16 bg-slate-100 rounded-xl" />
-        <div className="h-16 bg-slate-100 rounded-xl" />
+        <div className="h-16 bg-slate-100 dark:bg-slate-800 rounded-xl" />
+        <div className="h-16 bg-slate-100 dark:bg-slate-800 rounded-xl" />
+        <div className="h-16 bg-slate-100 dark:bg-slate-800 rounded-xl" />
+        <div className="h-16 bg-slate-100 dark:bg-slate-800 rounded-xl" />
       </div>
-      <div className="h-24 bg-slate-100 rounded-xl" />
+      <div className="h-24 bg-slate-100 dark:bg-slate-800 rounded-xl" />
     </div>
   );
 }

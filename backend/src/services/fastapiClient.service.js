@@ -48,14 +48,30 @@ export const isRetryableError = (error) => {
 
 const classifyFailure = (error) => {
     if (error.response) {
+        const status = error.response.status;
+        const apiError = error.response.data?.error;
+        let errorCode = apiError?.code || null;
+        let reason = apiError?.message || error.response.data?.message || error.message;
+
+        if (status === 429) {
+            errorCode = errorCode || "RATE_LIMIT_EXCEEDED";
+            reason = reason || "AI model quota or rate limit exceeded. Please check your API credits or try again in a few moments.";
+        }
+
         return {
-            statusCode: error.response.status,
-            reason: error.response.data?.error?.message || error.response.data?.message || error.message,
-            errorCode: error.response.data?.error?.code || null,
+            statusCode: status,
+            reason,
+            errorCode,
         };
     }
-    if (error.code === "ECONNABORTED") {
-        return { statusCode: null, reason: `Request timed out: ${error.message}`, errorCode: "TIMEOUT" };
+    if (error.code === "ECONNABORTED" || error.message?.includes("timeout")) {
+        return { statusCode: 504, reason: "AI Service request timed out.", errorCode: "TIMEOUT" };
+    }
+    if (error.code === "ECONNREFUSED" || error.message?.includes("ECONNREFUSED")) {
+        return { statusCode: 503, reason: "AI Service is offline or unreachable (connection refused).", errorCode: "SERVICE_UNAVAILABLE" };
+    }
+    if (error.code === "ECONNRESET" || error.message?.includes("socket hang up")) {
+        return { statusCode: 503, reason: "AI Service connection was interrupted (socket hang up).", errorCode: "SERVICE_DISCONNECTED" };
     }
     return { statusCode: null, reason: `Network error: ${error.message}`, errorCode: "NETWORK_ERROR" };
 };
