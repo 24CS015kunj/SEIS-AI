@@ -91,3 +91,53 @@ class RepositoryAnalysisResponse(BaseModel):
     hotspots: list[HotspotMetrics]
     trends: StructuralTrends
     insights: list[EngineeringInsight]
+
+
+class SEISEvidenceDTO(BaseModel):
+    """Quantitative evidence backing a SEIS diagnosis issue."""
+
+    model_config = ConfigDict(frozen=True)
+
+    lines: int
+    fan_in: int
+    fan_out: int
+    churn_count: int
+    bug_fix_count: int
+    cyclomatic_complexity: int
+    violations: list[str] = Field(default_factory=list)
+    smells: list[str] = Field(default_factory=list)
+
+
+class SEISDiagnosisIssueDTO(BaseModel):
+    """A formal, structured SEIS diagnostic finding."""
+
+    model_config = ConfigDict(frozen=True)
+
+    issue_id: str
+    target_path: str
+    component_name: str
+    category: str
+    severity: str
+    confidence: float
+    problem: str
+    evidence: dict[str, Any]
+    evolution_evidence: str
+    recommendation: str
+    action_level: int
+
+
+class QualityGateResponse(BaseModel):
+    """Multi-dimensional software quality score and diagnostic findings."""
+
+    model_config = ConfigDict(frozen=True)
+
+    repository_id: str
+    generated_at: datetime
+    overall_score: float
+    architecture_score: float
+    maintainability_score: float
+    evolution_risk_score: float
+    decision: str
+    total_files_analyzed: int
+    total_issues_found: int
+    issues: list[SEISDiagnosisIssueDTO]

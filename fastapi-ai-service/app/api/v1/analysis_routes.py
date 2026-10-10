@@ -28,12 +28,19 @@ from fastapi import APIRouter, Depends, Path, status
 
 from app.api.deps import (
     get_evolution_analysis_service,
+    get_quality_intelligence_service,
     get_repository_analysis_service,
     verify_service_token,
 )
-from app.api.schemas.analysis_schema import RepositoryAnalysisRequest, RepositoryAnalysisResponse
+from app.api.schemas.analysis_schema import (
+    QualityGateResponse,
+    RepositoryAnalysisRequest,
+    RepositoryAnalysisResponse,
+    SEISDiagnosisIssueDTO,
+)
 from app.domain.enums import DocumentType
 from app.domain.models import CommitInfo, Document, EvolutionReport
+from app.core.intelligence.quality_intelligence_service import QualityIntelligenceService
 from app.services.evolution_analysis_service import EvolutionAnalysisService
 from app.services.repository_analysis_service import RepositoryAnalysisService
 
@@ -171,4 +178,76 @@ async def analyze_software_evolution(
     ]
 
     return await service.analyze_evolution(repository_id, commits, files=files)
+
+
+@router.post(
+    "/{repository_id}/quality-gate",
+    response_model=QualityGateResponse,
+    status_code=status.HTTP_200_OK,
+    summary="Evaluate software quality gate and produce structured SEIS diagnostic issues",
+)
+async def evaluate_quality_gate(
+    payload: RepositoryAnalysisRequest,
+    repository_id: str = Path(min_length=1, description="Repository identifier."),
+    _service_token: str = Depends(verify_service_token),
+    service: QualityIntelligenceService = Depends(get_quality_intelligence_service),
+) -> QualityGateResponse:
+    """Executes QualityIntelligenceService to calculate multi-dimensional scores
+    (Architecture, Maintainability, Evolution Risk) and generate structured #SEIS-xxx
+    diagnostic findings with evidence trails.
+    """
+    from datetime import UTC, datetime
+
+    commits = [
+        CommitInfo(
+            commit_sha=c.commit_sha,
+            message=c.message,
+            files_changed=c.files_changed,
+            author_name=c.author_name,
+            author_email=c.author_email,
+            committed_at=c.committed_at,
+        )
+        for c in payload.commits
+    ]
+    files = [
+        Document(
+            repository_id=repository_id,
+            commit_sha=payload.analyzed_commit_sha,
+            file_path=f.file_path,
+            content=f.content,
+            language=f.language or "unknown",
+            document_type=DocumentType.SOURCE_CODE,
+        )
+        for f in payload.files
+    ]
+
+    summary = service.analyze_repository_quality(repository_id, files=files, commits=commits)
+
+    return QualityGateResponse(
+        repository_id=repository_id,
+        generated_at=datetime.now(UTC),
+        overall_score=summary.overall_score,
+        architecture_score=summary.architecture_score,
+        maintainability_score=summary.maintainability_score,
+        evolution_risk_score=summary.evolution_risk_score,
+        decision=summary.decision,
+        total_files_analyzed=summary.total_files_analyzed,
+        total_issues_found=summary.total_issues_found,
+        issues=[
+            SEISDiagnosisIssueDTO(
+                issue_id=i.issue_id,
+                target_path=i.target_path,
+                component_name=i.component_name,
+                category=i.category,
+                severity=i.severity,
+                confidence=i.confidence,
+                problem=i.problem,
+                evidence=i.evidence,
+                evolution_evidence=i.evolution_evidence,
+                recommendation=i.recommendation,
+                action_level=i.action_level,
+            )
+            for i in summary.issues
+        ],
+    )
 

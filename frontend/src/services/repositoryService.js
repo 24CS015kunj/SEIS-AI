@@ -324,3 +324,14 @@ export async function generateEvolutionAnalysis(repositoryId) {
   return response.data;
 }
 
+/**
+ * Triggers SEIS Quality Gate & Evolution Diagnosis evaluation (Milestones 2 & 3).
+ *
+ * @param {string} repositoryId
+ * @returns {Promise<object>}
+ */
+export async function generateQualityGateEvaluation(repositoryId) {
+  const response = await apiClient.post(`/api/github/repositories/${repositoryId}/quality-gate`);
+  return response.data;
+}
+

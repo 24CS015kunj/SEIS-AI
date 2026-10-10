@@ -17,6 +17,7 @@ import {
     getDependencyGraph,
     analyzeCommitImpact,
     generateEvolutionAnalysis,
+    generateQualityGate,
 } from "../controllers/github.controller.js";
 import { protect } from "../middleware/auth.middleware.js";
 import { apiRateLimiter, aiHeavyRateLimiter } from "../middleware/rateLimiter.middleware.js";
@@ -64,6 +65,9 @@ router.post("/repositories/:repositoryId/analysis", aiHeavyRateLimiter, generate
 
 // Software Evolution & Code Churn Analytics (Task #9)
 router.post("/repositories/:repositoryId/evolution", aiHeavyRateLimiter, generateEvolutionAnalysis);
+
+// SEIS Quality Gate & Evolution Diagnosis Engine (Milestone 2 & 3)
+router.post("/repositories/:repositoryId/quality-gate", aiHeavyRateLimiter, generateQualityGate);
 
 // AI ingestion (Task 44) -- workspace_id is always sourced from the
 // repository's own persisted workspaceId, never from the request body.

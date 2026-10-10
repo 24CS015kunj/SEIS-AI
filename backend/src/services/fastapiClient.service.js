@@ -432,3 +432,60 @@ export const submitEvolutionAnalysis = async (repositoryId, payload, options = {
     }
 };
 
+/**
+ * Submits repository evidence to the SEIS Quality Gate & Evolution Diagnosis pipeline.
+ */
+export const submitQualityGateEvaluation = async (repositoryId, payload, options = {}) => {
+    const config = options.config || getFastapiConfig();
+    const httpClient = options.httpClient || axios;
+
+    if (!config.baseUrl) {
+        return {
+            success: false,
+            statusCode: null,
+            errorCode: "MISSING_CONFIG",
+            reason: "FASTAPI_BASE_URL is not configured.",
+        };
+    }
+
+    const url = `${config.baseUrl.replace(/\/+$/, "")}/api/v1/repositories/${encodeURIComponent(repositoryId)}/quality-gate`;
+    const headers = buildHeaders(config, options);
+
+    try {
+        const response = await httpClient.post(url, payload, {
+            headers,
+            timeout: config.timeoutMs || 15000,
+        });
+
+        const data = response.data || {};
+        return {
+            success: true,
+            repositoryId: data.repository_id || repositoryId,
+            generatedAt: data.generated_at,
+            overallScore: data.overall_score ?? 100,
+            architectureScore: data.architecture_score ?? 100,
+            maintainabilityScore: data.maintainability_score ?? 100,
+            evolutionRiskScore: data.evolution_risk_score ?? 100,
+            decision: data.decision || "PASS",
+            totalFilesAnalyzed: data.total_files_analyzed ?? 0,
+            totalIssuesFound: data.total_issues_found ?? 0,
+            issues: (data.issues || []).map((i) => ({
+                issueId: i.issue_id,
+                targetPath: i.target_path,
+                componentName: i.component_name,
+                category: i.category,
+                severity: i.severity,
+                confidence: i.confidence,
+                problem: i.problem,
+                evidence: i.evidence,
+                evolutionEvidence: i.evolution_evidence,
+                recommendation: i.recommendation,
+                actionLevel: i.action_level,
+            })),
+        };
+    } catch (error) {
+        const { statusCode, reason, errorCode } = classifyFailure(error);
+        return { success: false, statusCode, errorCode, reason };
+    }
+};
+

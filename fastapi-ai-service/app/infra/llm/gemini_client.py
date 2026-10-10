@@ -219,12 +219,18 @@ class NemotronGateway:
     def _get_client(self) -> httpx.AsyncClient:
         if self._client is None:
             api_key = self._settings.nvidia_chat_api_key.get_secret_value()
+            base_url = (self._settings.nvidia_generation_base_url or "").lower()
+            is_local = any(k in base_url for k in ("localhost", "127.0.0.1", "host.docker.internal", "11434", "1234", "8080"))
+
             if not api_key:
-                raise LLMError(
-                    "NVIDIA_CHAT_API_KEY is not configured -- cannot call the NVIDIA "
-                    "hosted Generation API.",
-                    details={"model": self._settings.nemotron_model_name},
-                )
+                if is_local:
+                    api_key = "ollama-local"
+                else:
+                    raise LLMError(
+                        "NVIDIA_CHAT_API_KEY is not configured -- cannot call the hosted Generation API. "
+                        "For local models (Ollama, vLLM), set NVIDIA_GENERATION_BASE_URL=http://localhost:11434/v1.",
+                        details={"model": self._settings.nemotron_model_name},
+                    )
             self._client = httpx.AsyncClient(
                 base_url=self._settings.nvidia_generation_base_url,
                 timeout=self._settings.nemotron_timeout_ms / 1000,

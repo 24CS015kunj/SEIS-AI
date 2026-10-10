@@ -7,6 +7,7 @@ import {
   getRepositoryFiles,
   getRepositoryAnalysis,
   generateEvolutionAnalysis,
+  generateQualityGateEvaluation,
 } from '../services/repositoryService';
 import { useRepositoryIdentity } from '../hooks/useRepositoryIdentity';
 import { useRepositoryHeader } from '../hooks/useRepositoryHeader';
@@ -16,6 +17,7 @@ import CopilotDrawer from '../components/commandCenter/CopilotDrawer';
 import FileCodePreviewDrawer from '../components/common/FileCodePreviewDrawer';
 import EngineeringBackground from '../components/common/EngineeringBackground';
 import EmptyRepositoryState from '../components/common/EmptyRepositoryState';
+import QualityGateSection from '../components/quality/QualityGateSection';
 import { useAutoResolveDefaultRepository } from '../hooks/useAutoResolveDefaultRepository';
 
 const SUGGESTED_QUESTIONS = [
@@ -160,13 +162,45 @@ function SoftwareEvolutionPageContent({ repositoryId }) {
   const [evolutionGenerating, setEvolutionGenerating] = useState(false);
   const [evolutionError, setEvolutionError] = useState(null);
 
+  const [qualityData, setQualityData] = useState(null);
+  const [qualityLoading, setQualityLoading] = useState(false);
+
+  const handleEvaluateQualityGate = async () => {
+    if (!repositoryId || qualityLoading) return;
+    setQualityLoading(true);
+    try {
+      const res = await generateQualityGateEvaluation(repositoryId);
+      if (res.success) {
+        setQualityData({
+          overallScore: res.overallScore,
+          architectureScore: res.architectureScore,
+          maintainabilityScore: res.maintainabilityScore,
+          evolutionRiskScore: res.evolutionRiskScore,
+          decision: res.decision,
+          totalFilesAnalyzed: res.totalFilesAnalyzed,
+          totalIssuesFound: res.totalIssuesFound,
+          issues: res.issues || [],
+        });
+      }
+    } catch (err) {
+      console.warn('Quality gate evaluation fallback:', err.message);
+    } finally {
+      setQualityLoading(false);
+    }
+  };
+
   const handleRunEvolution = async () => {
     if (!repositoryId || evolutionGenerating) return;
     setEvolutionGenerating(true);
     setEvolutionError(null);
     try {
-      const res = await generateEvolutionAnalysis(repositoryId);
-      if (res.success) {
+      const [evoRes, qRes] = await Promise.allSettled([
+        generateEvolutionAnalysis(repositoryId),
+        generateQualityGateEvaluation(repositoryId),
+      ]);
+
+      if (evoRes.status === 'fulfilled' && evoRes.value?.success) {
+        const res = evoRes.value;
         setAnalysisData({
           generatedAt: res.generatedAt || new Date().toISOString(),
           hotspots: res.hotspots || [],
@@ -176,6 +210,20 @@ function SoftwareEvolutionPageContent({ repositoryId }) {
         });
         setAnalysisStale(false);
         setAnalysisStatus('ready');
+      }
+
+      if (qRes.status === 'fulfilled' && qRes.value?.success) {
+        const qData = qRes.value;
+        setQualityData({
+          overallScore: qData.overallScore,
+          architectureScore: qData.architectureScore,
+          maintainabilityScore: qData.maintainabilityScore,
+          evolutionRiskScore: qData.evolutionRiskScore,
+          decision: qData.decision,
+          totalFilesAnalyzed: qData.totalFilesAnalyzed,
+          totalIssuesFound: qData.totalIssuesFound,
+          issues: qData.issues || [],
+        });
       }
     } catch (err) {
       setEvolutionError(err.response?.data?.message || 'Failed to generate software evolution analytics.');
@@ -406,6 +454,13 @@ function SoftwareEvolutionPageContent({ repositoryId }) {
                 error={commitsError}
                 activity={activity}
                 onRetry={() => setCommitsRetryNonce((n) => n + 1)}
+              />
+
+              <QualityGateSection
+                qualityData={qualityData}
+                loading={qualityLoading}
+                onEvaluate={handleEvaluateQualityGate}
+                onSelectFile={(filePath) => setPreviewFilePath(filePath)}
               />
 
               <div className="lg:grid lg:grid-cols-2 lg:gap-6 lg:items-start">

@@ -349,6 +349,13 @@ def get_repository_analysis_service() -> RepositoryAnalysisService:
     )
 
 
+def get_quality_intelligence_service() -> QualityIntelligenceService:
+    """Dependency provider for QualityIntelligenceService (SEIS Quality Gate & Diagnosis)."""
+    from app.core.intelligence.quality_intelligence_service import QualityIntelligenceService
+
+    return QualityIntelligenceService()
+
+
 def get_evolution_analysis_service(
     settings: Settings = Depends(get_settings_dep),
     cache_client: RedisClient = Depends(get_cache_client),

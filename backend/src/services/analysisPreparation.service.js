@@ -397,3 +397,81 @@ export async function prepareAndSubmitEvolutionAnalysis({
     };
 }
 
+/**
+ * SEIS Quality Gate & Evolution Diagnosis evidence preparation and FastAPI submission.
+ */
+export async function prepareAndSubmitQualityGate({
+    repository,
+    branch,
+    accessToken,
+    githubService = githubServiceReal,
+    fastapiClient = fastapiClientReal,
+    config = getFastapiConfig(),
+    fetchConcurrency = DEFAULT_FETCH_CONCURRENCY,
+    correlationId = null,
+} = {}) {
+    const commitDocs = await ensureCommitsSynced({ repository, branch, accessToken, githubService });
+    if (commitDocs.length === 0) {
+        return {
+            blocked: true,
+            blockedReason: "No commit history is available to analyze yet.",
+        };
+    }
+
+    const sortedCommits = [...commitDocs]
+        .sort((a, b) => new Date(b.committedAt).getTime() - new Date(a.committedAt).getTime())
+        .slice(0, MAX_ANALYZED_COMMITS);
+
+    const analyzedCommits = await enrichCommitsWithFileChanges(sortedCommits, {
+        repository,
+        accessToken,
+        githubService,
+        fetchConcurrency,
+    });
+
+    const rankedPaths = rankFilesByModificationFrequency(analyzedCommits).slice(0, MAX_ANALYZED_FILES);
+
+    const currentFiles = rankedPaths.length
+        ? await File.find({ repositoryId: repository._id, branchId: branch._id, path: { $in: rankedPaths }, type: "file" })
+        : [];
+    const currentFileByPath = new Map(currentFiles.map((f) => [f.path, f]));
+    const eligiblePaths = rankedPaths.filter((path) => {
+        const file = currentFileByPath.get(path);
+        return Boolean(file) && file.size <= GITHUB_INLINE_CONTENT_LIMIT_BYTES;
+    });
+
+    const fetchResults = await mapWithConcurrency(eligiblePaths, fetchConcurrency, (path) =>
+        fetchOneFileContent(path, {
+            accessToken,
+            owner: repository.owner,
+            repo: repository.name,
+            ref: branch.name,
+            githubService,
+        })
+    );
+
+    const files = fetchResults
+        .filter((r) => r.content != null)
+        .map((r) => ({
+            file_path: r.path,
+            content: r.content,
+            language: currentFileByPath.get(r.path)?.language || null,
+        }));
+
+    const payload = {
+        analyzed_commit_sha: branch.latestCommitSha || branch.name,
+        commits: analyzedCommits.map(mapCommitForAnalysis),
+        files,
+    };
+
+    const result = await fastapiClient.submitQualityGateEvaluation(String(repository._id), payload, { config, correlationId });
+
+    return {
+        blocked: false,
+        analyzedCommitSha: branch.latestCommitSha || branch.name,
+        analyzedCommitCount: analyzedCommits.length,
+        analyzedFileCount: files.length,
+        result,
+    };
+}
+

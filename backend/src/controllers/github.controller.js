@@ -9,7 +9,7 @@ import Analysis from "../models/analyses.model.js";
 import * as githubService from "../services/github.service.js";
 import * as emailService from "../services/email.service.js";
 import { prepareAndSubmitIngestion } from "../services/ingestionPreparation.service.js";
-import { prepareAndSubmitAnalysis, prepareAndSubmitEvolutionAnalysis } from "../services/analysisPreparation.service.js";
+import { prepareAndSubmitAnalysis, prepareAndSubmitEvolutionAnalysis, prepareAndSubmitQualityGate } from "../services/analysisPreparation.service.js";
 import { submitChatMessage, streamChatMessage, submitCommitImpactAnalysis } from "../services/fastapiClient.service.js";
 import { submitExplanation } from "../services/fastapiClient.service.js";
 import { buildDependencyGraph } from "../services/dependencyAnalyzer.service.js";
@@ -2014,5 +2014,86 @@ export const makeGenerateEvolutionAnalysis = (deps = {}) => async (req, res, nex
 };
 
 export const generateEvolutionAnalysis = makeGenerateEvolutionAnalysis();
+
+/**
+ * SEIS Quality Gate & Evolution Diagnosis Controller.
+ * POST /api/github/repositories/:repositoryId/quality-gate
+ */
+export const makeGenerateQualityGate = (deps = {}) => async (req, res, next) => {
+    const { prepareAndSubmit = prepareAndSubmitQualityGate } = deps;
+
+    try {
+        const { repositoryId } = req.params;
+
+        if (!mongoose.Types.ObjectId.isValid(repositoryId)) {
+            return res.status(400).json({
+                success: false,
+                message: "Invalid repository ID format.",
+            });
+        }
+
+        const repository = await Repository.findOne({
+            _id: repositoryId,
+            userId: req.user._id,
+        });
+
+        if (!repository) {
+            return res.status(404).json({
+                success: false,
+                message: "Repository not found or access denied.",
+            });
+        }
+
+        const branch = await resolveOrSyncDefaultBranch({
+            repository,
+            accessToken: req.user.accessToken,
+            getRepositoryBranches: deps.getRepositoryBranches || githubService.getRepositoryBranches,
+        });
+
+        if (!branch) {
+            return res.status(409).json({
+                success: false,
+                errorCode: "NO_RESOLVABLE_BRANCH",
+                message: "No default or active branch could be resolved for this repository.",
+            });
+        }
+
+        const prepResult = await prepareAndSubmit({
+            repository,
+            branch,
+            accessToken: req.user.accessToken,
+            correlationId: req.correlationId,
+        });
+
+        if (prepResult.blocked) {
+            return res.status(422).json({
+                success: false,
+                errorCode: "QUALITY_GATE_BLOCKED",
+                message: prepResult.blockedReason,
+            });
+        }
+
+        if (!prepResult.result?.success) {
+            return res.status(prepResult.result?.statusCode || 502).json({
+                success: false,
+                errorCode: prepResult.result?.errorCode || "FASTAPI_ERROR",
+                message: prepResult.result?.reason || "FastAPI quality gate analysis failed",
+            });
+        }
+
+        return res.json({
+            success: true,
+            repositoryId: String(repository._id),
+            analyzedCommitSha: prepResult.analyzedCommitSha,
+            analyzedCommitCount: prepResult.analyzedCommitCount,
+            analyzedFileCount: prepResult.analyzedFileCount,
+            ...prepResult.result,
+        });
+    } catch (error) {
+        next(error);
+    }
+};
+
+export const generateQualityGate = makeGenerateQualityGate();
 
 
