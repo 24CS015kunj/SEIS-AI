@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import Navbar from '../components/layout/Navbar';
 import HeroSection from '../components/landing/HeroSection';
@@ -10,48 +10,51 @@ import FinalCtaSection from '../components/landing/FinalCtaSection';
 import Footer from '../components/layout/Footer';
 import DocsModal from '../components/common/DocsModal';
 
-export default function LandingPage() {
-  const navigate = useNavigate();
-  const [docsOpen, setDocsOpen] = useState(false);
-  const [mousePos, setMousePos] = useState({ x: -1000, y: -1000 });
-
-  // CTAs across the landing page all lead to the same place: the Login screen.
-  const goToLogin = () => navigate('/login');
+function GlobalCursorSkyGlow() {
+  const glowRef = useRef(null);
 
   useEffect(() => {
-    const handleMouseMove = (e) => {
-      setMousePos({ x: e.clientX, y: e.clientY });
+    const handlePointerMove = (e) => {
+      if (glowRef.current) {
+        glowRef.current.style.transform = `translate3d(${e.clientX}px, ${e.clientY}px, 0) translate(-50%, -50%)`;
+      }
     };
-    window.addEventListener('mousemove', handleMouseMove);
-    return () => window.removeEventListener('mousemove', handleMouseMove);
+    window.addEventListener('pointermove', handlePointerMove, { passive: true });
+    return () => window.removeEventListener('pointermove', handlePointerMove);
   }, []);
 
   return (
     <div
-      className="relative bg-[#F5F5F7] dark:bg-[#0B0F19] text-[#1D1D1F] dark:text-[#F8FAFC] min-h-screen w-full overflow-y-auto overflow-x-hidden scroll-smooth transition-colors duration-200"
+      className="pointer-events-none fixed inset-0 z-0 transition-opacity duration-300"
+      aria-hidden="true"
     >
-      {/* 1. Luminous Apple Ambient Aurora Wallpaper */}
-      <div className="absolute top-0 left-1/2 -translate-x-1/2 w-full max-w-[1340px] h-[640px] pointer-events-none overflow-hidden z-0">
-        <div className="absolute top-[-100px] left-1/2 -translate-x-1/2 w-[800px] sm:w-[1040px] h-[480px] bg-gradient-to-b from-[#0071E3]/18 via-[#AF52DE]/10 to-transparent rounded-full blur-[110px]" />
-        <div className="absolute top-[120px] left-1/6 w-[480px] h-[360px] bg-[#32ADE6]/12 rounded-full blur-[100px]" />
-        <div className="absolute top-[80px] right-1/6 w-[420px] h-[320px] bg-[#FF9500]/08 rounded-full blur-[100px]" />
-      </div>
-
-      {/* 2. Interactive Cursor Spotlight */}
       <div
-        className="fixed z-0 pointer-events-none transition-opacity duration-300 ease-out"
+        ref={glowRef}
+        className="absolute rounded-full transition-transform duration-75 ease-out filter blur-[70px]"
         style={{
-          width: '750px',
-          height: '750px',
           left: 0,
           top: 0,
-          transform: `translate(${mousePos.x - 375}px, ${mousePos.y - 375}px)`,
-          background: 'radial-gradient(circle, rgba(0,113,227,0.08) 0%, rgba(175,82,222,0.04) 40%, transparent 70%)',
-          filter: 'blur(60px)',
-          opacity: mousePos.x === -1000 ? 0 : 1,
+          width: '560px',
+          height: '560px',
+          transform: 'translate3d(-1000px, -1000px, 0) translate(-50%, -50%)',
+          background: 'radial-gradient(circle, rgba(56, 189, 248, 0.18) 0%, rgba(14, 165, 233, 0.06) 55%, transparent 80%)',
         }}
       />
+    </div>
+  );
+}
 
+export default function LandingPage() {
+  const navigate = useNavigate();
+  const [docsOpen, setDocsOpen] = useState(false);
+
+  // All landing page CTAs lead to GitHub OAuth login
+  const goToLogin = () => navigate('/login');
+
+  return (
+    <div className="landing-page relative min-h-screen w-full overflow-x-hidden bg-(--seis-canvas) text-(--seis-text-primary) transition-colors duration-200">
+      <GlobalCursorSkyGlow />
+      
       <div className="relative z-10">
         <Navbar onOpenAuth={goToLogin} onOpenDocs={() => setDocsOpen(true)} />
 

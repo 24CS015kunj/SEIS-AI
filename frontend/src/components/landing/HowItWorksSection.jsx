@@ -1,236 +1,269 @@
-import React, { useState } from 'react';
-import { Download, Search, Database, Compass, Lightbulb, Bot, Rocket, ArrowLeft, ArrowRight, Code } from 'lucide-react';
-import GithubIcon from '../common/GithubIcon';
+import React, { useState, useEffect } from 'react';
+import {
+  Braces,
+  GitBranch,
+  Database,
+  Network,
+  LineChart,
+  Bot,
+  Play,
+  Pause,
+} from 'lucide-react';
 import FadeIn from '../common/FadeIn';
+import InteractiveRobot from '../common/InteractiveRobot';
 
-const pipeline = [
+const stages = [
   {
-    id: 'github',
     step: '01',
-    label: 'GitHub',
-    title: 'Secure Repository Connection',
-    desc: 'Connect public or private repositories seamlessly with read-only OAuth scopes.',
-    technical: 'Authenticates securely, registers real-time webhook listeners, and initiates non-destructive cataloging.',
-    codeSnippet: 'git.connect({ scope: "read-only", events: ["push", "pull_request"] });',
-    icon: GithubIcon,
+    label: 'Repository Ingest',
+    title: 'OAuth & Manifest Ingestion',
+    desc: 'Secure read-only OAuth authentication. Streams repository tarballs into memory, stripping binaries and vendored dependencies.',
+    underHood: 'Express backend queries GitHub API for branch schemas, file trees, and commit metadata with strict isolation keys.',
+    icon: GitBranch,
+    activeBadge: 'connected'
   },
   {
-    id: 'import',
     step: '02',
-    label: 'Import',
-    title: 'Structure & Tree Extraction',
-    desc: 'Parses branch topologies, commit histories, and catalog directory hierarchies into indexed trees.',
-    technical: 'Extracts full commit matrices, author distributions, and file modification frequencies.',
-    codeSnippet: 'repo.extractHierarchy({ depth: "full", branches: ["main", "staging"] });',
-    icon: Download,
+    label: 'AST Parsing',
+    title: 'Abstract Syntax Tree Parsing',
+    desc: 'Parses source code into language-specific ASTs using Tree-Sitter grammars across JS, TS, Python, and Go.',
+    underHood: 'Extracts cross-file imports, exports, functions, and class definitions to preserve structural boundaries.',
+    icon: Braces,
+    activeBadge: 'parsed'
   },
   {
-    id: 'analysis',
     step: '03',
-    label: 'Analysis',
-    title: 'AST Parsing & Code Semantics',
-    desc: 'Breaks down raw source code into language-specific Abstract Syntax Trees (AST).',
-    technical: 'Resolves cross-file symbol references, internal export tables, and module dependencies.',
-    codeSnippet: 'ast.parseModule({ extractImports: true, resolveTypes: true });',
-    icon: Search,
-  },
-  {
-    id: 'knowledge',
-    step: '04',
-    label: 'Knowledge',
-    title: 'Vector Embeddings & Knowledge Graph',
-    desc: 'Transforms code semantics and documentation into high-dimensional vector embeddings.',
-    technical: 'Constructs a multi-relational knowledge graph linking functions, dependencies, and commit origins.',
-    codeSnippet: 'knowledgeGraph.build({ dimensions: 768, metric: "cosine" });',
+    label: 'Vector Indexing',
+    title: 'Semantic Chunks & Vector Store',
+    desc: 'Transforms code chunks and headings into high-dimensional embeddings stored in isolated Chroma collections.',
+    underHood: 'Content-hash embedding cache prevents re-indexing unmodified files across incremental repository pushes.',
     icon: Database,
+    activeBadge: 'indexed'
   },
   {
-    id: 'architecture',
+    step: '04',
+    label: 'Dependency Map',
+    title: 'Directed Import Graph & Cycle Detection',
+    desc: 'Constructs directed dependency graph models between modules, identifying circular loops and high-coupling risks.',
+    underHood: "Tarjan's strongly connected components algorithm identifies mutual circular import loops in milliseconds.",
+    icon: Network,
+    activeBadge: 'mapped'
+  },
+  {
     step: '05',
-    label: 'Architecture',
-    title: 'Dependency & Topology Mapping',
-    desc: 'Generates live architecture blueprints showing module couplings and package boundaries.',
-    technical: 'Detects circular dependencies, monolithic choke points, and architectural drift.',
-    codeSnippet: 'topology.analyze({ detectCycles: true, clusterModules: true });',
-    icon: Compass,
+    label: 'Evolution Engine',
+    title: 'Commit Churn & Hotspot Scoring',
+    desc: 'Combines commit change frequency with structural complexity to pinpoint high-risk engineering hotspots.',
+    underHood: 'Risk Formula: Hotspot Risk is approximately Churn Frequency x Cyclomatic Complexity. Flags files requiring architectural refactoring.',
+    icon: LineChart,
+    activeBadge: 'analyzed'
   },
   {
-    id: 'insights',
     step: '06',
-    label: 'Insights',
-    title: 'Evolution & Churn Analytics',
-    desc: 'Surfaces technical debt, high-frequency churn hotspots, and engineering risk metrics.',
-    technical: 'Computes cognitive complexity, churn-to-defect ratios, and file volatility over time.',
-    codeSnippet: 'metrics.evaluate({ health: 94, churnWindow: "90d", debtIndex: "A-" });',
-    icon: Lightbulb,
-  },
-  {
-    id: 'assistant',
-    step: '07',
-    label: 'Assistant',
-    title: 'Context-Aware AI Copilot',
-    desc: 'Answers natural language engineering queries with grounded references to the exact AST files.',
-    technical: 'Retrieves relevant AST chunks and topology graphs to produce hallucination-free architectural explanations.',
-    codeSnippet: 'copilot.ask("How does data flow from ingestion to search?", { grounded: true });',
+    label: 'Grounded RAG',
+    title: 'Zero-Hallucination Repository Copilot',
+    desc: 'Answers complex architectural questions supported by retrievable repository context and line-range citations.',
+    underHood: 'Strict grounding: if verifiable code evidence is missing, the AI communicates that rather than inventing answers.',
     icon: Bot,
-  },
-  {
-    id: 'productivity',
-    step: '08',
-    label: 'Productivity',
-    title: 'Accelerated Engineering Velocity',
-    desc: 'Enables teams to onboard in hours instead of weeks and execute large refactors with total confidence.',
-    technical: 'Cuts developer onboarding ramp by 70% and prevents architectural regressions across team pull requests.',
-    codeSnippet: 'team.accelerate({ onboardingHours: 2.5, confidence: "100%" });',
-    icon: Rocket,
-  },
+    activeBadge: 'grounded'
+  }
 ];
 
 export default function HowItWorksSection() {
-  const [activeIdx, setActiveIdx] = useState(2); // Default to 'Analysis' step
-  const activeStep = pipeline[activeIdx] || pipeline[0];
-  const ActiveIcon = activeStep.icon;
+  const [active, setActive] = useState(0);
+  const [isAutoPlay, setIsAutoPlay] = useState(false);
+  const [prefersReducedMotion, setPrefersReducedMotion] = useState(false);
 
-  const handlePrev = () => {
-    setActiveIdx((prev) => (prev > 0 ? prev - 1 : pipeline.length - 1));
-  };
+  useEffect(() => {
+    const mediaQuery = window.matchMedia('(prefers-reduced-motion: reduce)');
+    const syncMotionPreference = () => {
+      setPrefersReducedMotion(mediaQuery.matches);
+      if (mediaQuery.matches) setIsAutoPlay(false);
+    };
 
-  const handleNext = () => {
-    setActiveIdx((prev) => (prev < pipeline.length - 1 ? prev + 1 : 0));
+    syncMotionPreference();
+    mediaQuery.addEventListener?.('change', syncMotionPreference);
+    return () => mediaQuery.removeEventListener?.('change', syncMotionPreference);
+  }, []);
+
+  useEffect(() => {
+    if (!isAutoPlay) return;
+    const interval = setInterval(() => {
+      setActive((prev) => (prev + 1) % stages.length);
+    }, 4500);
+    return () => clearInterval(interval);
+  }, [isAutoPlay]);
+
+  const current = stages[active];
+  const StageIcon = current.icon;
+
+  const handleSelectStage = (idx) => {
+    setIsAutoPlay(false);
+    setActive(idx);
   };
 
   return (
-    <section id="how-it-works" className="section-padding bg-transparent">
-      <div className="max-w-[1280px] w-full mx-auto px-6 lg:px-8">
+    <section id="how-it-works" className="py-16 sm:py-24 border-b border-(--seis-border-subtle) bg-(--seis-canvas)">
+      <div className="mx-auto w-full max-w-310 px-4 sm:px-6 lg:px-8">
         
+        {/* Header */}
         <FadeIn direction="up">
-          <div className="section-header-centered mb-14 text-center max-w-[700px] mx-auto">
-            <div className="eyebrow mb-2.5">HOW IT WORKS</div>
-            <h2 className="headline-lg font-bold tracking-tight text-slate-900 mb-4">
-              The <span className="text-transparent bg-clip-text bg-gradient-to-r from-blue-600 to-indigo-600">Intelligence</span> Pipeline
+          <div className="mx-auto mb-12 max-w-180 text-center">
+            <div className="eyebrow">
+              <span className="mr-2 inline-block h-1.5 w-1.5 animate-pulse rounded-full bg-(--seis-cyan) align-middle" />
+              INGESTION &amp; INTELLIGENCE PIPELINE
+            </div>
+            <h2 className="text-[1.8rem] sm:text-[2.55rem] font-extrabold text-(--seis-text-primary) leading-tight m-0">
+              From Raw Git Tree to{' '}
+              <span className="text-(--seis-cyan)">Grounded Intelligence</span>
             </h2>
-            <p className="text-[15px] text-slate-500 leading-relaxed max-w-[560px] mx-auto m-0">
-              An automated, multi-stage processing pipeline that turns raw code into actionable engineering intelligence.
+            <p className="mx-auto mt-4 max-w-150 text-[17px] leading-relaxed text-(--seis-text-secondary) m-0">
+              An automated, multi-stage processing engine that transforms code repositories into searchable
+              knowledge graphs, churn forensics, and verifiable citations.
             </p>
           </div>
         </FadeIn>
 
-        {/* Pipeline Stepper Bar */}
-        <div className="relative max-w-[980px] mx-auto mb-10">
-          <div className="flex items-center justify-between gap-2 sm:gap-3 flex-wrap sm:flex-nowrap justify-center">
-            {pipeline.map((item, idx) => {
-              const Icon = item.icon;
-              const isActive = activeIdx === idx;
-              
-              return (
-                <div key={item.id} className="flex flex-col items-center gap-2">
+        {/* Pipeline Stage Bar */}
+        <FadeIn direction="up" delay={50}>
+          <div className="mb-8 rounded-lg border border-(--seis-border-subtle) bg-(--seis-surface-1) p-4 sm:p-5">
+            <div className="flex items-center justify-between mb-4 pb-3 border-b border-(--seis-border-subtle)">
+              <div className="flex items-center gap-2">
+                <span className="w-2 h-2 rounded-full bg-(--seis-cyan) animate-pulse" />
+                <span className="font-mono text-[11px] font-bold uppercase tracking-wider text-(--seis-text-secondary)">
+                  Pipeline Execution Stages
+                </span>
+              </div>
+              <button
+                type="button"
+                onClick={() => setIsAutoPlay(!isAutoPlay)}
+                disabled={prefersReducedMotion}
+                className="btn-tool-secondary h-7 px-2.5 text-[11px] font-mono flex items-center gap-1.5"
+                title={prefersReducedMotion ? 'Animation disabled by reduced motion preference' : isAutoPlay ? 'Pause auto walkthrough' : 'Resume auto walkthrough'}
+              >
+                {isAutoPlay && !prefersReducedMotion ? <Pause size={12} /> : <Play size={12} />}
+                <span>{prefersReducedMotion ? 'Reduced Motion' : isAutoPlay ? 'Pause' : 'Play'}</span>
+              </button>
+            </div>
+
+            {/* Stage Selector Grid */}
+            <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-2">
+              {stages.map((stg, idx) => {
+                const isActive = active === idx;
+                const isComplete = idx < active;
+                const Icon = stg.icon;
+                return (
                   <button
+                    key={stg.step}
                     type="button"
-                    onClick={() => setActiveIdx(idx)}
-                    aria-label={`Step ${item.step}: ${item.label}`}
-                    className={`w-13 h-13 sm:w-15 sm:h-15 rounded-2xl flex flex-col items-center justify-center cursor-pointer transition-all duration-300 relative border ${
+                    onClick={() => handleSelectStage(idx)}
+                    aria-current={isActive ? 'step' : undefined}
+                    className={`flex flex-col items-center justify-center p-3 rounded-md transition-all cursor-pointer text-center ${
                       isActive
-                        ? 'bg-blue-600 text-white border-blue-600 shadow-lg shadow-blue-500/25 ring-4 ring-blue-100 scale-105'
-                        : 'bg-white text-slate-600 border-slate-200/90 hover:border-blue-300 hover:text-blue-600 hover:shadow-xs hover:-translate-y-0.5'
+                        ? 'bg-(--seis-highlight) border border-(--seis-cyan)/40 shadow-sm font-semibold'
+                        : isComplete
+                          ? 'bg-(--seis-cyan-subtle) border border-(--seis-cyan)/20'
+                          : 'bg-(--seis-surface-2) hover:bg-(--seis-surface-hover) border border-(--seis-border-subtle)'
                     }`}
                   >
-                    <Icon size={20} strokeWidth={isActive ? 2 : 1.8} />
-                    <span className={`text-[10px] font-mono mt-1 ${isActive ? 'text-blue-100' : 'text-slate-400'}`}>
-                      {item.step}
+                    <div
+                      className={`w-8 h-8 rounded-md flex items-center justify-center mb-1.5 transition-colors ${
+                        isActive
+                          ? 'bg-(--seis-cyan) text-(--seis-text-on-accent) font-bold shadow-[0_0_12px_rgba(25,190,213,0.3)]'
+                          : isComplete
+                            ? 'bg-(--seis-cyan)/15 text-(--seis-cyan) border border-(--seis-cyan)/20'
+                            : 'bg-(--seis-surface-1) text-(--seis-text-secondary) border border-(--seis-border-subtle)'
+                      }`}
+                    >
+                      <Icon size={15} />
+                    </div>
+                    <span className={`font-mono text-[10px] font-bold ${isActive || isComplete ? 'text-(--seis-cyan)' : 'text-(--seis-text-muted)'}`}>
+                      {stg.step}
+                    </span>
+                    <span className="text-[13px] font-semibold text-(--seis-text-primary) truncate max-w-full">
+                      {stg.label}
                     </span>
                   </button>
+                );
+              })}
+            </div>
+            <div
+              className="relative mt-4 h-14.5 px-6"
+              role="progressbar"
+              aria-label="Pipeline walkthrough progress"
+              aria-valuemin={1}
+              aria-valuemax={stages.length}
+              aria-valuenow={active + 1}
+            >
+              <div className="absolute inset-x-6 top-1/2 h-1 -translate-y-1/2 rounded-full bg-(--seis-surface-inset)" />
+              <div className="absolute inset-x-6 top-1/2 h-1 -translate-y-1/2 overflow-hidden rounded-full">
+                <div
+                  className="h-full rounded-full bg-(--seis-cyan) shadow-[0_0_10px_var(--seis-cyan-glow)] transition-[width] duration-700 ease-out"
+                  style={{ width: `${(active / (stages.length - 1)) * 100}%` }}
+                />
+              </div>
+              <div className="absolute inset-x-6 top-1/2 flex -translate-y-1/2 justify-between" aria-hidden="true">
+                {stages.map((stage, index) => (
                   <span
-                    className={`text-[12px] font-medium transition-colors ${
-                      isActive ? 'text-blue-600 font-bold' : 'text-slate-600'
+                    key={stage.step}
+                    className={`h-2.5 w-2.5 rounded-full border-2 transition-all duration-300 ${
+                      index <= active
+                        ? 'border-(--seis-cyan) bg-(--seis-cyan) shadow-[0_0_8px_var(--seis-cyan-glow)]'
+                        : 'border-(--seis-border-strong) bg-(--seis-surface-1)'
                     }`}
-                  >
-                    {item.label}
-                  </span>
+                  />
+                ))}
+              </div>
+              <div
+                className="pointer-events-none absolute inset-x-6 top-1/2 z-10 -translate-y-1/2"
+                aria-hidden="true"
+              >
+                <div
+                  className={`absolute -translate-x-1/2 -translate-y-1/2 transition-[left] duration-700 ease-[cubic-bezier(0.22,1,0.36,1)] ${prefersReducedMotion ? 'transition-none!' : ''}`}
+                  style={{ left: `${(active / (stages.length - 1)) * 100}%` }}
+                >
+                  <InteractiveRobot size={42} interactive={false} showChatBubble={false} />
                 </div>
-              );
-            })}
+              </div>
+            </div>
           </div>
-        </div>
+        </FadeIn>
 
-        {/* Active Stage Inspector Card */}
-        <FadeIn key={activeStep.id} direction="up" delay={50}>
-          <div className="max-w-[920px] mx-auto bg-white border border-slate-200/90 rounded-2xl p-6 sm:p-8 shadow-sm">
-            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-5 border-b border-slate-100 mb-6">
-              <div className="flex items-center gap-3.5">
-                <div className="w-12 h-12 rounded-xl bg-blue-50 border border-blue-100 flex items-center justify-center text-blue-600 shrink-0">
-                  <ActiveIcon size={22} strokeWidth={2} />
+        {/* Active Stage Details */}
+        <FadeIn direction="up" delay={100}>
+          <div key={current.step} className="animate-[seis-panel-rise_0.45s_cubic-bezier(0.22,1,0.36,1)_both] rounded-lg border border-(--seis-border-strong) bg-(--seis-surface-1) shadow-sm overflow-hidden">
+            <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 p-4 border-b border-(--seis-border-subtle) bg-(--seis-surface-2)">
+              <div className="flex items-center gap-3">
+                <div className="w-10 h-10 rounded-md bg-(--seis-highlight) border border-(--seis-cyan)/30 text-(--seis-cyan) flex items-center justify-center shrink-0">
+                  <StageIcon size={20} />
                 </div>
                 <div>
-                  <div className="flex items-center gap-2">
-                    <span className="text-[11px] font-mono font-bold uppercase tracking-wider text-blue-600 bg-blue-50 px-2 py-0.5 rounded border border-blue-100">
-                      STAGE {activeStep.step} OF 08
-                    </span>
-                    <span className="text-[11.5px] font-semibold text-slate-400">·</span>
-                    <span className="text-[12px] text-slate-500 font-medium">Pipeline Stage</span>
+                  <div className="font-mono text-[10.5px] font-bold text-(--seis-cyan) tracking-wider">
+                    STAGE {current.step} OF 06 - {current.activeBadge.toUpperCase()}
                   </div>
-                  <h3 className="text-[18px] sm:text-[20px] font-bold text-slate-900 mt-1 m-0">
-                    {activeStep.title}
+                  <h3 className="text-lg sm:text-xl font-bold text-(--seis-text-primary) m-0">
+                    {current.title}
                   </h3>
                 </div>
               </div>
-
-              {/* Prev / Next controls */}
-              <div className="flex items-center gap-2 self-end sm:self-center">
-                <button
-                  type="button"
-                  onClick={handlePrev}
-                  className="h-8 px-3 rounded-lg border border-slate-200 bg-white hover:bg-slate-50 text-slate-600 hover:text-slate-900 text-xs font-semibold flex items-center gap-1 transition-colors cursor-pointer"
-                  title="Previous Step"
-                >
-                  <ArrowLeft size={13} />
-                  <span>Prev</span>
-                </button>
-                <button
-                  type="button"
-                  onClick={handleNext}
-                  className="h-8 px-3 rounded-lg border border-blue-600 bg-blue-600 hover:bg-blue-700 text-white text-xs font-semibold flex items-center gap-1 transition-colors cursor-pointer shadow-2xs"
-                  title="Next Step"
-                >
-                  <span>Next</span>
-                  <ArrowRight size={13} />
-                </button>
-              </div>
             </div>
 
-            {/* Stage Body */}
-            <div className="grid grid-cols-1 md:grid-cols-12 gap-6 items-center">
-              <div className="md:col-span-7 space-y-4">
-                <div>
-                  <h4 className="text-[12px] font-bold text-slate-400 uppercase tracking-wider mb-1.5">
-                    What happens here
-                  </h4>
-                  <p className="text-[14px] text-slate-700 leading-relaxed m-0 font-medium">
-                    {activeStep.desc}
-                  </p>
-                </div>
-
-                <div className="pt-3 border-t border-slate-100">
-                  <h4 className="text-[12px] font-bold text-slate-400 uppercase tracking-wider mb-1.5">
-                    Under the hood
-                  </h4>
-                  <p className="text-[13px] text-slate-500 leading-relaxed m-0">
-                    {activeStep.technical}
-                  </p>
-                </div>
+            <div className="p-5 sm:p-6">
+              <div>
+                <h4 className="font-mono text-[10px] font-bold uppercase tracking-wider text-(--seis-text-muted) m-0">
+                  What happens at this stage
+                </h4>
+                <p className="mt-2 text-[16px] leading-relaxed text-(--seis-text-primary) m-0">
+                  {current.desc}
+                </p>
               </div>
-
-              {/* Code Snippet Box */}
-              <div className="md:col-span-5 bg-slate-900 rounded-xl p-4 text-slate-100 border border-slate-800 shadow-inner">
-                <div className="flex items-center justify-between pb-2.5 mb-3 border-b border-slate-800 text-[11px] text-slate-400">
-                  <div className="flex items-center gap-1.5">
-                    <Code size={12} className="text-blue-400" />
-                    <span className="font-mono">pipeline_runner.ts</span>
-                  </div>
-                  <span className="font-mono text-emerald-400">active</span>
-                </div>
-                <pre className="text-[12px] font-mono text-blue-200 overflow-x-auto whitespace-pre-wrap leading-relaxed m-0">
-                  <code>{activeStep.codeSnippet}</code>
-                </pre>
+              <div className="mt-5 border-t border-(--seis-border-subtle) pt-4">
+                <h4 className="font-mono text-[10px] font-bold uppercase tracking-wider text-(--seis-text-muted) m-0">
+                  Under the hood
+                </h4>
+                <p className="mt-2 text-[16px] leading-relaxed text-(--seis-text-secondary) m-0">
+                  {current.underHood}
+                </p>
               </div>
             </div>
           </div>

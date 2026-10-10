@@ -9,17 +9,17 @@ import CommandCenterHeader from '../components/commandCenter/CommandCenterHeader
 import OverviewMetrics from '../components/commandCenter/OverviewMetrics';
 import RepositoryHealthCard from '../components/commandCenter/RepositoryHealthCard';
 import RepositoryActivitySection from '../components/commandCenter/RepositoryActivitySection';
-import EngineeringHotspotsSection from '../components/commandCenter/EngineeringHotspotsSection';
-import TechStackStrip from '../components/commandCenter/TechStackStrip';
-import AiInsightsPanel from '../components/commandCenter/AiInsightsPanel';
-import ArchitectureSection from '../components/commandCenter/ArchitectureSection';
-import HotspotsSection from '../components/commandCenter/HotspotsSection';
-import ActivitySection from '../components/commandCenter/ActivitySection';
+import NeedsAttentionSection from '../components/commandCenter/NeedsAttentionSection';
+import AiRecommendationCard from '../components/commandCenter/AiRecommendationCard';
+import TopRiskModules from '../components/commandCenter/TopRiskModules';
+import RepositorySnapshot from '../components/commandCenter/RepositorySnapshot';
 import CopilotDrawer from '../components/commandCenter/CopilotDrawer';
 import FileCodePreviewDrawer from '../components/common/FileCodePreviewDrawer';
-import EngineeringBackground from '../components/common/EngineeringBackground';
+import AuthenticatedAppShell from '../components/layout/AuthenticatedAppShell';
 import EmptyRepositoryState from '../components/common/EmptyRepositoryState';
 import { useAutoResolveDefaultRepository } from '../hooks/useAutoResolveDefaultRepository';
+import { useAuth } from '../context/AuthContext';
+import { Sparkles } from 'lucide-react';
 
 /** No repository-specific suggested-question generation exists anywhere in
  * this codebase (confirmed by inspection) -- this is a fixed set of
@@ -48,6 +48,7 @@ export default function CommandCenterPage() {
 
 function CommandCenterPageContent({ repositoryId }) {
   const identity = useRepositoryIdentity(repositoryId);
+  const { user } = useAuth();
 
   const [mobileNavOpen, setMobileNavOpen] = useState(false);
   const [copilotOpen, setCopilotOpen] = useState(false);
@@ -159,15 +160,7 @@ function CommandCenterPageContent({ repositoryId }) {
     ];
   }, [dashboardData]);
 
-  const activity = useMemo(() => {
-    const commits = dashboardData?.activity?.commits ?? [];
-    return commits.map((c) => ({
-      id: c.sha,
-      message: c.message,
-      actor: c.author,
-      timestamp: formatRelativeTime(c.committedAt) || 'Unknown time',
-    }));
-  }, [dashboardData]);
+  // Unused activity block removed
 
   // Task 69: real repository analysis (AI Insights), fetched and
   // generated independently of the Dashboard's own data -- a failed or
@@ -259,16 +252,17 @@ function CommandCenterPageContent({ repositoryId }) {
   const showSkeleton = identity.status === 'loading' || dashboardStatus === 'loading';
 
   return (
-    <div className="relative min-h-screen w-full bg-[#F5F5F7] text-[#1D1D1F] flex">
-      <EngineeringBackground />
-      <CommandCenterSidebar
-        repository={headerRepo}
-        repositoryId={identity.status === 'ready' ? repositoryId : null}
-        mobileOpen={mobileNavOpen}
-        onCloseMobile={() => setMobileNavOpen(false)}
-      />
-
-      <div className="flex-1 min-w-0 flex flex-col relative z-10">
+    <AuthenticatedAppShell
+      className="relative min-h-screen w-full bg-[#F8FAFC] dark:bg-[#0B0F19] text-slate-900 dark:text-slate-100 flex transition-colors duration-200"
+      sidebar={
+        <CommandCenterSidebar
+          repository={headerRepo}
+          repositoryId={repositoryId || null}
+          mobileOpen={mobileNavOpen}
+          onCloseMobile={() => setMobileNavOpen(false)}
+        />
+      }
+    >
         <CommandCenterHeader
           repository={headerRepo}
           repositoryId={repositoryId}
@@ -292,60 +286,84 @@ function CommandCenterPageContent({ repositoryId }) {
           ) : dashboardStatus === 'error' ? (
             <DashboardErrorState message={dashboardError} onRetry={() => setDashboardRetryNonce((n) => n + 1)} />
           ) : (
-            <div className="lg:grid lg:grid-cols-[1fr_320px] lg:gap-5 lg:items-start max-w-[1280px] mx-auto">
-              <div className="flex flex-col gap-5 min-w-0">
-                <section aria-label="Key engineering overview">
+            <div className="max-w-[1360px] mx-auto w-full">
+              {/* Welcome / AI Command Center */}
+              <section className="mb-8 mt-2 animate-in fade-in slide-in-from-bottom-4 duration-700">
+                <h2 className="text-[26px] font-extrabold tracking-tight text-slate-900 dark:text-white mb-2 leading-tight">Good morning, {user?.name || user?.githubUsername || 'Developer'} 👋</h2>
+                <p className="text-[14px] text-slate-600 dark:text-slate-400 mb-5">Here's the current state of your repository.</p>
+                <div className="relative group max-w-[800px]">
+                  <div className="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none">
+                    <Sparkles size={16} className="text-[#0071E3] dark:text-blue-400 group-focus-within:text-blue-600 transition-colors" />
+                  </div>
+                  <input 
+                    type="text" 
+                    placeholder="✨ Ask SEIS AI anything about this repository..." 
+                    className="block w-full pl-11 pr-4 py-3.5 rounded-2xl border border-slate-200 dark:border-slate-800 bg-white/70 dark:bg-[#111827]/70 backdrop-blur-xl text-slate-900 dark:text-white placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-[#0071E3]/20 focus:border-[#0071E3] dark:focus:border-blue-500 shadow-[0_2px_12px_rgba(0,0,0,0.03)] dark:shadow-[0_4px_16px_rgba(0,0,0,0.4)] transition-all text-[14.5px] cursor-pointer hover:bg-white dark:hover:bg-[#111827]"
+                    onClick={() => setCopilotOpen(true)}
+                    readOnly
+                  />
+                  <div className="absolute inset-y-0 right-0 pr-4 flex items-center pointer-events-none">
+                    <kbd className="hidden sm:inline-block text-[11px] font-mono font-medium text-slate-400 dark:text-slate-500 bg-slate-100 dark:bg-slate-800 px-2 py-0.5 rounded border border-slate-200 dark:border-slate-700">⌘K</kbd>
+                  </div>
+                </div>
+              </section>
+
+              {/* Top Row: Health & Metrics */}
+              <div className="grid grid-cols-1 lg:grid-cols-4 gap-5 mb-5 animate-in fade-in slide-in-from-bottom-6 duration-700 delay-100 fill-mode-both">
+                <div className="lg:col-span-1 min-w-0">
+                  <RepositoryHealthCard
+                    status={analysisStatus === 'idle' ? 'loading' : analysisStatus}
+                    analysis={analysisData}
+                  />
+                </div>
+                <div className="lg:col-span-3 min-w-0 flex flex-col justify-stretch">
                   <OverviewMetrics metrics={metrics} />
-                </section>
-                {/* Task 92: Repository Health Score — derived from existing AI
-                    Insights analysis data (Task 69/74). Only visible once an
-                    analysis has been generated; never blocks the rest of the
-                    dashboard from rendering (null returned during loading/none). */}
-                <RepositoryHealthCard
-                  status={analysisStatus === 'idle' ? 'loading' : analysisStatus}
-                  analysis={analysisData}
-                />
-                {/* Task 95: Repository Activity & Contribution Insights */}
-                <RepositoryActivitySection
-                  commits={branchCommits}
-                  dashboardData={dashboardData}
-                  loading={commitsStatus === 'loading' && branchCommits.length === 0}
-                />
-                {/* Repository Engineering Risk & Hotspots */}
-                <EngineeringHotspotsSection
-                  commits={branchCommits}
-                  dashboardData={dashboardData}
-                  analysisData={analysisData}
-                  loading={commitsStatus === 'loading' && branchCommits.length === 0}
-                  onPreviewFile={(path) => setPreviewFilePath(path)}
-                />
-                <AiInsightsPanel
-                  status={analysisStatus === 'idle' ? 'loading' : analysisStatus}
-                  analysis={analysisData}
-                  stale={analysisStale}
-                  generating={analysisGenerating}
-                  error={analysisError}
-                  onGenerate={handleGenerateAnalysis}
-                  onPreviewFile={(path) => setPreviewFilePath(path)}
-                />
-                <ArchitectureSection
-                  available={dashboardData?.architecture?.available ?? false}
-                  directories={dashboardData?.architecture?.directories ?? []}
-                  rootFileCount={dashboardData?.architecture?.rootFileCount ?? 0}
-                />
+                </div>
               </div>
 
-              <div className="flex flex-col gap-6 mt-6 lg:mt-0 min-w-0">
-                <TechStackStrip
-                  available={dashboardData?.languages?.available ?? false}
-                  languages={dashboardData?.languages?.breakdown ?? []}
-                />
-                <ActivitySection available={dashboardData?.activity?.available ?? false} activity={activity} />
+              {/* Middle Row: Needs Attention & Snapshot */}
+              <div className="grid grid-cols-1 lg:grid-cols-3 gap-5 mb-5 animate-in fade-in slide-in-from-bottom-8 duration-700 delay-200 fill-mode-both">
+                <div className="lg:col-span-2 min-w-0">
+                  <NeedsAttentionSection 
+                    status={analysisStatus === 'idle' ? 'loading' : analysisStatus}
+                    analysis={analysisData}
+                    onGenerate={handleGenerateAnalysis}
+                    generating={analysisGenerating}
+                    stale={analysisStale}
+                    error={analysisError}
+                    onPreviewFile={(path) => setPreviewFilePath(path)}
+                  />
+                </div>
+                <div className="lg:col-span-1 min-w-0">
+                  <RepositorySnapshot dashboardData={dashboardData} />
+                </div>
+              </div>
+
+              {/* Bottom Row: Activity, AI Recommendation & Hotspots */}
+              <div className="grid grid-cols-1 lg:grid-cols-3 gap-5 animate-in fade-in slide-in-from-bottom-10 duration-700 delay-300 fill-mode-both">
+                <div className="lg:col-span-2 min-w-0">
+                  <RepositoryActivitySection
+                    commits={branchCommits}
+                    dashboardData={dashboardData}
+                    loading={commitsStatus === 'loading' && branchCommits.length === 0}
+                  />
+                </div>
+                <div className="lg:col-span-1 min-w-0 flex flex-col gap-5">
+                  <AiRecommendationCard 
+                    analysis={analysisData} 
+                    onGenerate={handleGenerateAnalysis} 
+                    generating={analysisGenerating} 
+                  />
+                  <TopRiskModules 
+                    analysisData={analysisData}
+                    onPreviewFile={(path) => setPreviewFilePath(path)}
+                    onGenerate={handleGenerateAnalysis}
+                  />
+                </div>
               </div>
             </div>
           )}
         </main>
-      </div>
 
       {copilotOpen && (
         <CopilotDrawer
@@ -361,7 +379,7 @@ function CommandCenterPageContent({ repositoryId }) {
         filePath={previewFilePath}
         onClose={() => setPreviewFilePath(null)}
       />
-    </div>
+    </AuthenticatedAppShell>
   );
 }
 

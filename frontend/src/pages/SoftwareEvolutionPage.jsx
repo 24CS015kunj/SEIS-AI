@@ -14,7 +14,7 @@ import CommandCenterSidebar from '../components/commandCenter/CommandCenterSideb
 import CommandCenterHeader from '../components/commandCenter/CommandCenterHeader';
 import CopilotDrawer from '../components/commandCenter/CopilotDrawer';
 import FileCodePreviewDrawer from '../components/common/FileCodePreviewDrawer';
-import EngineeringBackground from '../components/common/EngineeringBackground';
+import AuthenticatedAppShell from '../components/layout/AuthenticatedAppShell';
 import EmptyRepositoryState from '../components/common/EmptyRepositoryState';
 import { useAutoResolveDefaultRepository } from '../hooks/useAutoResolveDefaultRepository';
 
@@ -323,16 +323,16 @@ function SoftwareEvolutionPageContent({ repositoryId }) {
   const showSkeleton = identity.status === 'loading' || branchSyncStatus === 'loading' || branchSyncStatus === 'idle';
 
   return (
-    <div className="relative min-h-screen w-full bg-[#F5F6FA] flex">
-      <EngineeringBackground />
-      <CommandCenterSidebar
-        repository={headerRepo}
-        repositoryId={identityReady ? repositoryId : null}
-        mobileOpen={mobileNavOpen}
-        onCloseMobile={() => setMobileNavOpen(false)}
-      />
-
-      <div className="flex-1 min-w-0 flex flex-col">
+    <AuthenticatedAppShell
+      sidebar={
+        <CommandCenterSidebar
+          repository={headerRepo}
+          repositoryId={repositoryId || null}
+          mobileOpen={mobileNavOpen}
+          onCloseMobile={() => setMobileNavOpen(false)}
+        />
+      }
+    >
         <CommandCenterHeader
           repository={headerRepo}
           repositoryId={repositoryId}
@@ -454,7 +454,6 @@ function SoftwareEvolutionPageContent({ repositoryId }) {
             </div>
           )}
         </main>
-      </div>
 
       {copilotOpen && (
         <CopilotDrawer
@@ -470,7 +469,7 @@ function SoftwareEvolutionPageContent({ repositoryId }) {
         filePath={previewFilePath}
         onClose={() => setPreviewFilePath(null)}
       />
-    </div>
+    </AuthenticatedAppShell>
   );
 }
 

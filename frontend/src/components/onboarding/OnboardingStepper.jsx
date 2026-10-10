@@ -9,8 +9,8 @@ const ONBOARDING_STEPS = [
 
 export default function OnboardingStepper({ currentStep = 1, onStepClick }) {
   return (
-    <div className="w-full mb-8">
-      <nav aria-label="Onboarding Progress" className="max-w-3xl mx-auto">
+    <div className="w-full mb-6 font-mono">
+      <nav aria-label="Onboarding Progress" className="max-w-2xl mx-auto">
         <ol className="flex items-center justify-between w-full relative">
           {ONBOARDING_STEPS.map((step, idx) => {
             const isCompleted = step.id < currentStep;
@@ -28,8 +28,8 @@ export default function OnboardingStepper({ currentStep = 1, onStepClick }) {
                 {idx > 0 && (
                   <div
                     aria-hidden="true"
-                    className={`absolute top-5 -left-1/2 right-1/2 h-0.5 -translate-y-1/2 z-0 transition-all duration-300 ${
-                      step.id <= currentStep ? 'bg-gradient-to-r from-blue-600 to-indigo-600' : 'bg-slate-200'
+                    className={`absolute top-4 -left-1/2 right-1/2 h-[1px] -translate-y-1/2 z-0 transition-colors ${
+                      step.id <= currentStep ? 'bg-[var(--seis-brand-blue)]' : 'bg-[var(--seis-border-subtle)]'
                     }`}
                   />
                 )}
@@ -39,38 +39,38 @@ export default function OnboardingStepper({ currentStep = 1, onStepClick }) {
                   type="button"
                   disabled={!isClickable}
                   onClick={() => isClickable && onStepClick(step.id)}
-                  className={`relative z-10 w-10 h-10 rounded-full flex items-center justify-center font-bold text-[13px] transition-all duration-200 ${
+                  className={`relative z-10 w-8 h-8 rounded border flex items-center justify-center font-mono text-[11px] font-bold transition-all ${
                     isCompleted
-                      ? 'bg-blue-600 text-white shadow-md shadow-blue-500/20 hover:scale-105'
+                      ? 'bg-[var(--seis-brand-blue)] border-[var(--seis-brand-blue)] text-white'
                       : isCurrent
-                        ? 'bg-gradient-to-br from-blue-600 to-indigo-600 text-white ring-4 ring-blue-100 shadow-lg shadow-blue-600/30 scale-105'
-                        : 'bg-white border-2 border-slate-200 text-slate-400'
-                  } ${isClickable ? 'cursor-pointer' : 'cursor-default'}`}
+                        ? 'bg-[var(--seis-surface-2)] border-[var(--seis-brand-blue)] text-[var(--seis-brand-blue)] ring-2 ring-blue-500/20'
+                        : 'bg-[var(--seis-surface-1)] border-[var(--seis-border-subtle)] text-[var(--seis-text-muted)]'
+                  } ${isClickable ? 'cursor-pointer hover:border-[var(--seis-brand-blue)]' : 'cursor-default'}`}
                   aria-label={`Step ${step.id}: ${step.label} (${
                     isCompleted ? 'Completed' : isCurrent ? 'Current' : 'Upcoming'
                   })`}
                 >
                   {isCompleted ? (
-                    <Check size={16} strokeWidth={2.8} className="animate-in fade-in" />
+                    <Check size={14} strokeWidth={2.5} />
                   ) : (
-                    <Icon size={16} className={isCurrent ? 'text-white' : 'text-slate-400'} />
+                    <span>{step.id}</span>
                   )}
                 </button>
 
                 {/* Step Text Label */}
-                <div className="text-center mt-2.5 px-1">
+                <div className="text-center mt-2 px-1">
                   <span
-                    className={`block text-[12px] sm:text-[13px] font-bold tracking-tight transition-colors ${
+                    className={`block text-[11.5px] font-semibold tracking-tight transition-colors ${
                       isCurrent
-                        ? 'text-slate-900'
+                        ? 'text-[var(--seis-text-primary)]'
                         : isCompleted
-                          ? 'text-slate-700'
-                          : 'text-slate-400'
+                          ? 'text-[var(--seis-text-secondary)]'
+                          : 'text-[var(--seis-text-muted)]'
                     }`}
                   >
                     {step.label}
                   </span>
-                  <span className="hidden sm:block text-[11px] text-slate-400 font-medium mt-0.5">
+                  <span className="hidden sm:block text-[10.5px] text-[var(--seis-text-muted)] mt-0.5">
                     {step.desc}
                   </span>
                 </div>

@@ -1,5 +1,5 @@
 import React from 'react';
-import { Routes, Route } from 'react-router-dom';
+import { Routes, Route, Navigate } from 'react-router-dom';
 import LandingPage from './pages/LandingPage';
 import LoginPage from './pages/LoginPage';
 import WorkspaceCreationPage from './pages/WorkspaceCreationPage';
@@ -111,6 +111,14 @@ export default function App() {
             <SoftwareEvolutionPage />
           </ProtectedRoute>
         }
+      />
+      <Route
+        path="/dashboard"
+        element={<Navigate to="/command-center" replace />}
+      />
+      <Route
+        path="/dashboard/:repositoryId"
+        element={<Navigate to="/command-center" replace />}
       />
       <Route path="*" element={<NotFoundPage />} />
     </Routes>

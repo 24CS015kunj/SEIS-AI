@@ -37,14 +37,16 @@ export default function RepositoryHealthCard({ status, analysis }) {
   return (
     <div
       id="health-score-card"
-      className="apple-card p-5 rounded-[20px] flex items-center gap-5"
+      className="apple-card p-5 rounded-[20px] flex flex-col items-start justify-center gap-5 h-full"
       aria-label={`Repository health score: ${score} out of 100`}
     >
       {/* Gauge ring */}
-      <ScoreRing score={score} tier={tier} />
+      <div className="w-full flex justify-center mt-2">
+        <ScoreRing score={score} tier={tier} />
+      </div>
 
       {/* Text side */}
-      <div className="flex-1 min-w-0">
+      <div className="flex-1 w-full flex flex-col items-center text-center">
         <div className="flex items-center gap-2 mb-1">
           <TierIcon tier={tier} />
           <span className="text-[14px] font-semibold text-[#1D1D1F]">Repository Health</span>
@@ -59,7 +61,7 @@ export default function RepositoryHealthCard({ status, analysis }) {
 
         {/* Deduction breakdown — only shown if there are any */}
         {deductions.length > 0 && (
-          <div className="flex flex-wrap gap-x-3 gap-y-1">
+          <div className="flex flex-wrap justify-center gap-x-3 gap-y-1.5 mt-2">
             {criticalCount > 0 && (
               <DeductionChip
                 icon={AlertOctagon}

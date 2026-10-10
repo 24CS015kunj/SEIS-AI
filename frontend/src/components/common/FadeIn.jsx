@@ -5,6 +5,12 @@ export default function FadeIn({ children, delay = 0, direction = 'zoom', classN
   const domRef = useRef();
 
   useEffect(() => {
+    const motionQuery = window.matchMedia('(prefers-reduced-motion: reduce)');
+    if (motionQuery.matches || !('IntersectionObserver' in window)) {
+      setIsVisible(true);
+      return undefined;
+    }
+
     const observer = new IntersectionObserver(
       (entries) => {
         entries.forEach((entry) => {
@@ -14,14 +20,14 @@ export default function FadeIn({ children, delay = 0, direction = 'zoom', classN
           }
         });
       },
-      { threshold: 0.15, rootMargin: '0px 0px -50px 0px' }
+      { threshold: 0.12, rootMargin: '0px 0px -8% 0px' }
     );
 
     const currentRef = domRef.current;
     if (currentRef) observer.observe(currentRef);
 
     return () => {
-      if (currentRef) observer.unobserve(currentRef);
+      observer.disconnect();
     };
   }, []);
 
@@ -59,7 +65,10 @@ export default function FadeIn({ children, delay = 0, direction = 'zoom', classN
       className={`transition-all duration-1000 ease-[cubic-bezier(0.22,1,0.36,1)] ${
         isVisible ? getVisibleClasses() : getHiddenClasses()
       } ${className}`}
-      style={{ transitionDelay: `${delay}ms` }}
+      style={{
+        transitionDelay: `${delay}ms`,
+        transitionDuration: '800ms',
+      }}
     >
       {children}
     </div>

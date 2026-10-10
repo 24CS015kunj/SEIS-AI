@@ -1,50 +1,38 @@
 import React from 'react';
+import { Circle, Code2, ShieldCheck, UserPlus } from 'lucide-react';
 import FadeIn from '../common/FadeIn';
-import { Code2, ShieldCheck, UserPlus, Check } from 'lucide-react';
 
 const roles = [
   {
-    id: 'developers',
-    title: 'Developers',
-    roleTag: 'Codebase Comprehension',
+    tag: 'CODEBASE COMPREHENSION',
+    title: 'Senior Engineers & Contributors',
     body: 'Understand unfamiliar repositories, trace complex dependencies, and grasp architectural intent in minutes.',
     icon: Code2,
-    accentColor: 'text-blue-600',
-    iconBg: 'bg-blue-50 border-blue-200/80',
-    borderHover: 'hover:border-blue-300 hover:shadow-blue-500/8',
-    highlights: [
+    features: [
       'AST-based dependency & flow graphs',
       'Grounded code explanations with file links',
       'Fast ramp-up on unfamiliar modules',
     ],
   },
   {
-    id: 'tech-leads',
-    title: 'Tech Leads',
-    roleTag: 'Architecture & Governance',
+    tag: 'GOVERNANCE & DRIFT',
+    title: 'Tech Leads & Architects',
     body: 'Understand architectural drift, assess pull request impact, and monitor engineering risks across services.',
     icon: ShieldCheck,
-    accentColor: 'text-indigo-600',
-    iconBg: 'bg-indigo-50 border-indigo-200/80',
-    borderHover: 'hover:border-indigo-300 hover:shadow-indigo-500/8',
-    highlights: [
+    features: [
       'System-wide technical debt detection',
-      'Pull request blast-radius analysis',
+      'Circular import & coupling diagnostics',
       'Hotspot & high-churn module tracking',
     ],
   },
   {
-    id: 'contributors',
-    title: 'New Contributors',
-    roleTag: 'Rapid Onboarding',
+    tag: 'RAPID ONBOARDING',
+    title: 'New Team Members',
     body: 'Gain a solid mental model of the codebase on day one without wading through thousands of lines manually.',
     icon: UserPlus,
-    accentColor: 'text-sky-600',
-    iconBg: 'bg-sky-50 border-sky-200/80',
-    borderHover: 'hover:border-sky-300 hover:shadow-sky-500/8',
-    highlights: [
-      'Interactive architecture blueprints',
-      'Natural language repository copilot',
+    features: [
+      'Automated architecture summaries',
+      'Natural-language repository Copilot',
       'Accelerated path to first approved PR',
     ],
   },
@@ -52,66 +40,59 @@ const roles = [
 
 export default function EngineeringRolesSection() {
   return (
-    <section id="who-uses-seis" className="section-padding bg-transparent relative overflow-hidden">
-      <div className="max-w-[1280px] w-full mx-auto px-6 lg:px-8 relative z-10">
-        
+    <section id="who-uses-seis" className="border-b border-(--seis-border-subtle) bg-(--seis-canvas) py-16 sm:py-24">
+      <div className="mx-auto w-full max-w-310 px-4 sm:px-6 lg:px-8">
         <FadeIn direction="up">
-          <div className="section-header-centered mb-14 text-center max-w-[700px] mx-auto">
-            <div className="eyebrow mb-2.5">WHO USES SEIS?</div>
-            <h2 className="headline-lg font-bold tracking-tight text-slate-900 mb-4">
-              Engineered for <span className="text-transparent bg-clip-text bg-gradient-to-r from-blue-600 to-indigo-600">Engineering Teams</span>
+          <div className="mx-auto mb-12 max-w-180 text-center">
+            <div className="eyebrow">
+              ENGINEERING ROLES
+            </div>
+            <h2 className="m-0 text-[1.8rem] leading-tight font-extrabold text-(--seis-text-primary) sm:text-[2.55rem]">
+              Built for <span className="text-(--seis-cyan)">Engineering</span> Velocity
             </h2>
-            <p className="text-[15px] text-slate-500 leading-relaxed max-w-[560px] mx-auto m-0">
+            <p className="mx-auto mt-4 m-0 max-w-150 text-[17px] leading-relaxed text-(--seis-text-secondary)">
               Purpose-built intelligence for every engineer navigating, reviewing, and evolving complex codebases.
             </p>
           </div>
         </FadeIn>
 
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-6 lg:gap-8">
-          {roles.map((role, i) => {
+        <div className="grid gap-4 lg:grid-cols-3">
+          {roles.map((role, index) => {
             const Icon = role.icon;
             return (
-              <FadeIn key={role.id} direction="up" delay={i * 120}>
-                <div
-                  className={`bg-white border border-slate-200/90 rounded-2xl p-7 lg:p-8 h-full flex flex-col justify-between transition-all duration-300 hover:-translate-y-1 hover:shadow-xl ${role.borderHover} group`}
-                >
+              <FadeIn key={role.title} direction="up" delay={index * 60}>
+                <article className="group flex h-full flex-col justify-between rounded-lg border border-(--seis-border-subtle) bg-(--seis-surface-1) p-6 transition-all duration-300 hover:border-(--seis-cyan)/40 hover:shadow-[0_4px_20px_rgba(25,190,213,0.06)]">
                   <div>
-                    {/* Top Row: Icon + Role Tag */}
-                    <div className="flex items-center justify-between gap-3 mb-6">
-                      <div className={`w-12 h-12 rounded-xl flex items-center justify-center border ${role.iconBg} ${role.accentColor} transition-transform duration-300 group-hover:scale-105 shadow-2xs`}>
-                        <Icon size={22} strokeWidth={1.8} />
+                    <div className="flex items-start justify-between gap-4 mb-4">
+                      <div className="flex h-8 w-8 items-center justify-center rounded-md border border-(--seis-cyan)/30 bg-(--seis-highlight) text-(--seis-cyan) transition-transform duration-300 group-hover:scale-110">
+                        <Icon size={16} />
                       </div>
-                      <span className="text-[11.5px] font-semibold text-slate-600 bg-slate-100/90 border border-slate-200/70 rounded-full px-3 py-1 tracking-wide">
-                        {role.roleTag}
+                      <span className="badge-tag">
+                        {role.tag}
                       </span>
                     </div>
 
-                    {/* Title & Body */}
-                    <h3 className="text-[19px] font-bold text-slate-900 tracking-tight mb-2.5">
+                    <h3 className="m-0 text-lg font-bold text-(--seis-text-primary) transition-colors group-hover:text-(--seis-cyan)">
                       {role.title}
                     </h3>
-                    <p className="text-[14px] text-slate-500 leading-relaxed mb-6">
+                    <p className="m-0 mt-2 text-[16px] leading-relaxed text-(--seis-text-secondary)">
                       {role.body}
                     </p>
                   </div>
 
-                  {/* Highlights List */}
-                  <div className="pt-5 border-t border-slate-100 space-y-2.5">
-                    {role.highlights.map((item) => (
-                      <div key={item} className="flex items-start gap-2.5 text-[13px] text-slate-700">
-                        <div className={`w-4 h-4 rounded-full flex items-center justify-center shrink-0 mt-0.5 ${role.iconBg} ${role.accentColor}`}>
-                          <Check size={10} strokeWidth={2.5} />
-                        </div>
-                        <span className="leading-snug">{item}</span>
+                  <div className="mt-6 space-y-2 border-t border-(--seis-border-subtle) pt-4">
+                    {role.features.map((feature) => (
+                      <div key={feature} className="flex items-center gap-2 text-[14px] text-(--seis-text-primary)">
+                        <Circle size={7} className="shrink-0 fill-(--seis-cyan) text-(--seis-cyan)" strokeWidth={0} aria-hidden="true" />
+                        <span>{feature}</span>
                       </div>
                     ))}
                   </div>
-                </div>
+                </article>
               </FadeIn>
             );
           })}
         </div>
-
       </div>
     </section>
   );

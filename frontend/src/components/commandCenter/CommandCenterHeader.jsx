@@ -39,13 +39,13 @@ export default function CommandCenterHeader({
 
   return (
     <>
-      <header className="sticky top-0 z-30 flex items-center justify-between gap-3 h-14 px-4 sm:px-6 border-b border-black/[0.06] liquid-glass">
+      <header className="sticky top-0 z-30 flex items-center justify-between gap-3 h-13 px-4 sm:px-6 border-b border-[var(--seis-border-subtle)] bg-[var(--seis-surface-1)]">
         <div className="flex items-center gap-3 min-w-0 flex-1">
           <button
             type="button"
             onClick={onOpenMobileNav}
             aria-label="Open navigation"
-            className="lg:hidden w-8 h-8 -ml-1 rounded-full flex items-center justify-center text-[#86868B] hover:text-[#1D1D1F] hover:bg-black/[0.05] shrink-0 transition-colors"
+            className="lg:hidden w-8 h-8 -ml-1 rounded-md flex items-center justify-center text-[var(--seis-text-secondary)] hover:text-[var(--seis-text-primary)] hover:bg-[var(--seis-surface-hover)] shrink-0 transition-colors"
           >
             <Menu size={18} aria-hidden="true" />
           </button>
@@ -58,32 +58,32 @@ export default function CommandCenterHeader({
               aria-expanded={repoSwitcherOpen}
               aria-haspopup="dialog"
               aria-label="Switch active repository"
-              className="flex items-center gap-2 px-2.5 py-1.5 -ml-1.5 rounded-xl text-left hover:bg-black/[0.04] transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#0071E3]/40 group max-w-full"
+              className="flex items-center gap-2 px-2 py-1 -ml-1 rounded-md text-left hover:bg-[var(--seis-surface-hover)] transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500/30 group max-w-full"
             >
               <div className="min-w-0">
                 <div className="flex items-center gap-1.5 min-w-0">
-                  <h1 className="text-[14px] font-semibold text-[#1D1D1F] truncate">
+                  <h1 className="text-[13.5px] font-bold text-[var(--seis-text-primary)] truncate">
                     {repository.owner ? `${repository.owner}/` : ''}{repository.name}
                   </h1>
                   <ChevronDown
-                    size={13}
-                    className={`text-[#86868B] group-hover:text-[#1D1D1F] shrink-0 transition-transform duration-150 ${
+                    size={12}
+                    className={`text-[var(--seis-text-muted)] group-hover:text-[var(--seis-text-primary)] shrink-0 transition-transform duration-150 ${
                       repoSwitcherOpen ? 'rotate-180' : ''
                     }`}
                     aria-hidden="true"
                   />
-                  <span className="hidden sm:inline-flex items-center gap-1 text-[11px] font-mono text-[#86868B] bg-black/[0.04] px-2 py-0.5 rounded-full shrink-0 ml-1">
+                  <span className="hidden sm:inline-flex items-center gap-1 text-[10.5px] font-mono text-[var(--seis-text-secondary)] bg-[var(--seis-surface-2)] border border-[var(--seis-border-subtle)] px-1.5 py-0.5 rounded shrink-0 ml-1">
                     <GitBranch size={10} aria-hidden="true" />
                     {repository.branch}
                   </span>
                 </div>
                 <div className="flex items-center gap-2 mt-0.5">
-                  <span className={`inline-flex items-center gap-1.5 text-[11.5px] font-medium ${status.text}`}>
+                  <span className={`inline-flex items-center gap-1 text-[11px] font-mono font-semibold ${status.text}`}>
                     <span className={`w-1.5 h-1.5 rounded-full ${status.dot}`} aria-hidden="true" />
                     {status.label}
                   </span>
-                  <span className="hidden sm:inline text-[11px] text-black/20">·</span>
-                  <span className="hidden sm:inline text-[11.5px] text-[#86868B]">{repository.lastUpdated}</span>
+                  <span className="hidden sm:inline text-[11px] text-[var(--seis-text-muted)]">·</span>
+                  <span className="hidden sm:inline text-[11px] font-mono text-[var(--seis-text-muted)]">{repository.lastUpdated}</span>
                 </div>
               </div>
             </button>
@@ -98,16 +98,16 @@ export default function CommandCenterHeader({
         </div>
 
         {/* Command Palette Trigger & Copilot Button */}
-        <div className="flex items-center gap-2.5 shrink-0">
+        <div className="flex items-center gap-2 shrink-0">
           <button
             type="button"
             onClick={() => setCommandPaletteOpen(true)}
             aria-label="Search commands and repositories"
-            className="hidden md:inline-flex items-center gap-2.5 h-9 px-3.5 rounded-full bg-black/[0.05] hover:bg-black/[0.08] text-[#86868B] hover:text-[#1D1D1F] text-[13px] font-normal transition-all cursor-pointer"
+            className="hidden md:inline-flex items-center gap-2 h-8 px-3 rounded-md bg-[var(--seis-surface-2)] hover:bg-[var(--seis-surface-hover)] border border-[var(--seis-border-subtle)] text-[var(--seis-text-secondary)] hover:text-[var(--seis-text-primary)] text-[12px] font-mono transition-all cursor-pointer"
           >
-            <Search size={13} className="text-[#86868B]" aria-hidden="true" />
-            <span>Search or command...</span>
-            <kbd className="ml-1 text-[11px] font-medium text-[#1D1D1F] bg-white rounded-md px-1.5 py-0.5 shadow-xs border border-black/[0.06]">
+            <Search size={12} className="text-[var(--seis-text-muted)]" aria-hidden="true" />
+            <span>Search repository...</span>
+            <kbd className="ml-1 text-[10px] font-mono font-semibold text-[var(--seis-text-primary)] bg-[var(--seis-surface-1)] rounded px-1.5 py-0.2 border border-[var(--seis-border-strong)]">
               ⌘K
             </kbd>
           </button>
@@ -116,9 +116,9 @@ export default function CommandCenterHeader({
             type="button"
             onClick={() => setCommandPaletteOpen(true)}
             aria-label="Command palette"
-            className="md:hidden w-8 h-8 rounded-full bg-black/[0.05] text-[#86868B] flex items-center justify-center hover:bg-black/[0.08]"
+            className="md:hidden w-8 h-8 rounded-md bg-[var(--seis-surface-2)] border border-[var(--seis-border-subtle)] text-[var(--seis-text-secondary)] flex items-center justify-center hover:bg-[var(--seis-surface-hover)]"
           >
-            <Search size={14} aria-hidden="true" />
+            <Search size={13} aria-hidden="true" />
           </button>
 
           <ThemeToggle />
@@ -126,9 +126,9 @@ export default function CommandCenterHeader({
           <button
             type="button"
             onClick={onOpenCopilot}
-            className="shrink-0 inline-flex items-center gap-1.5 h-9 px-4 rounded-full bg-[#0071E3] hover:bg-[#0077ED] text-white text-[13px] font-medium shadow-[0_2px_8px_rgba(0,113,227,0.3)] cursor-pointer transition-all active:scale-[0.97]"
+            className="shrink-0 inline-flex items-center gap-1.5 h-8 px-3 rounded-md bg-blue-600 hover:bg-blue-700 text-white text-[12px] font-semibold border-0 cursor-pointer transition-colors shadow-2xs"
           >
-            <Sparkles size={13} aria-hidden="true" />
+            <Sparkles size={12} aria-hidden="true" />
             <span className="whitespace-nowrap">AI Copilot</span>
           </button>
         </div>

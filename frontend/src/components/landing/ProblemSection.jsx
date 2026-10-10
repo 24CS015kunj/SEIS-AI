@@ -1,77 +1,84 @@
 import React from 'react';
+import { Blocks, Compass, Route, TimerReset } from 'lucide-react';
 import FadeIn from '../common/FadeIn';
 
 const problems = [
   {
-    num: '01',
-    title: 'COMPLEX CODEBASES',
-    body: 'Large repositories can be difficult to navigate.',
+    icon: Blocks,
+    title: 'Complex Multi-Service Topology',
+    body: 'Repositories and services grow into impenetrable black boxes over years of rapid feature delivery.',
   },
   {
-    num: '02',
-    title: 'SCATTERED KNOWLEDGE',
-    body: 'Architecture, business logic and dependencies are spread across the project.',
+    icon: Compass,
+    title: 'Scattered Domain Knowledge',
+    body: "Architecture decisions, implicit dependencies, and core constraints live only inside senior engineers' heads.",
   },
   {
-    num: '03',
-    title: 'MANUAL EXPLORATION',
-    body: 'Developers spend hours tracing files, dependencies and history.',
+    icon: Route,
+    title: 'Manual Forensic Exploration',
+    body: 'Engineers spend over 40% of sprint time stepping through debugger call stacks, git blame, and text grep.',
   },
   {
-    num: '04',
-    title: 'SLOW ONBOARDING',
-    body: 'New developers need significant time before contributing confidently.',
+    icon: TimerReset,
+    title: 'Unpredictable Code Churn',
+    body: 'Frequent edits in high-complexity modules create hidden engineering hotspots that slip past standard code reviews.',
   },
 ];
 
 export default function ProblemSection() {
   return (
-    <section className="section-padding bg-transparent">
-      <div className="max-w-[1280px] w-full mx-auto px-6 lg:px-8">
-        
-        <FadeIn direction="left">
-          <div className="grid grid-cols-1 lg:grid-cols-12 gap-16 items-start">
-            
-            {/* Left Column - Text */}
-            <div className="lg:col-span-5">
-              <h2 className="headline-lg mb-6">
-                The Hard Part Isn't Finding the Code.<br />
-                <span className="text-transparent bg-clip-text bg-gradient-to-r from-blue-600 to-indigo-600">It's Understanding How It Fits Together.</span>
-              </h2>
-              
-              <p className="body-lg">
-                Modern software repositories contain thousands of files, dependencies, commits and architectural decisions. When developers join an unfamiliar project, they often have to reconstruct that understanding manually.
-              </p>
-            </div>
-
-            {/* Right Column - 4 points */}
-            <div className="lg:col-span-6 lg:col-start-7">
-              <div className="relative border-l-2 border-slate-200 ml-4 space-y-10 py-2">
-                {problems.map((p, i) => (
-                  <FadeIn key={p.num} direction="right" delay={i * 100}>
-                    <div className="relative pl-10">
-                      {/* Timeline Circle Bullet */}
-                      <div className="absolute top-[-2px] -left-[17px] w-8 h-8 bg-[#FAFAFA] border-2 border-indigo-200 rounded-full flex items-center justify-center">
-                        <div className="w-2.5 h-2.5 bg-gradient-to-br from-indigo-500 to-purple-500 rounded-full" />
-                      </div>
-                      
-                      <div className="pt-0.5">
-                        <h3 className="text-[13px] font-bold text-slate-900 tracking-widest uppercase mb-2">
-                          {p.title}
-                        </h3>
-                        <p className="text-[15px] text-slate-500 leading-relaxed">
-                          {p.body}
-                        </p>
-                      </div>
-                    </div>
-                  </FadeIn>
-                ))}
-              </div>
-            </div>
-
+    <section
+      id="problem"
+      className="py-16 sm:py-24 border-y border-(--seis-border-subtle) bg-(--seis-surface-2)"
+    >
+      <div className="mx-auto grid w-full max-w-310 items-center gap-8 px-4 sm:px-6 lg:grid-cols-[0.95fr_1.1fr] lg:gap-10 lg:px-8">
+        <FadeIn direction="up">
+          <div className="max-w-140">
+            <div className="eyebrow">THE STRUCTURAL CHALLENGE</div>
+            <h2 className="m-0 text-[1.8rem] font-extrabold leading-[1.12] text-(--seis-text-primary) sm:text-[2.75rem]">
+              Finding code is trivial.{' '}
+              <span className="text-(--seis-cyan)">
+                Understanding systemic coupling and evolution is not.
+              </span>
+            </h2>
+            <p className="m-0 mt-5 text-[18px] leading-[1.6] text-(--seis-text-secondary)">
+              Living codebases accumulate hidden dependencies, circular references, and hotspots where
+              change frequency intersects high complexity. Standard static analysis tells you what syntax
+              exists today, but cannot explain how the system evolved or which modules present high
+              blast-radius risks.
+            </p>
           </div>
         </FadeIn>
 
+        <div className="grid auto-rows-fr grid-cols-1 items-stretch gap-4 sm:grid-cols-2 sm:gap-x-4 sm:gap-y-4.5">
+          {problems.map((item, index) => {
+            const Icon = item.icon;
+            return (
+              <FadeIn key={item.title} direction="up" delay={index * 60} className="h-full">
+                <article className="group flex h-full min-h-60 flex-col justify-between rounded-lg border border-(--seis-border-subtle) bg-(--seis-surface-1) p-6 transition-all duration-300 hover:border-(--seis-cyan)/40 hover:shadow-[0_4px_20px_rgba(25,190,213,0.06)]">
+                  <div>
+                    <div className="mb-4 flex items-center justify-between">
+                      <div className="flex h-8 w-8 items-center justify-center rounded-md border border-(--seis-cyan)/30 bg-(--seis-highlight) text-(--seis-cyan) transition-transform duration-300 group-hover:scale-110">
+                        <Icon size={16} />
+                      </div>
+                      <span className="font-mono text-[11px] font-bold text-(--seis-text-muted) transition-colors group-hover:text-(--seis-cyan)">
+                        0{index + 1}
+                      </span>
+                    </div>
+
+                    <h3 className="m-0 text-left text-[17px] font-bold text-(--seis-text-primary) transition-colors group-hover:text-(--seis-cyan)">
+                      {item.title}
+                    </h3>
+
+                    <p className="m-0 mt-2 text-left text-[16px] leading-relaxed text-(--seis-text-secondary)">
+                      {item.body}
+                    </p>
+                  </div>
+                </article>
+              </FadeIn>
+            );
+          })}
+        </div>
       </div>
     </section>
   );

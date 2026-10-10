@@ -588,7 +588,7 @@ function ActivityAreaChart({ buckets, metric, rangeDays }) {
 
   return (
     <div className="w-full relative select-none">
-      <div className="relative w-full aspect-[600/170]">
+      <div className="relative w-full aspect-600/170">
         <svg
           viewBox={`0 0 ${width} ${height}`}
           className="w-full h-full overflow-visible"

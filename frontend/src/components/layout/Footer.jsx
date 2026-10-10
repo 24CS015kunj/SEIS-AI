@@ -1,53 +1,64 @@
 import React from 'react';
 import FadeIn from '../common/FadeIn';
+import BrandMark from '../common/BrandMark';
 
 export default function Footer({ onOpenDocs }) {
+  const linkClass = 'text-[13px] text-(--seis-text-secondary) transition-colors hover:text-(--seis-cyan) no-underline';
+
   return (
-    <footer className="section-padding-sm bg-transparent border-t border-[#E2E8F0]">
-      <div className="max-w-[1280px] mx-auto px-6 lg:px-8">
-        
+    <footer className="border-t border-(--seis-border-subtle) bg-(--seis-surface-1) py-14">
+      <div className="mx-auto max-w-310 px-4 sm:px-6 lg:px-8">
         <FadeIn direction="up">
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-12 mb-16">
-            <div className="lg:col-span-1">
-              <h3 className="text-base font-bold text-slate-900 mb-3">SEIS AI Copilot</h3>
-              <p className="body-sm m-0">AI-powered software engineering intelligence.</p>
+          <div className="mb-10 grid grid-cols-1 gap-8 sm:grid-cols-2 lg:grid-cols-4">
+            <div>
+              <div className="flex items-center gap-2 mb-3">
+                <BrandMark size={24} />
+                <span className="font-mono text-[14px] font-bold text-(--seis-text-primary)">SEIS-AI</span>
+              </div>
+              <p className="m-0 text-[13px] leading-relaxed text-(--seis-text-secondary)">
+                Repository intelligence for understanding architecture, dependencies, and code evolution.
+              </p>
             </div>
             <div>
-              <h4 className="text-[13px] font-bold text-slate-900 tracking-widest uppercase mb-4">PRODUCT</h4>
-              <ul className="flex flex-col gap-3 m-0 p-0 list-none">
-                <li><a href="#features" className="text-sm text-slate-500 hover:text-slate-900 transition-colors no-underline">Features</a></li>
-                <li><a href="#how-it-works" className="text-sm text-slate-500 hover:text-slate-900 transition-colors no-underline">Workflow</a></li>
+              <h4 className="mb-3 font-mono text-[10.5px] font-bold uppercase tracking-wider text-(--seis-text-muted)">SYSTEM</h4>
+              <ul className="m-0 flex list-none flex-col gap-2.5 p-0">
+                <li><a href="#hero" className={linkClass}>Overview</a></li>
+                <li><a href="#features" className={linkClass}>Capabilities</a></li>
+                <li><a href="#how-it-works" className={linkClass}>Intelligence Pipeline</a></li>
               </ul>
             </div>
             <div>
-              <h4 className="text-[13px] font-bold text-slate-900 tracking-widest uppercase mb-4">COMPANY</h4>
-              <ul className="flex flex-col gap-3 m-0 p-0 list-none">
-                <li><a href="#who-uses-seis" className="text-sm text-slate-500 hover:text-slate-900 transition-colors no-underline">About Us</a></li>
-                <li><a href="#" className="text-sm text-slate-500 hover:text-slate-900 transition-colors no-underline">Privacy</a></li>
-                <li><a href="#" className="text-sm text-slate-500 hover:text-slate-900 transition-colors no-underline">Terms</a></li>
+              <h4 className="mb-3 font-mono text-[10.5px] font-bold uppercase tracking-wider text-(--seis-text-muted)">ROLES</h4>
+              <ul className="m-0 flex list-none flex-col gap-2.5 p-0">
+                <li><a href="#who-uses-seis" className={linkClass}>Staff Engineers &amp; Architects</a></li>
+                <li><a href="#who-uses-seis" className={linkClass}>Tech Leads &amp; Managers</a></li>
+                <li><a href="#who-uses-seis" className={linkClass}>New Contributors</a></li>
               </ul>
             </div>
             <div>
-              <h4 className="text-[13px] font-bold text-slate-900 tracking-widest uppercase mb-4">RESOURCES</h4>
-              <ul className="flex flex-col gap-3 m-0 p-0 list-none">
+              <h4 className="mb-3 font-mono text-[10.5px] font-bold uppercase tracking-wider text-(--seis-text-muted)">RESOURCES</h4>
+              <ul className="m-0 flex list-none flex-col gap-2.5 p-0">
                 <li>
-                  <button
-                    type="button"
-                    onClick={onOpenDocs}
-                    className="text-sm text-slate-500 hover:text-slate-900 transition-colors bg-transparent border-0 p-0 cursor-pointer"
-                  >
+                  <button type="button" onClick={onOpenDocs} className="cursor-pointer border-0 bg-transparent p-0 text-[13px] text-(--seis-text-secondary) transition-colors hover:text-(--seis-cyan)">
                     Documentation
                   </button>
                 </li>
-                <li><a href="https://github.com" target="_blank" rel="noreferrer" className="text-sm text-slate-500 hover:text-slate-900 transition-colors no-underline">GitHub</a></li>
               </ul>
             </div>
           </div>
-          <div className="pt-8 border-t border-[#E2E8F0] flex justify-between items-center">
-            <span className="text-sm text-slate-400">© 2026 SEIS AI Copilot</span>
+          <div className="flex flex-col items-center justify-between gap-3 border-t border-(--seis-border-subtle) pt-6 font-mono text-[11px] text-(--seis-text-muted) sm:flex-row">
+            <span>
+              (c) {new Date().getFullYear()} SEIS AI
+            </span>
+            <div className="flex items-center gap-3">
+              <span>FastAPI AI Service</span>
+              <span>/</span>
+              <span>Express Business Layer</span>
+              <span>/</span>
+              <span>React AST Shell</span>
+            </div>
           </div>
         </FadeIn>
-
       </div>
     </footer>
   );

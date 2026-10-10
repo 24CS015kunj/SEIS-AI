@@ -67,7 +67,7 @@ export default function CommandPalette({
         category: 'Navigation',
         label: 'Go to Dashboard',
         icon: LayoutGrid,
-        perform: () => navigate(target('/command-center')),
+        perform: () => navigate('/dashboard'),
       },
       {
         id: 'nav-architecture',

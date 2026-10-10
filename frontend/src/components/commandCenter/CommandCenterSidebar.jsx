@@ -1,48 +1,14 @@
 import React from 'react';
 import { useLocation, Link } from 'react-router-dom';
-import { LayoutGrid, GitBranch, Boxes, TrendingUp, Sparkles, X, LogOut, Layers } from 'lucide-react';
+import { GitBranch, X, LogOut, Layers } from 'lucide-react';
 import { BrandGlyph } from '../common/BrandMark';
 import { useAuth } from '../../context/AuthContext';
 import { getActiveWorkspace } from '../../services/workspaceService';
+import { APP_NAV_ITEMS } from '../layout/appNavItems';
 
 /**
- * `page` distinguishes the real destinations this shared shell nav can
- * point at; `anchor` items only make sense once on the Command Center
- * page itself. Task 69: "Architecture" used to be an anchor into a small
- * Dashboard section, which live testing found read as "an effectively
- * empty page" -- it now points at its own real, dedicated route
- * (`/architecture`), same `primary` treatment as Dashboard/Source
- * Control. "Insights" stays an anchor -- AI Insights (Task 69's real
- * analysis) genuinely lives on the Dashboard, not a separate page.
- * Task 79: "Software Evolution" now points at its own real, dedicated
- * route the same way -- the "Soon" placeholder is retired now that a
- * real page exists behind it.
- */
-const NAV_ITEMS = [
-  { id: 'overview', label: 'Dashboard', icon: LayoutGrid, page: '/command-center', anchor: true, primary: true },
-  { label: 'Architecture', icon: Boxes, page: '/architecture', primary: true },
-  { id: 'insights', label: 'Insights', icon: Sparkles, page: '/command-center', anchor: true },
-  { label: 'Software Evolution', icon: TrendingUp, page: '/software-evolution', primary: true },
-  { label: 'Source Control', icon: GitBranch, page: '/source-control', primary: true },
-];
-
-/**
- * Shared app-shell navigation used by both Command Center and Source
- * Control — a single nav list, not two competing ones, which directly
- * addresses the Figma audit's "duplicate nav systems" finding. Active state
- * is derived from the current route rather than hardcoded, so the same
- * component works correctly on either page. Software Evolution has no page
- * yet and stays inert with a "Soon" tag rather than a dead link.
- *
- * Task 71: navigation is now driven entirely by `repositoryId` (the real
- * Mongo `_id`, resolved from the URL by the page via `useRepositoryIdentity`)
- * instead of React Router `location.state`. Every link this component
- * builds appends `repositoryId` onto the target path itself
- * (`/architecture/<id>`), so the selected repository survives every
- * in-app navigation, a refresh, and a direct/pasted link -- state never
- * enters the picture. `repositoryId` is `null`/`undefined` exactly when no
- * repository is selected (the honest state), and every link then points
- * at the bare, repository-less route.
+ * Shared authenticated sidebar — workspace dashboard, repository-scoped
+ * product pages, and Insights (Command Center + #insights).
  */
 export default function CommandCenterSidebar({ repository, repositoryId, mobileOpen, onCloseMobile }) {
   const location = useLocation();
@@ -58,62 +24,75 @@ export default function CommandCenterSidebar({ repository, repositoryId, mobileO
         />
       )}
       <aside
-        className={`fixed inset-y-0 left-0 z-50 w-[244px] shrink-0 bg-[#FBFBFD]/80 border-r border-black/[0.06] backdrop-blur-2xl flex flex-col transition-transform duration-200 lg:static lg:translate-x-0 ${
+        className={`fixed inset-y-0 left-0 z-50 w-[240px] shrink-0 bg-[var(--seis-surface-1)] border-r border-[var(--seis-border-subtle)] flex flex-col transition-transform duration-200 lg:static lg:translate-x-0 ${
           mobileOpen ? 'translate-x-0' : '-translate-x-full'
         }`}
         aria-label="Application navigation"
       >
-        <div className="flex items-center justify-between gap-2 px-4 h-14 border-b border-black/[0.06] shrink-0">
+        <div className="flex items-center justify-between gap-2 px-4 h-13 border-b border-[var(--seis-border-subtle)] shrink-0">
           <div className="flex items-center gap-2 min-w-0">
-            <div className="w-7 h-7 rounded-xl bg-[#0071E3]/10 flex items-center justify-center shrink-0">
-              <BrandGlyph size={15} tone="onLight" />
+            <div className="w-6 h-6 rounded-md bg-blue-500/10 border border-blue-500/20 flex items-center justify-center shrink-0">
+              <BrandGlyph size={14} tone="onLight" />
             </div>
-            <span className="text-[13.5px] font-semibold text-[#1D1D1F] truncate">SEIS AI Copilot</span>
+            <span className="text-[13px] font-bold text-[var(--seis-text-primary)] truncate font-mono tracking-tight">SEIS-AI</span>
           </div>
           <button
             type="button"
             onClick={onCloseMobile}
             aria-label="Close navigation"
-            className="lg:hidden w-7 h-7 rounded-full flex items-center justify-center text-[#86868B] hover:text-[#1D1D1F] hover:bg-black/[0.05] transition-colors"
+            className="lg:hidden w-7 h-7 rounded-md flex items-center justify-center text-[var(--seis-text-secondary)] hover:text-[var(--seis-text-primary)] hover:bg-[var(--seis-surface-hover)] transition-colors"
           >
             <X size={15} aria-hidden="true" />
           </button>
         </div>
 
-        {/* Active Workspace Info */}
-        <div className="px-3.5 py-2.5 border-b border-black/[0.04]">
+        <div className="px-3.5 py-2.5 border-b border-[var(--seis-border-subtle)] bg-[var(--seis-surface-2)]">
           <div className="flex items-center justify-between gap-1">
-            <span className="text-[11px] font-medium text-[#86868B]">
-              Workspace
-            </span>
+            <span className="text-[10px] font-mono font-bold uppercase tracking-wider text-[var(--seis-text-muted)]">Workspace</span>
             <Link
               to="/workspace"
-              className="text-[11.5px] font-medium text-[#0071E3] hover:underline"
+              className="text-[11px] font-mono font-semibold text-blue-600 hover:text-blue-700 hover:underline"
             >
               Switch
             </Link>
           </div>
-          <div className="flex items-center gap-1.5 mt-0.5 text-[13px] font-medium text-[#1D1D1F] truncate" title={activeWorkspace?.name || 'My Workspace'}>
-            <Layers size={13} className="text-[#0071E3] shrink-0" />
+          <div
+            className="flex items-center gap-1.5 mt-1 text-[12.5px] font-semibold text-[var(--seis-text-primary)] truncate"
+            title={activeWorkspace?.name || 'My Workspace'}
+          >
+            <Layers size={13} className="text-blue-600 shrink-0" />
             <span className="truncate">{activeWorkspace?.name || 'My Workspace'}</span>
           </div>
         </div>
 
-        <div className="px-3.5 py-2.5 border-b border-black/[0.04]">
-          <div className="text-[11px] font-medium text-[#86868B] mb-0.5">
-            Active Repository
+        {repositoryId ? (
+          <div className="px-3.5 py-2.5 border-b border-[var(--seis-border-subtle)]">
+            <div className="text-[10px] font-mono font-bold uppercase tracking-wider text-[var(--seis-text-muted)] mb-0.5">Active Repository</div>
+            <div className="text-[12.5px] font-bold text-[var(--seis-text-primary)] truncate font-mono">{repository.name}</div>
+            <div className="flex items-center gap-1.5 text-[11px] text-[var(--seis-text-secondary)] mt-0.5 truncate font-mono">
+              <GitBranch size={10} className="shrink-0" />
+              <span>{repository.branch}</span>
+              <span className="text-[var(--seis-text-muted)]">·</span>
+              <span className="truncate">{repository.owner}</span>
+            </div>
           </div>
-          <div className="text-[13px] font-semibold text-[#1D1D1F] truncate">{repository.name}</div>
-          <div className="flex items-center gap-1.5 text-[11.5px] text-[#86868B] mt-0.5 truncate">
-            <GitBranch size={10} className="text-[#86868B] shrink-0" />
-            <span className="font-mono text-[11px]">{repository.branch}</span>
-            <span className="text-black/20">·</span>
-            <span className="truncate">{repository.owner}</span>
+        ) : (
+          <div className="px-3.5 py-2.5 border-b border-[var(--seis-border-subtle)]">
+            <div className="text-[10px] font-mono font-bold uppercase tracking-wider text-[var(--seis-text-muted)] mb-0.5">Active Repository</div>
+            <p className="text-[12px] text-[var(--seis-text-muted)] m-0 mb-1.5">None selected</p>
+            <div className="flex flex-col gap-1">
+              <Link to="/command-center" className="text-[11px] font-semibold text-blue-600 hover:underline">
+                Open Overview
+              </Link>
+              <Link to="/import-repository" className="text-[11px] font-semibold text-blue-600 hover:underline">
+                Import Repository
+              </Link>
+            </div>
           </div>
-        </div>
+        )}
 
-        <nav className="flex-1 py-3 px-2 space-y-0.5 overflow-y-auto">
-          {NAV_ITEMS.map((item) => (
+        <nav className="flex-1 py-3 px-2 space-y-1 overflow-y-auto">
+          {APP_NAV_ITEMS.map((item) => (
             <NavRow
               key={item.label}
               item={item}
@@ -124,14 +103,14 @@ export default function CommandCenterSidebar({ repository, repositoryId, mobileO
           ))}
         </nav>
 
-        <div className="px-3.5 py-3 border-t border-black/[0.06] shrink-0 flex items-center justify-between gap-2">
+        <div className="px-3.5 py-2.5 border-t border-[var(--seis-border-subtle)] bg-[var(--seis-surface-2)] shrink-0 flex items-center justify-between gap-2">
           <div className="min-w-0">
-            <span className="inline-flex items-center gap-1.5 text-[11.5px] text-[#34C759] font-medium">
-              <span className="w-1.5 h-1.5 rounded-full bg-[#34C759] animate-pulse" aria-hidden="true" />
+            <span className="inline-flex items-center gap-1 text-[10.5px] font-mono font-semibold text-emerald-600 dark:text-emerald-400">
+              <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" aria-hidden="true" />
               AST Index Active
             </span>
             {user && (
-              <div className="text-[11.5px] text-[#86868B] truncate mt-0.5" title={user.githubUsername}>
+              <div className="text-[11px] font-mono text-[var(--seis-text-muted)] truncate mt-0.5" title={user.githubUsername}>
                 @{user.githubUsername}
               </div>
             )}
@@ -141,7 +120,7 @@ export default function CommandCenterSidebar({ repository, repositoryId, mobileO
             onClick={logout}
             aria-label="Sign out"
             title="Sign out"
-            className="shrink-0 w-7 h-7 rounded-full flex items-center justify-center text-[#86868B] hover:text-[#1D1D1F] hover:bg-black/[0.05] transition-colors"
+            className="shrink-0 w-7 h-7 rounded-md flex items-center justify-center text-[var(--seis-text-secondary)] hover:text-rose-600 hover:bg-[var(--seis-surface-hover)] transition-colors cursor-pointer"
           >
             <LogOut size={13} aria-hidden="true" />
           </button>
@@ -154,39 +133,27 @@ export default function CommandCenterSidebar({ repository, repositoryId, mobileO
 function NavRow({ item, currentPath, repositoryId, onNavigate }) {
   const Icon = item.icon;
 
-  if (item.kind === 'soon') {
-    return (
-      <div className="flex items-center gap-2.5 px-3 py-2 rounded-xl text-[13px] text-[#86868B] cursor-not-allowed opacity-60">
-        <Icon size={15} className="text-[#86868B] shrink-0" aria-hidden="true" />
-        <span className="truncate">{item.label}</span>
-        <span className="ml-auto text-[10px] font-medium uppercase tracking-wide text-[#86868B] bg-black/[0.05] rounded-full px-2 py-0.5 shrink-0">
-          Soon
-        </span>
-      </div>
-    );
-  }
+  const onItemRoute =
+    currentPath === item.page || currentPath.startsWith(`${item.page}/`);
+  const isActive = Boolean(item.primary && onItemRoute);
 
-  const onCurrentPage = currentPath === item.page || currentPath.startsWith(`${item.page}/`);
-  const target = repositoryId ? `${item.page}/${repositoryId}` : item.page;
-  const href = item.anchor && onCurrentPage ? `#${item.id}` : `${target}${item.anchor ? `#${item.id}` : ''}`;
-  const isActive = onCurrentPage && item.primary;
-  const Tag = item.anchor && onCurrentPage ? 'a' : Link;
-  const linkProp = Tag === 'a' ? { href } : { to: href };
+  const scopedBase = repositoryId ? `${item.page}/${repositoryId}` : item.page;
+  const href = item.hash ? `${scopedBase}#${item.hash}` : scopedBase;
 
   return (
-    <Tag
-      {...linkProp}
+    <Link
+      to={href}
       onClick={onNavigate}
       aria-current={isActive ? 'page' : undefined}
-      className={`flex items-center gap-2.5 px-3 py-2 rounded-xl text-[13px] font-medium transition-all ${
+      className={`flex items-center gap-2.5 px-2.5 py-2 rounded-md text-[12.5px] font-medium transition-all ${
         isActive
-          ? 'bg-[#0071E3]/10 text-[#0071E3] font-semibold'
-          : 'text-[#86868B] hover:bg-black/[0.04] hover:text-[#1D1D1F]'
+          ? 'bg-blue-50/80 text-blue-700 dark:bg-blue-500/15 dark:text-blue-400 font-semibold border border-blue-200/70 dark:border-blue-500/30 shadow-2xs'
+          : 'text-[var(--seis-text-secondary)] hover:bg-[var(--seis-surface-hover)] hover:text-[var(--seis-text-primary)] border border-transparent'
       }`}
     >
-      <Icon size={15} className={isActive ? 'text-[#0071E3]' : 'text-[#86868B]'} aria-hidden="true" />
+      <Icon size={14} className={isActive ? 'text-blue-600 dark:text-blue-400' : 'text-[var(--seis-text-muted)]'} aria-hidden="true" />
       <span className="truncate">{item.label}</span>
-      {isActive && <span className="ml-auto w-1.5 h-1.5 rounded-full bg-[#0071E3] shrink-0" aria-hidden="true" />}
-    </Tag>
+      {isActive && <span className="ml-auto w-1.5 h-1.5 rounded-full bg-blue-600 dark:bg-blue-400 shrink-0" aria-hidden="true" />}
+    </Link>
   );
 }

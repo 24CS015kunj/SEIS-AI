@@ -4,34 +4,30 @@
     <meta charset="UTF-8" />
     <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>SEIS AI Copilot — AI-Powered Software Evolution Intelligence System</title>
-    <meta name="description" content="Connect your GitHub repository and turn a complex codebase into an intelligent engineering workspace with architecture insights, repository intelligence, and AI understanding." />
-    
-    <!-- Google Fonts: Inter & JetBrains Mono -->
+    <meta name="theme-color" content="#19BED5" />
+    <title>SEIS AI Copilot - Software Evolution Intelligence System</title>
+    <meta name="description" content="Connect your GitHub repository and turn a complex codebase into an intelligent engineering workspace with architecture insights, dependency maps, and grounded AI understanding." />
+
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500;600;700&display=swap" rel="stylesheet">
 
-    <!-- Early theme bootstrap to prevent flash of wrong theme -->
     <script>
       (function() {
         try {
           var stored = localStorage.getItem('seis-theme');
-          var theme = (stored === 'light' || stored === 'dark') ? stored : 'dark';
-          if (theme === 'dark') {
-            document.documentElement.classList.add('dark');
-            document.documentElement.setAttribute('data-theme', 'dark');
-            document.documentElement.style.colorScheme = 'dark';
-          } else {
-            document.documentElement.classList.remove('dark');
-            document.documentElement.setAttribute('data-theme', 'light');
-            document.documentElement.style.colorScheme = 'light';
-          }
-        } catch (e) {}
+          var theme = stored === 'light' || stored === 'dark'
+            ? stored
+            : (window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light');
+
+          document.documentElement.classList.toggle('dark', theme === 'dark');
+          document.documentElement.setAttribute('data-theme', theme);
+          document.documentElement.style.colorScheme = theme;
+        } catch (error) {}
       })();
     </script>
   </head>
-  <body class="bg-[#F5F5F7] dark:bg-[#0B0F19] text-[#1D1D1F] dark:text-[#F8FAFC] antialiased selection:bg-blue-600 selection:text-white transition-colors duration-200">
+  <body class="bg-[#F7F9FC] text-[#111827] antialiased selection:bg-[#19BED5] selection:text-white transition-colors duration-200 dark:bg-[#080B0F] dark:text-[#F8FAFC]">
     <div id="root"></div>
     <script type="module" src="/src/main.jsx"></script>
   </body>

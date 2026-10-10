@@ -20,7 +20,7 @@ import CommitDetailDrawer from '../components/sourceControl/CommitDetailDrawer';
 import BranchList from '../components/sourceControl/BranchList';
 import FileList from '../components/sourceControl/FileList';
 import FileCodePreviewDrawer from '../components/common/FileCodePreviewDrawer';
-import EngineeringBackground from '../components/common/EngineeringBackground';
+import AuthenticatedAppShell from '../components/layout/AuthenticatedAppShell';
 import CommitCategoryStrip from '../components/commandCenter/CommitCategoryStrip';
 import { useAutoResolveDefaultRepository } from '../hooks/useAutoResolveDefaultRepository';
 
@@ -291,16 +291,16 @@ function SourceControlPageContent({ repositoryId }) {
   const showSkeleton = identity.status === 'loading';
 
   return (
-    <div className="relative min-h-screen w-full bg-[#F5F6FA] flex">
-      <EngineeringBackground />
-      <CommandCenterSidebar
-        repository={headerRepo}
-        repositoryId={identityReady ? repositoryId : null}
-        mobileOpen={mobileNavOpen}
-        onCloseMobile={() => setMobileNavOpen(false)}
-      />
-
-      <div className="flex-1 min-w-0 flex flex-col">
+    <AuthenticatedAppShell
+      sidebar={
+        <CommandCenterSidebar
+          repository={headerRepo}
+          repositoryId={repositoryId || null}
+          mobileOpen={mobileNavOpen}
+          onCloseMobile={() => setMobileNavOpen(false)}
+        />
+      }
+    >
         <CommandCenterHeader
           repository={headerRepo}
           repositoryId={repositoryId}
@@ -391,7 +391,6 @@ function SourceControlPageContent({ repositoryId }) {
             </div>
           )}
         </main>
-      </div>
 
       {copilotOpen && (
         <CopilotDrawer
@@ -415,7 +414,7 @@ function SourceControlPageContent({ repositoryId }) {
         filePath={previewFilePath}
         onClose={() => setPreviewFilePath(null)}
       />
-    </div>
+    </AuthenticatedAppShell>
   );
 }
 

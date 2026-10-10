@@ -21,7 +21,7 @@ import ModuleDetailsPanel from '../components/architecture/ModuleDetailsPanel';
 import DependencyAnalysisPanel from '../components/architecture/DependencyAnalysisPanel';
 import FileCodePreviewDrawer from '../components/common/FileCodePreviewDrawer';
 import CitationDrawer from '../components/chat/CitationDrawer';
-import EngineeringBackground from '../components/common/EngineeringBackground';
+import AuthenticatedAppShell from '../components/layout/AuthenticatedAppShell';
 import EmptyRepositoryState from '../components/common/EmptyRepositoryState';
 import { useAutoResolveDefaultRepository } from '../hooks/useAutoResolveDefaultRepository';
 
@@ -257,16 +257,16 @@ function ArchitecturePageContent({ repositoryId }) {
   const showSkeleton = identity.status === 'loading' || dashboardStatus === 'loading' || dashboardStatus === 'idle';
 
   return (
-    <div className="relative min-h-screen w-full bg-[#F5F6FA] flex">
-      <EngineeringBackground />
-      <CommandCenterSidebar
-        repository={headerRepo}
-        repositoryId={identityReady ? repositoryId : null}
-        mobileOpen={mobileNavOpen}
-        onCloseMobile={() => setMobileNavOpen(false)}
-      />
-
-      <div className="flex-1 min-w-0 flex flex-col">
+    <AuthenticatedAppShell
+      sidebar={
+        <CommandCenterSidebar
+          repository={headerRepo}
+          repositoryId={repositoryId || null}
+          mobileOpen={mobileNavOpen}
+          onCloseMobile={() => setMobileNavOpen(false)}
+        />
+      }
+    >
         <CommandCenterHeader
           repository={headerRepo}
           repositoryId={repositoryId}
@@ -463,7 +463,6 @@ function ArchitecturePageContent({ repositoryId }) {
             </div>
           )}
         </main>
-      </div>
 
       {copilotOpen && (
         <CopilotDrawer
@@ -485,7 +484,7 @@ function ArchitecturePageContent({ repositoryId }) {
         isOpen={citationDrawerOpen}
         onClose={() => setCitationDrawerOpen(false)}
       />
-    </div>
+    </AuthenticatedAppShell>
   );
 }
 

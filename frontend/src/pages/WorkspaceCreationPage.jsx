@@ -164,84 +164,65 @@ export default function WorkspaceCreationPage() {
   }
 
   return (
-    <div className="min-h-screen w-full bg-[#F5F6FA] flex flex-col lg:flex-row">
-      {/* ---------- Left panel: marketing + product preview (desktop only) ---------- */}
-      <div className="hidden lg:flex lg:w-[38%] relative overflow-hidden border-r border-[#E2E8F0]">
-        <div
-          className="absolute inset-0 pointer-events-none"
-          style={{
-            backgroundImage: 'radial-gradient(#E2E8F0 1px, transparent 1px)',
-            backgroundSize: '32px 32px',
-          }}
-        />
-        <div className="relative w-full flex flex-col justify-center px-14 xl:px-16 py-16">
+    <div className="min-h-screen w-full bg-[var(--seis-canvas)] flex flex-col lg:flex-row">
+      {/* ---------- Left panel: technical spec + architectural context (desktop only) ---------- */}
+      <div className="hidden lg:flex lg:w-[38%] relative overflow-hidden border-r border-[var(--seis-border-subtle)] bg-[var(--seis-surface-1)]">
+        <div className="seis-engineering-grid" aria-hidden="true" />
+        <div className="relative w-full flex flex-col justify-center px-12 xl:px-14 py-16 z-10">
           <div className="max-w-[420px]">
             <FadeIn>
               <Link
                 to="/"
-                className="inline-flex items-center gap-2.5 mb-10"
-                style={{ textDecoration: 'none' }}
-                aria-label="SEIS AI Copilot — back to homepage"
+                className="inline-flex items-center gap-2 mb-10 group no-underline"
+                aria-label="SEIS-AI — back to homepage"
               >
-                <BrandMark size={36} />
-                <span className="text-[15px] font-extrabold text-slate-900 tracking-tight">
-                  SEIS AI Copilot
+                <BrandMark size={32} />
+                <span className="font-mono text-[15px] font-bold text-[var(--seis-text-primary)] tracking-tight">
+                  SEIS-AI
                 </span>
+                <span className="badge-tag ml-1">v2.4</span>
               </Link>
 
-              <span className="eyebrow inline-block !mb-4 bg-blue-50 px-3 py-1 rounded-full">
-                ENGINEERING INTELLIGENCE PLATFORM
-              </span>
-              <h1 className="headline-lg mb-5" style={{ fontSize: 'clamp(1.75rem, 2.6vw, 2.5rem)' }}>
-                Your Software,{' '}
-                <span className="text-transparent bg-clip-text bg-gradient-to-r from-blue-600 to-indigo-600">
-                  Understood by AI.
-                </span>
+              <div className="text-[10px] font-mono font-bold uppercase tracking-wider text-blue-500 mb-3">
+                WORKSPACE TOPOLOGY
+              </div>
+              <h1 className="text-2xl xl:text-3xl font-extrabold text-[var(--seis-text-primary)] leading-tight tracking-tight mb-4 font-mono">
+                Isolated Environments for Living Codebases.
               </h1>
-              <p className="body-base mb-8 max-w-[380px]">
-                Every workspace connects a GitHub repository to an AI engine that maps
-                architecture, tracks evolution, and answers questions about your code.
+              <p className="text-[13.5px] text-[var(--seis-text-secondary)] leading-relaxed mb-6">
+                Workspaces maintain distinct AST index caches, commit churn windows, and vector embeddings for grouped software repositories.
               </p>
 
-              <div className="flex flex-wrap gap-2.5 mb-10">
-                <div className="inline-flex items-center gap-2 border border-[#E2E8F0] bg-white rounded-lg px-3 py-2">
-                  <FolderGit2 size={14} className="text-blue-600" aria-hidden="true" />
-                  <span className="text-[13px] font-semibold text-slate-700">Repository Analysis</span>
+              <div className="flex flex-wrap gap-2 mb-8">
+                <div className="inline-flex items-center gap-2 border border-[var(--seis-border-subtle)] bg-[var(--seis-surface-2)] rounded px-3 py-1.5 font-mono text-[12px]">
+                  <FolderGit2 size={13} className="text-blue-500" aria-hidden="true" />
+                  <span className="font-semibold text-[var(--seis-text-primary)]">AST Cache Isolated</span>
                 </div>
-                <div className="inline-flex items-center gap-2 border border-[#E2E8F0] bg-white rounded-lg px-3 py-2">
-                  <LayoutGrid size={14} className="text-indigo-600" aria-hidden="true" />
-                  <span className="text-[13px] font-semibold text-slate-700">Workspace</span>
+                <div className="inline-flex items-center gap-2 border border-[var(--seis-border-subtle)] bg-[var(--seis-surface-2)] rounded px-3 py-1.5 font-mono text-[12px]">
+                  <LayoutGrid size={13} className="text-indigo-500" aria-hidden="true" />
+                  <span className="font-semibold text-[var(--seis-text-primary)]">Multi-Repo Scope</span>
                 </div>
               </div>
             </FadeIn>
 
             <FadeIn delay={150}>
-              <div className="app-window bg-white">
-                <div className="app-titlebar bg-white justify-between">
-                  <span className="text-[11px] font-mono text-slate-400">seis-ai-copilot/frontend</span>
-                  <span className="text-[11px] font-mono font-semibold text-emerald-600 bg-emerald-50 px-2 py-0.5 rounded">
-                    92% EXCELLENT
-                  </span>
+              <div className="rounded border border-[var(--seis-border-subtle)] bg-[var(--seis-surface-2)] font-mono text-[11px] overflow-hidden">
+                <div className="flex items-center justify-between px-3.5 py-2 border-b border-[var(--seis-border-subtle)] bg-[var(--seis-surface-3)]">
+                  <span className="text-[var(--seis-text-muted)]">SEIS_CORE // WORKSPACE_MANIFEST</span>
+                  <span className="badge-ast">ONLINE</span>
                 </div>
-                <div className="p-5 bg-[#F8FAFC]">
-                  <div className="text-[11px] font-bold uppercase tracking-wider text-slate-400 mb-2">
-                    Languages
+                <div className="p-3.5 space-y-2.5 text-[var(--seis-text-secondary)]">
+                  <div className="flex items-center justify-between">
+                    <span>Index Resolution</span>
+                    <strong className="text-[var(--seis-text-primary)] font-mono">AST Tree-Sitter + Git</strong>
                   </div>
-                  <div className="flex gap-1.5 h-2 rounded-full overflow-hidden mb-5">
-                    <div className="bg-blue-500" style={{ width: '55%' }} />
-                    <div className="bg-indigo-400" style={{ width: '25%' }} />
-                    <div className="bg-emerald-400" style={{ width: '20%' }} />
+                  <div className="flex items-center justify-between">
+                    <span>Vector Persistence</span>
+                    <strong className="text-[var(--seis-text-primary)] font-mono">ChromaDB Local Collection</strong>
                   </div>
-                  <div className="text-[11px] font-bold uppercase tracking-wider text-slate-400 mb-2">
-                    Architecture Overview
-                  </div>
-                  <div className="bg-white rounded-lg border border-[#E2E8F0] p-4 flex items-center gap-3">
-                    <div className="w-8 h-8 rounded-lg bg-blue-50 flex items-center justify-center shrink-0">
-                      <BrandGlyph size={16} tone="onLight" />
-                    </div>
-                    <p className="text-[12.5px] text-slate-500 leading-snug m-0">
-                      0 circular dependencies detected across the module graph.
-                    </p>
+                  <div className="flex items-center justify-between">
+                    <span>Citation Verification</span>
+                    <strong className="text-emerald-500 font-mono">Strict File:Line Binding</strong>
                   </div>
                 </div>
               </div>
@@ -269,37 +250,39 @@ export default function WorkspaceCreationPage() {
             </Link>
 
             <FadeIn direction="scale">
-              <div className="bg-white border border-[#E2E8F0] rounded-2xl shadow-[0_8px_30px_rgba(15,23,42,0.06)] p-6 sm:p-9 lg:px-[41px] lg:py-10">
+              <div className="bg-[var(--seis-surface-1)] border border-[var(--seis-border-subtle)] rounded-lg shadow-sm p-6 sm:p-8 lg:p-9">
 
                 {/* ---- Header + stepper ---- */}
                 <div className="mb-6">
-                  <h2 className="text-xl sm:text-2xl font-bold text-slate-900 mb-1.5">Workspace Setup</h2>
-                  <p className="text-sm text-slate-500 mb-6">
-                    Set up or choose the engineering workspace where your repositories and AI insights live.
+                  <h2 className="text-lg sm:text-xl font-bold text-[var(--seis-text-primary)] mb-1 font-mono tracking-tight">
+                    Workspace Configuration
+                  </h2>
+                  <p className="text-[13px] text-[var(--seis-text-secondary)] mb-5">
+                    Define an isolated analysis workspace for your repositories and AST indexes.
                   </p>
                   <OnboardingStepper currentStep={1} />
                 </div>
 
                 {existingWorkspacesStatus === 'ready' && existingWorkspaces.length > 0 && (
-                  <div className="flex border-b border-slate-200 mb-6 gap-6">
+                  <div className="flex border-b border-[var(--seis-border-subtle)] mb-6 gap-6 font-mono text-[12px]">
                     <button
                       type="button"
                       onClick={() => setActiveTab('existing')}
-                      className={`pb-3 text-[13.5px] font-bold border-b-2 transition-colors cursor-pointer ${
+                      className={`pb-2.5 font-bold border-b-2 transition-colors cursor-pointer ${
                         activeTab === 'existing'
-                          ? 'border-blue-600 text-blue-600'
-                          : 'border-transparent text-slate-500 hover:text-slate-800'
+                          ? 'border-blue-500 text-blue-500'
+                          : 'border-transparent text-[var(--seis-text-muted)] hover:text-[var(--seis-text-primary)]'
                       }`}
                     >
-                      Choose Existing Workspace ({existingWorkspaces.length})
+                      Available Workspaces ({existingWorkspaces.length})
                     </button>
                     <button
                       type="button"
                       onClick={() => setActiveTab('create')}
-                      className={`pb-3 text-[13.5px] font-bold border-b-2 transition-colors cursor-pointer ${
+                      className={`pb-2.5 font-bold border-b-2 transition-colors cursor-pointer ${
                         activeTab === 'create'
-                          ? 'border-blue-600 text-blue-600'
-                          : 'border-transparent text-slate-500 hover:text-slate-800'
+                          ? 'border-blue-500 text-blue-500'
+                          : 'border-transparent text-[var(--seis-text-muted)] hover:text-[var(--seis-text-primary)]'
                       }`}
                     >
                       + Create New Workspace
@@ -316,144 +299,139 @@ export default function WorkspaceCreationPage() {
                   />
                 ) : (
                   <form onSubmit={handleSubmit} noValidate>
-                    {/* ---- Logo upload ---- */}
-                    <div className="mb-7">
-                      <LogoUpload />
-                    </div>
-
-                  {/* ---- Workspace name ---- */}
-                  <div className="mb-5">
-                    <label htmlFor="workspace-name" className="flex items-center gap-1 text-[11px] font-bold uppercase tracking-wider text-slate-500 mb-2">
-                      Workspace Name
-                      <span aria-hidden="true" className="text-rose-500">*</span>
-                      <span className="sr-only">(required)</span>
-                    </label>
-                    <input
-                      id="workspace-name"
-                      ref={nameInputRef}
-                      type="text"
-                      value={name}
-                      onChange={handleNameChange}
-                      onBlur={handleNameBlur}
-                      required
-                      aria-required="true"
-                      aria-invalid={nameError ? 'true' : 'false'}
-                      aria-describedby={nameError ? nameErrorId : undefined}
-                      placeholder="e.g. Platform Engineering"
-                      className={`w-full h-11 px-3.5 rounded-lg border text-[15px] text-slate-900 transition-colors ${
-                        nameError
-                          ? 'border-rose-400 focus-visible:border-rose-500'
-                          : 'border-[#E2E8F0] focus-visible:border-blue-500'
-                      }`}
-                    />
-                    {nameError && (
-                      <p id={nameErrorId} role="alert" className="flex items-center gap-1.5 text-[13px] text-rose-600 mt-1.5">
-                        <AlertCircle size={13} className="shrink-0" aria-hidden="true" />
-                        {nameError}
-                      </p>
-                    )}
-                  </div>
-
-                  {/* ---- Description ---- */}
-                  <div className="mb-5">
-                    <label htmlFor="workspace-description" className="block text-[11px] font-bold uppercase tracking-wider text-slate-500 mb-2">
-                      Description
-                    </label>
-                    <textarea
-                      id="workspace-description"
-                      value={description}
-                      onChange={(e) => setDescription(e.target.value)}
-                      rows={3}
-                      placeholder="Briefly describe the purpose of this workspace…"
-                      className="w-full min-h-[90px] px-3.5 py-2.5 rounded-lg border border-[#E2E8F0] text-[15px] text-slate-900 transition-colors focus-visible:border-blue-500 resize-y"
-                    />
-                  </div>
-
-                  {/* ---- Type + Org row ---- */}
-                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 mb-6">
-                    <div>
-                      <label htmlFor="workspace-type" className="block text-[11px] font-bold uppercase tracking-wider text-slate-500 mb-2">
-                        Workspace Type
-                      </label>
-                      <div className="relative">
-                        <select
-                          id="workspace-type"
-                          value={workspaceType}
-                          onChange={(e) => setWorkspaceType(e.target.value)}
-                          className="w-full h-11 pl-3.5 pr-9 rounded-lg border border-[#E2E8F0] text-[15px] text-slate-900 appearance-none bg-white transition-colors focus-visible:border-blue-500"
-                        >
-                          {WORKSPACE_TYPES.map((t) => (
-                            <option key={t.value} value={t.value}>{t.label}</option>
-                          ))}
-                        </select>
-                        <ChevronDown size={16} className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 text-slate-400" aria-hidden="true" />
-                      </div>
-                    </div>
-                    <div>
-                      <label htmlFor="org-name" className="block text-[11px] font-bold uppercase tracking-wider text-slate-500 mb-2">
-                        Organization Name <span className="normal-case font-medium text-slate-400">(optional)</span>
+                    {/* ---- Workspace name ---- */}
+                    <div className="mb-4">
+                      <label htmlFor="workspace-name" className="flex items-center gap-1 text-[10.5px] font-mono font-bold uppercase tracking-wider text-[var(--seis-text-muted)] mb-1.5">
+                        Workspace Identifier
+                        <span aria-hidden="true" className="text-rose-500">*</span>
+                        <span className="sr-only">(required)</span>
                       </label>
                       <input
-                        id="org-name"
+                        id="workspace-name"
+                        ref={nameInputRef}
                         type="text"
-                        value={orgName}
-                        onChange={(e) => setOrgName(e.target.value)}
-                        placeholder="e.g. Acme Corp"
-                        className="w-full h-11 px-3.5 rounded-lg border border-[#E2E8F0] text-[15px] text-slate-900 transition-colors focus-visible:border-blue-500"
+                        value={name}
+                        onChange={handleNameChange}
+                        onBlur={handleNameBlur}
+                        required
+                        aria-required="true"
+                        aria-invalid={nameError ? 'true' : 'false'}
+                        aria-describedby={nameError ? nameErrorId : undefined}
+                        placeholder="e.g. Core Architecture Lab"
+                        className={`w-full h-10 px-3 rounded border text-[13.5px] font-mono text-[var(--seis-text-primary)] bg-[var(--seis-surface-2)] transition-colors ${
+                          nameError
+                            ? 'border-rose-500 focus-visible:border-rose-500'
+                            : 'border-[var(--seis-border-subtle)] focus-visible:border-blue-500'
+                        }`}
+                      />
+                      {nameError && (
+                        <p id={nameErrorId} role="alert" className="flex items-center gap-1.5 text-[12px] font-mono text-rose-500 mt-1">
+                          <AlertCircle size={12} className="shrink-0" aria-hidden="true" />
+                          {nameError}
+                        </p>
+                      )}
+                    </div>
+
+                    {/* ---- Description ---- */}
+                    <div className="mb-4">
+                      <label htmlFor="workspace-description" className="block text-[10.5px] font-mono font-bold uppercase tracking-wider text-[var(--seis-text-muted)] mb-1.5">
+                        Description / Domain Scope
+                      </label>
+                      <textarea
+                        id="workspace-description"
+                        value={description}
+                        onChange={(e) => setDescription(e.target.value)}
+                        rows={2}
+                        placeholder="e.g. Ingestion and evolution telemetry for microservices…"
+                        className="w-full min-h-[72px] px-3 py-2 rounded border border-[var(--seis-border-subtle)] text-[13px] font-mono text-[var(--seis-text-primary)] bg-[var(--seis-surface-2)] transition-colors focus-visible:border-blue-500 resize-y"
                       />
                     </div>
-                  </div>
 
-                  {/* ---- Live preview ---- */}
-                  <WorkspacePreview name={name.trim() || 'Your Workspace'} />
+                    {/* ---- Type + Org row ---- */}
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 mb-5 font-mono">
+                      <div>
+                        <label htmlFor="workspace-type" className="block text-[10.5px] font-bold uppercase tracking-wider text-[var(--seis-text-muted)] mb-1.5">
+                          Deployment Type
+                        </label>
+                        <div className="relative">
+                          <select
+                            id="workspace-type"
+                            value={workspaceType}
+                            onChange={(e) => setWorkspaceType(e.target.value)}
+                            className="w-full h-10 pl-3 pr-8 rounded border border-[var(--seis-border-subtle)] text-[12.5px] font-mono text-[var(--seis-text-primary)] appearance-none bg-[var(--seis-surface-2)] transition-colors focus-visible:border-blue-500"
+                          >
+                            {WORKSPACE_TYPES.map((t) => (
+                              <option key={t.value} value={t.value}>{t.label}</option>
+                            ))}
+                          </select>
+                          <ChevronDown size={14} className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 text-[var(--seis-text-muted)]" aria-hidden="true" />
+                        </div>
+                      </div>
+                      <div>
+                        <label htmlFor="org-name" className="block text-[10.5px] font-bold uppercase tracking-wider text-[var(--seis-text-muted)] mb-1.5">
+                          Organization Tag <span className="normal-case font-normal text-[var(--seis-text-muted)]">(optional)</span>
+                        </label>
+                        <input
+                          id="org-name"
+                          type="text"
+                          value={orgName}
+                          onChange={(e) => setOrgName(e.target.value)}
+                          placeholder="e.g. Systems Engineering"
+                          className="w-full h-10 px-3 rounded border border-[var(--seis-border-subtle)] text-[12.5px] font-mono text-[var(--seis-text-primary)] bg-[var(--seis-surface-2)] transition-colors focus-visible:border-blue-500"
+                        />
+                      </div>
+                    </div>
 
-                  {submitError && (
-                    <p role="alert" className="flex items-center gap-1.5 text-[13px] text-rose-600 mt-4">
-                      <AlertCircle size={13} className="shrink-0" aria-hidden="true" />
-                      {submitError}
-                    </p>
-                  )}
+                    {/* ---- Live preview ---- */}
+                    <WorkspacePreview name={name.trim() || 'Workspace Preview'} />
 
-                  {/* ---- Actions ---- */}
-                  <div className="flex flex-col-reverse sm:flex-row sm:items-center sm:justify-between gap-3 mt-7">
-                    <Link
-                      to="/login"
-                      className="inline-flex items-center justify-center gap-2 h-11 px-4 rounded-lg border border-[#E2E8F0] text-slate-700 text-[14px] font-semibold no-underline transition-colors hover:bg-slate-50 w-full sm:w-auto"
-                    >
-                      <ArrowLeft size={16} aria-hidden="true" />
-                      Back
-                    </Link>
-                    <button
-                      type="submit"
-                      disabled={submitStatus === 'submitting'}
-                      aria-busy={submitStatus === 'submitting'}
-                      className="inline-flex items-center justify-center gap-2 h-11 px-6 rounded-lg bg-blue-600 text-white text-[14px] font-semibold border-0 cursor-pointer transition-colors hover:bg-blue-700 disabled:cursor-not-allowed disabled:opacity-80 w-full sm:w-auto whitespace-nowrap"
-                    >
-                      {submitStatus === 'submitting' ? (
-                        <>
-                          <Loader2 size={17} className="animate-spin" aria-hidden="true" />
-                          Creating Workspace…
-                        </>
-                      ) : (
-                        <>
-                          Create Workspace
-                          <ArrowRight size={16} aria-hidden="true" />
-                        </>
-                      )}
-                    </button>
-                  </div>
-                  <span className="sr-only" role="status" aria-live="polite">
-                    {submitStatus === 'submitting' ? 'Creating your workspace, please wait.' : ''}
-                  </span>
-                </form>
+                    {submitError && (
+                      <p role="alert" className="flex items-center gap-1.5 text-[12px] font-mono text-rose-500 mt-3">
+                        <AlertCircle size={12} className="shrink-0" aria-hidden="true" />
+                        {submitError}
+                      </p>
+                    )}
+
+                    {/* ---- Actions ---- */}
+                    <div className="flex flex-col-reverse sm:flex-row sm:items-center sm:justify-between gap-3 mt-6 pt-4 border-t border-[var(--seis-border-subtle)]">
+                      <Link
+                        to="/login"
+                        className="inline-flex items-center justify-center gap-1.5 h-9 px-3 rounded border border-[var(--seis-border-subtle)] bg-[var(--seis-surface-2)] text-[var(--seis-text-secondary)] hover:text-[var(--seis-text-primary)] text-[12px] font-mono font-medium no-underline transition-colors w-full sm:w-auto"
+                      >
+                        <ArrowLeft size={14} aria-hidden="true" />
+                        Back to Auth
+                      </Link>
+                      <button
+                        type="submit"
+                        disabled={submitStatus === 'submitting'}
+                        aria-busy={submitStatus === 'submitting'}
+                        className="btn-tool-primary inline-flex items-center justify-center gap-2 h-9 px-4 rounded text-[12.5px] font-mono font-semibold cursor-pointer transition-colors disabled:cursor-not-allowed disabled:opacity-70 w-full sm:w-auto whitespace-nowrap"
+                      >
+                        {submitStatus === 'submitting' ? (
+                          <>
+                            <Loader2 size={14} className="animate-spin" aria-hidden="true" />
+                            Creating Workspace…
+                          </>
+                        ) : (
+                          <>
+                            <span>Initialize Workspace</span>
+                            <ArrowRight size={14} aria-hidden="true" />
+                          </>
+                        )}
+                      </button>
+                    </div>
+                    <span className="sr-only" role="status" aria-live="polite">
+                      {submitStatus === 'submitting' ? 'Creating your workspace, please wait.' : ''}
+                    </span>
+                  </form>
                 )}
               </div>
             </FadeIn>
 
-            <div className="flex items-center justify-center gap-6 mt-6 text-[13px] text-slate-500">
-              <a href="#" className="hover:text-slate-900 transition-colors no-underline">Privacy Policy</a>
-              <a href="#" className="hover:text-slate-900 transition-colors no-underline">Documentation</a>
-              <a href="#" className="hover:text-slate-900 transition-colors no-underline">Support</a>
+            <div className="flex items-center justify-center gap-6 mt-6 text-[11px] font-mono text-[var(--seis-text-muted)]">
+              <a href="#" className="hover:text-[var(--seis-text-primary)] transition-colors no-underline">Telemetry Policy</a>
+              <a href="#" className="hover:text-[var(--seis-text-primary)] transition-colors no-underline">Architecture Docs</a>
+              <a href="#" className="hover:text-[var(--seis-text-primary)] transition-colors no-underline">Diagnostic Log</a>
             </div>
           </div>
         </div>
@@ -590,23 +568,23 @@ function LogoUpload() {
 
 function ExistingWorkspacesPanel({ workspaces, onOpen, onChangeRepo, onCreateNew }) {
   return (
-    <div className="mb-7">
+    <div className="mb-6 font-mono">
       <div className="flex items-center justify-between gap-2 mb-3">
-        <span className="text-[11px] font-bold uppercase tracking-wider text-slate-500">
-          Your Workspaces ({workspaces.length})
+        <span className="text-[10.5px] font-bold uppercase tracking-wider text-[var(--seis-text-muted)]">
+          Registered Workspaces ({workspaces.length})
         </span>
         {onCreateNew && (
           <button
             type="button"
             onClick={onCreateNew}
-            className="text-[12px] font-semibold text-blue-600 hover:text-blue-700 cursor-pointer"
+            className="text-[11.5px] font-bold text-blue-500 hover:underline cursor-pointer"
           >
             + Create New
           </button>
         )}
       </div>
 
-      <div className="grid grid-cols-1 gap-3">
+      <div className="grid grid-cols-1 gap-2.5">
         {workspaces.map((workspace) => {
           const defaultRepoId =
             typeof workspace.defaultRepositoryId === 'object'
@@ -622,59 +600,59 @@ function ExistingWorkspacesPanel({ workspaces, onOpen, onChangeRepo, onCreateNew
           return (
             <div
               key={workspace._id}
-              className="group flex flex-col sm:flex-row sm:items-center justify-between gap-3 bg-white border border-slate-200 hover:border-blue-400 hover:shadow-md rounded-xl p-4 transition-all"
+              className="group flex flex-col sm:flex-row sm:items-center justify-between gap-3 bg-[var(--seis-surface-2)] border border-[var(--seis-border-subtle)] hover:border-[var(--seis-border-strong)] rounded p-3.5 transition-all"
             >
               <div className="flex items-center gap-3 min-w-0">
-                <div className="w-10 h-10 rounded-xl bg-blue-50 text-blue-600 flex items-center justify-center shrink-0">
-                  <LayoutGrid size={18} />
+                <div className="w-8 h-8 rounded bg-[var(--seis-surface-3)] text-[var(--seis-brand-blue)] border border-[var(--seis-border-subtle)] flex items-center justify-center shrink-0">
+                  <LayoutGrid size={15} />
                 </div>
                 <div className="min-w-0">
-                  <h4 className="text-[14.5px] font-bold text-slate-900 truncate m-0">
+                  <h4 className="text-[13.5px] font-bold text-[var(--seis-text-primary)] truncate m-0 font-mono">
                     {workspace.name}
                   </h4>
                   {defaultRepoName ? (
-                    <div className="flex items-center gap-1.5 text-[12px] text-slate-500 font-mono mt-0.5 truncate" title={`Default: ${defaultRepoName}`}>
-                      <FolderGit2 size={12} className="text-blue-600 shrink-0" />
-                      <span className="truncate">Default: <strong className="text-slate-800 font-semibold">{defaultRepoName}</strong></span>
+                    <div className="flex items-center gap-1.5 text-[11px] text-[var(--seis-text-secondary)] font-mono mt-0.5 truncate" title={`Default: ${defaultRepoName}`}>
+                      <FolderGit2 size={11} className="text-blue-500 shrink-0" />
+                      <span className="truncate">Default: <strong className="text-[var(--seis-text-primary)] font-semibold">{defaultRepoName}</strong></span>
                     </div>
                   ) : (
-                    <span className="text-[12px] text-slate-400 block mt-0.5">
-                      No repository linked yet
+                    <span className="text-[11px] text-[var(--seis-text-muted)] block mt-0.5 font-mono">
+                      No linked repository
                     </span>
                   )}
                 </div>
               </div>
 
-              <div className="flex items-center gap-2 shrink-0 self-end sm:self-auto">
+              <div className="flex items-center gap-2 shrink-0 self-end sm:self-auto font-mono text-[12px]">
                 {defaultRepoId ? (
                   <>
                     <button
                       type="button"
                       onClick={() => onChangeRepo(workspace)}
-                      className="inline-flex items-center gap-1.5 h-9 px-3 rounded-lg bg-slate-100 hover:bg-slate-200 text-slate-700 hover:text-slate-900 text-[12px] font-semibold border border-slate-200 cursor-pointer transition-colors"
+                      className="inline-flex items-center gap-1 h-8 px-2.5 rounded bg-[var(--seis-surface-1)] hover:bg-[var(--seis-surface-3)] text-[var(--seis-text-secondary)] hover:text-[var(--seis-text-primary)] font-medium border border-[var(--seis-border-subtle)] cursor-pointer transition-colors"
                       title="Switch or choose a different repository for this workspace"
                     >
-                      <FolderGit2 size={13} className="text-slate-500" />
+                      <FolderGit2 size={12} className="text-[var(--seis-text-muted)]" />
                       <span>Switch Repo</span>
                     </button>
                     <button
                       type="button"
                       onClick={() => onOpen(workspace, defaultRepoId)}
-                      className="inline-flex items-center gap-1.5 h-9 px-4 rounded-lg bg-blue-600 hover:bg-blue-700 text-white text-[13px] font-semibold border-0 cursor-pointer transition-colors shadow-xs"
-                      title="Directly open Command Center with default repository"
+                      className="btn-tool-primary inline-flex items-center gap-1.5 h-8 px-3 rounded font-semibold cursor-pointer transition-colors"
+                      title="Open telemetry command center"
                     >
                       <span>Open Workspace</span>
-                      <ArrowRight size={14} />
+                      <ArrowRight size={13} />
                     </button>
                   </>
                 ) : (
                   <button
                     type="button"
                     onClick={() => onChangeRepo(workspace)}
-                    className="inline-flex items-center gap-1.5 h-9 px-4 rounded-lg bg-blue-600 hover:bg-blue-700 text-white text-[13px] font-semibold border-0 cursor-pointer transition-colors shadow-xs"
+                    className="btn-tool-primary inline-flex items-center gap-1.5 h-8 px-3 rounded font-semibold cursor-pointer transition-colors"
                   >
-                    <span>Select Repository</span>
-                    <ArrowRight size={14} />
+                    <span>Link Repository</span>
+                    <ArrowRight size={13} />
                   </button>
                 )}
               </div>
@@ -689,19 +667,19 @@ function ExistingWorkspacesPanel({ workspaces, onOpen, onChangeRepo, onCreateNew
 function WorkspacePreview({ name }) {
   return (
     <div
-      className="relative rounded-xl p-[1.5px] bg-gradient-to-r from-blue-500 to-indigo-500"
+      className="rounded border border-[var(--seis-border-subtle)] bg-[var(--seis-surface-2)] p-3 font-mono"
       aria-label="Workspace preview"
     >
-      <div className="rounded-[10px] bg-white p-4 flex items-center gap-3.5">
-        <div className="w-10 h-10 rounded-lg bg-blue-50 flex items-center justify-center shrink-0">
-          <BrandGlyph size={18} tone="onLight" />
+      <div className="flex items-center gap-3">
+        <div className="w-8 h-8 rounded bg-[var(--seis-surface-3)] border border-[var(--seis-border-subtle)] flex items-center justify-center shrink-0">
+          <BrandGlyph size={15} tone="neutral" />
         </div>
         <div className="min-w-0">
-          <div className="text-[14px] font-bold text-slate-900 truncate">{name}</div>
-          <div className="flex flex-wrap items-center gap-x-1.5 gap-y-0.5 text-[12.5px] text-slate-500 mt-0.5">
-            <span className="whitespace-nowrap">Engineering Space</span>
-            <span aria-hidden="true">·</span>
-            <span className="flex items-center gap-1 whitespace-nowrap"><FolderGit2 size={11} aria-hidden="true" />Ready for Repos</span>
+          <div className="text-[13px] font-bold text-[var(--seis-text-primary)] truncate">{name}</div>
+          <div className="flex flex-wrap items-center gap-x-2 text-[11px] text-[var(--seis-text-muted)] mt-0.5">
+            <span className="badge-ast">READY FOR INGESTION</span>
+            <span>·</span>
+            <span className="flex items-center gap-1"><FolderGit2 size={10} aria-hidden="true" />Multi-Repo AST Target</span>
           </div>
         </div>
       </div>
@@ -724,27 +702,29 @@ function SuccessScreen({ workspace }) {
   }, [workspace]);
 
   return (
-    <div className="min-h-screen w-full bg-[#F5F6FA] flex items-center justify-center px-6 py-16">
+    <div className="min-h-screen w-full bg-[var(--seis-canvas)] flex items-center justify-center px-6 py-16 font-mono">
       <FadeIn direction="scale">
         <div
           role="status"
           aria-live="polite"
-          className="w-full max-w-[460px] bg-white border border-[#E2E8F0] rounded-2xl shadow-[0_8px_30px_rgba(15,23,42,0.08)] px-8 py-10 text-center"
+          className="w-full max-w-[460px] bg-[var(--seis-surface-1)] border border-[var(--seis-border-subtle)] rounded-lg shadow-sm px-8 py-10 text-center"
         >
-          <div className="w-16 h-16 rounded-2xl bg-emerald-50 text-emerald-600 flex items-center justify-center mx-auto mb-5 shadow-inner">
-            <CheckCircle2 size={32} />
+          <div className="w-12 h-12 rounded bg-emerald-500/10 border border-emerald-500/30 text-emerald-500 flex items-center justify-center mx-auto mb-4">
+            <CheckCircle2 size={24} />
           </div>
-          <h1 className="text-xl font-bold text-slate-900 mb-2">Workspace Created Successfully</h1>
-          <p className="text-sm text-slate-500 leading-relaxed mb-6">
-            <span className="font-semibold text-slate-700">{workspace.name}</span> is ready. Moving to repository selection…
+          <h1 className="text-lg font-bold text-[var(--seis-text-primary)] mb-2 tracking-tight">
+            Workspace Initialized
+          </h1>
+          <p className="text-[13px] text-[var(--seis-text-secondary)] leading-relaxed mb-6 font-sans">
+            <span className="font-semibold text-[var(--seis-text-primary)] font-mono">{workspace.name}</span> active. Routing to repository selection…
           </p>
           <button
             type="button"
             onClick={handleContinue}
-            className="w-full inline-flex items-center justify-center gap-2 h-11 px-6 rounded-xl bg-blue-600 hover:bg-blue-700 text-white text-[14px] font-semibold transition-colors cursor-pointer"
+            className="btn-tool-primary w-full inline-flex items-center justify-center gap-2 h-10 px-5 rounded text-[13px] font-semibold transition-colors cursor-pointer"
           >
-            Continue to Repository Setup
-            <ArrowRight size={15} />
+            Continue to Repository Selection
+            <ArrowRight size={14} />
           </button>
         </div>
       </FadeIn>

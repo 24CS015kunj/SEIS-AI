@@ -1,16 +1,14 @@
 import React, { useState, useEffect } from 'react';
 import { Link } from 'react-router-dom';
-import { Menu, X } from 'lucide-react';
-import GithubIcon from '../common/GithubIcon';
-import BrandMark from '../common/BrandMark';
+import { GitBranch, Menu, UserRound, X } from 'lucide-react';
 import ThemeToggle from '../common/ThemeToggle';
 import { useAuth } from '../../context/AuthContext';
 
 const navLinks = [
-  { name: 'Features', href: '#features' },
-  { name: 'Workflow', href: '#how-it-works' },
+  { name: 'Capabilities', href: '#features' },
+  { name: 'Pipeline', href: '#how-it-works' },
+  { name: 'Roles', href: '#who-uses-seis' },
   { name: 'Documentation', href: '#' },
-  { name: 'About Us', href: '#who-uses-seis' },
 ];
 
 export default function Navbar({ onOpenAuth, onOpenDocs }) {
@@ -30,82 +28,90 @@ export default function Navbar({ onOpenAuth, onOpenDocs }) {
       e.preventDefault();
     }
     if (link.name === 'Documentation') {
-      onOpenDocs();
+      onOpenDocs?.();
     }
     setMenuOpen(false);
   };
 
   return (
     <header
-      style={{ height: '68px' }}
-      className={`sticky top-0 z-50 tech-glass transition-all duration-200 ${
-        scrolled ? 'shadow-[0_1px_3px_0_rgba(15,23,42,0.06)] border-b border-slate-200' : 'border-b border-slate-200/70'
+      className={`sticky top-0 z-50 h-14 border-b transition-all duration-200 ${
+        scrolled
+          ? 'bg-(--seis-surface-1)/95 backdrop-blur-md border-(--seis-border-subtle) shadow-sm'
+          : 'bg-(--seis-surface-1)/85 backdrop-blur-md border-(--seis-border-subtle)'
       }`}
     >
-      <div className="max-w-[1280px] mx-auto px-6 lg:px-8 h-full flex items-center justify-between gap-8">
+      <div className="max-w-310 mx-auto px-4 sm:px-6 lg:px-8 h-full flex items-center justify-between gap-6">
 
-        {/* Brand — same mark used across Login/Workspace/Import/Command Center */}
-        <a href="#hero" className="flex items-center gap-2.5 flex-shrink-0 group no-underline">
-          <BrandMark size={30} />
-          <span className="text-[15px] font-bold text-slate-900 tracking-tight flex items-center gap-2">
-            SEIS AI Copilot
-            <span className="hidden sm:inline-block font-mono text-[10px] font-semibold text-blue-600 dark:text-blue-400 bg-blue-50 dark:bg-blue-950/60 border border-blue-200/70 dark:border-blue-800/60 rounded px-1.5 py-0.5">
-              v1.0
+        {/* Brand */}
+        <a
+          href="#hero"
+          className="group flex shrink-0 items-center gap-2.5 rounded-md no-underline outline-none focus-visible:ring-2 focus-visible:ring-(--seis-cyan) focus-visible:ring-offset-2 focus-visible:ring-offset-(--seis-canvas) seis-logo-entrance"
+          aria-label="SEIS-AI homepage"
+        >
+          <img
+            src="/logo.jpeg"
+            alt=""
+            className="h-8 w-8 shrink-0 rounded-full border border-(--seis-cyan)/40 object-cover"
+          />
+          <div className="flex min-w-0 items-baseline gap-1.5">
+            <span className="font-mono text-[14px] font-bold text-(--seis-text-primary) transition-colors duration-200 group-hover:text-(--seis-cyan)">
+              SEIS-AI
             </span>
-          </span>
+          </div>
         </a>
 
         {/* Desktop Nav */}
-        <nav className="hidden lg:flex items-center gap-7">
+        <nav className="hidden lg:flex items-center gap-1">
           {navLinks.map((link) => (
             <a
               key={link.name}
               href={link.href}
               onClick={(e) => handleNavClick(e, link)}
-              className="relative text-[14px] font-medium text-slate-600 dark:text-slate-400 hover:text-slate-950 dark:hover:text-white transition-colors group py-1.5"
-              style={{ textDecoration: 'none' }}
+              className="rounded-md px-3 py-1.5 text-[13px] font-medium text-(--seis-text-secondary) no-underline transition-all duration-150 hover:bg-(--seis-surface-hover) hover:text-(--seis-cyan) focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-(--seis-cyan) focus-visible:ring-offset-2 focus-visible:ring-offset-(--seis-canvas)"
             >
               {link.name}
-              <span className="absolute bottom-0 left-0 w-0 h-[2px] bg-blue-600 rounded-full transition-all duration-200 group-hover:w-full" />
             </a>
           ))}
         </nav>
 
         {/* Right Actions */}
-        <div className="hidden lg:flex items-center gap-3">
+        <div className="hidden lg:flex items-center gap-2">
           <ThemeToggle />
+
           {isAuthenticated ? (
             <div className="flex items-center gap-2">
               <Link
-                to="/login"
-                title="Account Details & Confirmation"
-                className="flex items-center gap-2 h-9 px-2.5 rounded-lg bg-slate-100 dark:bg-slate-800 hover:bg-slate-200/80 dark:hover:bg-slate-700 transition-colors no-underline text-slate-800 dark:text-slate-200 text-[13px] font-medium border border-slate-200 dark:border-slate-700"
+                to="/workspace"
+                title="Your Workspaces"
+                className="flex h-8 items-center gap-2 rounded-md border border-(--seis-border-subtle) bg-(--seis-surface-2) px-2.5 font-mono text-[12px] font-semibold text-(--seis-text-primary) no-underline transition-all duration-150 hover:border-(--seis-cyan) hover:text-(--seis-cyan)"
               >
                 {user.avatarUrl ? (
                   <img
                     src={user.avatarUrl}
                     alt={user.githubUsername}
-                    className="w-5 h-5 rounded-full object-cover border border-white dark:border-slate-700"
+                    className="w-4 h-4 rounded-full object-cover"
                   />
                 ) : (
-                  <GithubIcon className="w-4 h-4 text-slate-700 dark:text-slate-300" />
+                  <UserRound className="w-3.5 h-3.5" aria-hidden="true" />
                 )}
                 <span>@{user.githubUsername}</span>
               </Link>
               <Link
-                to="/workspace"
-                className="btn-apple-primary h-9 px-3.5 text-[13px] rounded-lg font-semibold flex items-center justify-center no-underline"
+                to="/command-center"
+                className="btn-tool-primary h-8 px-3.5 text-[12px] no-underline"
               >
-                <span>Workspace</span>
+                <span>Command Center</span>
               </Link>
             </div>
           ) : (
             <button
-              onClick={() => onOpenAuth('github')}
-              className="btn-dev-primary h-10 px-4 text-[13.5px] gap-2 rounded-lg font-semibold"
+              type="button"
+              onClick={() => onOpenAuth?.('github')}
+              className="btn-tool-primary h-8 px-3.5 text-[12.5px]"
             >
-              <GithubIcon className="w-4 h-4" />
-              <span>Connect GitHub</span>
+              <GitBranch size={14} aria-hidden="true" />
+              <span>Connect Repository</span>
             </button>
           )}
         </div>
@@ -114,64 +120,51 @@ export default function Navbar({ onOpenAuth, onOpenDocs }) {
         <div className="lg:hidden flex items-center gap-2">
           <ThemeToggle />
           <button
+            type="button"
             onClick={() => setMenuOpen(!menuOpen)}
-            className="p-2 rounded-md text-slate-500 hover:text-slate-900 dark:hover:text-slate-100 hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors"
+            className="rounded-md p-1.5 text-(--seis-text-secondary) hover:bg-(--seis-surface-hover) hover:text-(--seis-text-primary) transition-colors border border-(--seis-border-subtle)"
             aria-label="Toggle menu"
-            style={{ background: 'none', border: 'none', cursor: 'pointer' }}
+            aria-expanded={menuOpen}
           >
-            {menuOpen ? <X size={20} /> : <Menu size={20} />}
+            {menuOpen ? <X size={18} /> : <Menu size={18} />}
           </button>
         </div>
       </div>
 
       {/* Mobile Drawer */}
       {menuOpen && (
-        <div className="lg:hidden absolute top-[72px] left-0 right-0 bg-white dark:bg-[#0F172A] border-b border-[#E2E8F0] dark:border-slate-800 z-50 shadow-sm">
-          <div className="px-6 py-5 space-y-1">
+        <div className="absolute left-0 right-0 top-14 z-50 border-b border-(--seis-border-subtle) bg-(--seis-surface-1) shadow-lg lg:hidden">
+          <div className="px-5 py-4 space-y-0.5">
             {navLinks.map((link) => (
               <a
                 key={link.name}
                 href={link.href}
                 onClick={(e) => handleNavClick(e, link)}
-                style={{ fontSize: 15, fontWeight: 500, textDecoration: 'none' }}
-                className="block py-2.5 text-slate-800 dark:text-slate-100 hover:text-[#2563EB] dark:hover:text-blue-400 transition-colors"
+                className="block py-2.5 px-3 text-[13.5px] font-medium text-(--seis-text-secondary) hover:text-(--seis-text-primary) hover:bg-(--seis-surface-hover) rounded-md no-underline transition-colors"
               >
                 {link.name}
               </a>
             ))}
           </div>
-          <div className="px-6 pb-6 pt-4 border-t border-[#E2E8F0] dark:border-slate-800 space-y-3">
+          <div className="border-t border-(--seis-border-subtle) px-5 py-4">
             {isAuthenticated ? (
               <div className="space-y-2">
                 <Link
-                  to="/workspace"
+                  to="/command-center"
                   onClick={() => setMenuOpen(false)}
-                  className="btn-apple-primary w-full h-11 gap-2 rounded-lg font-semibold text-[14px] flex items-center justify-center no-underline"
+                  className="btn-tool-primary w-full h-10 text-[13px] no-underline"
                 >
-                  {user.avatarUrl && (
-                    <img
-                      src={user.avatarUrl}
-                      alt={user.githubUsername}
-                      className="w-5 h-5 rounded-full object-cover"
-                    />
-                  )}
-                  <span>Go to Workspace (@{user.githubUsername})</span>
-                </Link>
-                <Link
-                  to="/login"
-                  onClick={() => setMenuOpen(false)}
-                  className="w-full h-10 text-[13px] font-medium text-slate-700 dark:text-slate-200 bg-slate-100 dark:bg-slate-800 hover:bg-slate-200/80 dark:hover:bg-slate-700 rounded-lg flex items-center justify-center gap-2 no-underline"
-                >
-                  Manage Account & Switch User
+                  Enter Command Center (@{user.githubUsername})
                 </Link>
               </div>
             ) : (
               <button
-                onClick={() => { setMenuOpen(false); onOpenAuth('github'); }}
-                className="btn-dev-primary w-full h-11 gap-2 rounded-lg font-semibold text-[14px]"
+                type="button"
+                onClick={() => { setMenuOpen(false); onOpenAuth?.('github'); }}
+                className="btn-tool-primary h-10 w-full text-[13px]"
               >
-                <GithubIcon className="w-4 h-4" />
-                Connect GitHub
+                <GitBranch size={14} aria-hidden="true" />
+                Connect Repository
               </button>
             )}
           </div>

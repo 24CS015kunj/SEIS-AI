@@ -226,8 +226,8 @@ export default function ImportRepositoryPage() {
   };
 
   return (
-    <div className="min-h-screen w-full bg-[#F5F6FA] flex flex-col items-center justify-start px-4 sm:px-6 py-8 lg:py-12">
-      <div className="w-full max-w-[1024px] mb-4">
+    <div className="min-h-screen w-full bg-[var(--seis-canvas)] flex flex-col items-center justify-start px-4 sm:px-6 py-8 lg:py-10">
+      <div className="w-full max-w-[1060px] mb-4">
         <OnboardingStepper
           currentStep={2}
           onStepClick={(step) => {
@@ -236,52 +236,52 @@ export default function ImportRepositoryPage() {
         />
       </div>
 
-      <FadeIn direction="scale" className="w-full max-w-[1024px]">
-        <div className="bg-white border border-[#E2E8F0] rounded-2xl shadow-[0_8px_30px_rgba(15,23,42,0.08)] overflow-hidden">
+      <FadeIn direction="scale" className="w-full max-w-[1060px]">
+        <div className="bg-[var(--seis-surface-1)] border border-[var(--seis-border-subtle)] rounded-lg shadow-sm overflow-hidden">
 
           {/* ---------- Header ---------- */}
-          <div className="flex items-start justify-between gap-4 px-6 sm:px-8 py-6 border-b border-[#E2E8F0]">
+          <div className="flex items-start justify-between gap-4 px-6 sm:px-7 py-5 border-b border-[var(--seis-border-subtle)] bg-[var(--seis-surface-1)]">
             <div className="flex items-start gap-3">
-              <BrandMark size={36} />
+              <BrandMark size={32} />
               <div>
-                <h1 className="text-lg sm:text-xl font-bold text-slate-900 leading-tight">
-                  Import GitHub Repositories
+                <h1 className="text-base sm:text-lg font-bold text-[var(--seis-text-primary)] leading-tight font-mono tracking-tight">
+                  Repository Ingestion Ledger
                 </h1>
-                <p className="text-[13.5px] text-slate-500 mt-1">
-                  Sync and select a repository to connect to SEIS AI Copilot.
+                <p className="text-[12.5px] text-[var(--seis-text-secondary)] mt-0.5">
+                  Select a target GitHub repository to extract AST dependencies and calculate commit churn.
                 </p>
               </div>
             </div>
             <Link
               to="/workspace"
               aria-label="Back to workspace setup"
-              className="shrink-0 w-9 h-9 rounded-lg border border-[#E2E8F0] flex items-center justify-center text-slate-500 hover:text-slate-900 hover:bg-slate-50 transition-colors"
+              className="shrink-0 w-8 h-8 rounded border border-[var(--seis-border-subtle)] bg-[var(--seis-surface-2)] flex items-center justify-center text-[var(--seis-text-muted)] hover:text-[var(--seis-text-primary)] hover:border-[var(--seis-border-strong)] transition-colors"
             >
-              <X size={17} aria-hidden="true" />
+              <X size={15} aria-hidden="true" />
             </Link>
           </div>
 
           {/* ---------- Active Workspace Selector Toolbar ---------- */}
-          <div className="bg-slate-50 border-b border-[#E2E8F0] px-6 sm:px-8 py-3 flex flex-wrap items-center justify-between gap-3">
+          <div className="bg-[var(--seis-surface-2)] border-b border-[var(--seis-border-subtle)] px-6 sm:px-7 py-2.5 flex flex-wrap items-center justify-between gap-3 font-mono text-[12px]">
             <div className="flex items-center gap-2 relative">
-              <span className="text-[11px] font-bold uppercase tracking-wider text-slate-400">
-                Workspace:
+              <span className="text-[10px] font-bold uppercase tracking-wider text-[var(--seis-text-muted)]">
+                ACTIVE WORKSPACE:
               </span>
               <div className="relative">
                 <button
                   type="button"
                   onClick={() => setWorkspaceMenuOpen((v) => !v)}
-                  className="inline-flex items-center gap-2 px-3 py-1.5 rounded-lg border border-slate-200 bg-white hover:bg-slate-100 text-slate-800 text-[13px] font-semibold transition-colors shadow-2xs cursor-pointer"
+                  className="inline-flex items-center gap-2 px-2.5 py-1 rounded border border-[var(--seis-border-subtle)] bg-[var(--seis-surface-1)] hover:border-[var(--seis-border-strong)] text-[var(--seis-text-primary)] font-semibold transition-colors cursor-pointer"
                 >
-                  <LayoutGrid size={14} className="text-blue-600 shrink-0" />
+                  <LayoutGrid size={13} className="text-blue-500 shrink-0" />
                   <span className="max-w-[200px] truncate">{activeWorkspace?.name || 'Loading workspaces…'}</span>
-                  <ChevronDown size={13} className={`text-slate-400 transition-transform ${workspaceMenuOpen ? 'rotate-180' : ''}`} />
+                  <ChevronDown size={12} className={`text-[var(--seis-text-muted)] transition-transform ${workspaceMenuOpen ? 'rotate-180' : ''}`} />
                 </button>
 
                 {workspaceMenuOpen && (
-                  <div className="absolute left-0 top-full mt-1.5 w-64 bg-white border border-slate-200 rounded-xl shadow-lg z-30 p-1.5">
-                    <div className="text-[10.5px] font-bold uppercase tracking-wider text-slate-400 px-2.5 py-1.5">
-                      Your Workspaces ({workspaces.length})
+                  <div className="absolute left-0 top-full mt-1 w-64 bg-[var(--seis-surface-1)] border border-[var(--seis-border-strong)] rounded shadow-lg z-30 p-1.5 font-mono">
+                    <div className="text-[10px] font-bold uppercase tracking-wider text-[var(--seis-text-muted)] px-2 py-1">
+                      Registered Workspaces ({workspaces.length})
                     </div>
                     <div className="max-h-48 overflow-y-auto flex flex-col gap-0.5">
                       {workspaces.map((ws) => (
@@ -289,26 +289,26 @@ export default function ImportRepositoryPage() {
                           key={ws._id}
                           type="button"
                           onClick={() => handleSelectWorkspace(ws)}
-                          className={`w-full flex items-center justify-between px-2.5 py-2 rounded-lg text-left text-[12.5px] transition-colors cursor-pointer ${
+                          className={`w-full flex items-center justify-between px-2 py-1.5 rounded text-left text-[11.5px] transition-colors cursor-pointer ${
                             activeWorkspace?._id === ws._id
-                              ? 'bg-blue-50 text-blue-700 font-semibold'
-                              : 'text-slate-700 hover:bg-slate-50'
+                              ? 'bg-blue-500/10 text-blue-500 font-semibold'
+                              : 'text-[var(--seis-text-secondary)] hover:bg-[var(--seis-surface-2)] hover:text-[var(--seis-text-primary)]'
                           }`}
                         >
                           <span className="truncate">{ws.name}</span>
                           {activeWorkspace?._id === ws._id && (
-                            <Check size={14} className="text-blue-600 shrink-0" />
+                            <Check size={13} className="text-blue-500 shrink-0" />
                           )}
                         </button>
                       ))}
                     </div>
-                    <div className="border-t border-slate-100 mt-1 pt-1">
+                    <div className="border-t border-[var(--seis-border-subtle)] mt-1 pt-1">
                       <Link
                         to="/workspace"
-                        className="flex items-center gap-2 px-2.5 py-2 text-[12.5px] font-medium text-blue-600 hover:bg-blue-50 rounded-lg transition-colors"
+                        className="flex items-center gap-1.5 px-2 py-1 text-[11.5px] font-medium text-blue-500 hover:underline"
                       >
-                        <Plus size={13} />
-                        Create New Workspace
+                        <Plus size={12} />
+                        New Workspace
                       </Link>
                     </div>
                   </div>
@@ -318,26 +318,26 @@ export default function ImportRepositoryPage() {
 
             <Link
               to="/workspace"
-              className="inline-flex items-center gap-1 text-[12px] font-semibold text-blue-600 hover:text-blue-700 hover:underline"
+              className="inline-flex items-center gap-1 text-[11.5px] font-bold text-blue-500 hover:underline"
             >
-              <Plus size={13} />
-              New Workspace
+              <Plus size={12} />
+              Manage Workspaces
             </Link>
           </div>
 
           {/* ---------- Search + filters + sync ---------- */}
-          <div className="px-6 sm:px-8 pt-6">
-            <div className="flex flex-col sm:flex-row gap-3 mb-4">
+          <div className="px-6 sm:px-7 pt-5">
+            <div className="flex flex-col sm:flex-row gap-2.5 mb-3.5">
               <div className="relative flex-1">
-                <Search size={17} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400" aria-hidden="true" />
+                <Search size={15} className="absolute left-3 top-1/2 -translate-y-1/2 text-[var(--seis-text-muted)]" aria-hidden="true" />
                 <label htmlFor="repo-search" className="sr-only">Search repositories</label>
                 <input
                   id="repo-search"
                   type="text"
                   value={query}
                   onChange={(e) => setQuery(e.target.value)}
-                  placeholder="Search repositories…"
-                  className="w-full h-11 pl-10 pr-4 rounded-lg border border-[#E2E8F0] text-[14.5px] text-slate-900 focus-visible:border-blue-500 transition-colors"
+                  placeholder="Filter by repository name or description…"
+                  className="w-full h-9 pl-9 pr-3 rounded border border-[var(--seis-border-subtle)] bg-[var(--seis-surface-2)] text-[13px] font-mono text-[var(--seis-text-primary)] focus:border-blue-500 transition-colors placeholder:text-[var(--seis-text-muted)]"
                 />
               </div>
               <button
@@ -345,34 +345,34 @@ export default function ImportRepositoryPage() {
                 onClick={handleSync}
                 disabled={syncStatus === 'syncing'}
                 aria-busy={syncStatus === 'syncing'}
-                className="inline-flex items-center justify-center gap-2 h-11 px-4 rounded-lg border border-[#E2E8F0] bg-white text-slate-700 text-[13.5px] font-semibold transition-colors hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-70 whitespace-nowrap"
+                className="inline-flex items-center justify-center gap-1.5 h-9 px-3 rounded border border-[var(--seis-border-subtle)] bg-[var(--seis-surface-2)] text-[var(--seis-text-secondary)] hover:text-[var(--seis-text-primary)] hover:border-[var(--seis-border-strong)] text-[12px] font-mono font-medium transition-colors disabled:cursor-not-allowed disabled:opacity-70 whitespace-nowrap cursor-pointer"
               >
-                <RefreshCw size={15} className={syncStatus === 'syncing' ? 'animate-spin' : ''} aria-hidden="true" />
-                {syncStatus === 'syncing' ? 'Syncing…' : 'Sync from GitHub'}
+                <RefreshCw size={13} className={syncStatus === 'syncing' ? 'animate-spin' : ''} aria-hidden="true" />
+                {syncStatus === 'syncing' ? 'Syncing GitHub…' : 'Sync GitHub Repos'}
               </button>
             </div>
 
             {syncStatus === 'error' && syncError && (
-              <p role="alert" className="flex items-center gap-1.5 text-[13px] text-rose-600 mb-4">
-                <AlertCircle size={13} className="shrink-0" aria-hidden="true" />
+              <p role="alert" className="flex items-center gap-1.5 text-[12px] font-mono text-rose-500 mb-3">
+                <AlertCircle size={12} className="shrink-0" aria-hidden="true" />
                 {syncError}
               </p>
             )}
 
             {repos.length > 0 && (
-              <div className="flex flex-wrap items-center gap-x-5 gap-y-3 mb-5">
-                <div role="group" aria-label="Filter by visibility" className="flex items-center gap-2">
-                  <span className="text-[11px] font-bold uppercase tracking-wider text-slate-400 mr-0.5">Visibility</span>
+              <div className="flex flex-wrap items-center gap-x-4 gap-y-2 mb-4 font-mono text-[11.5px]">
+                <div role="group" aria-label="Filter by visibility" className="flex items-center gap-1.5">
+                  <span className="text-[10px] font-bold uppercase tracking-wider text-[var(--seis-text-muted)] mr-0.5">Visibility:</span>
                   {VISIBILITY_FILTERS.map((f) => (
                     <button
                       key={f.value}
                       type="button"
                       aria-pressed={visibility === f.value}
                       onClick={() => setVisibility(f.value)}
-                      className={`h-7 px-3 rounded-full text-[12.5px] font-semibold border transition-colors ${
+                      className={`h-6 px-2.5 rounded text-[11px] font-medium border transition-colors cursor-pointer ${
                         visibility === f.value
-                          ? 'bg-blue-600 border-blue-600 text-white'
-                          : 'bg-white border-[#E2E8F0] text-slate-600 hover:bg-slate-50'
+                          ? 'bg-[var(--seis-brand-blue)] border-[var(--seis-brand-blue)] text-white font-bold'
+                          : 'bg-[var(--seis-surface-2)] border-[var(--seis-border-subtle)] text-[var(--seis-text-muted)] hover:text-[var(--seis-text-primary)]'
                       }`}
                     >
                       {f.label}
@@ -382,9 +382,9 @@ export default function ImportRepositoryPage() {
 
                 {languageOptions.length > 0 && (
                   <>
-                    <div aria-hidden="true" className="hidden sm:block w-px h-5 bg-[#E2E8F0]" />
-                    <div role="group" aria-label="Filter by language" className="flex items-center gap-2">
-                      <span className="text-[11px] font-bold uppercase tracking-wider text-slate-400 mr-0.5">Language</span>
+                    <div aria-hidden="true" className="hidden sm:block w-px h-4 bg-[var(--seis-border-subtle)]" />
+                    <div role="group" aria-label="Filter by language" className="flex items-center gap-1.5">
+                      <span className="text-[10px] font-bold uppercase tracking-wider text-[var(--seis-text-muted)] mr-0.5">Language:</span>
                       {languageOptions.map((lang) => {
                         const active = language === lang;
                         return (
@@ -393,10 +393,10 @@ export default function ImportRepositoryPage() {
                             type="button"
                             aria-pressed={active}
                             onClick={() => setLanguage(active ? null : lang)}
-                            className={`h-7 px-3 rounded-full text-[12.5px] font-semibold border transition-colors ${
+                            className={`h-6 px-2.5 rounded text-[11px] font-medium border transition-colors cursor-pointer ${
                               active
-                                ? 'bg-slate-900 border-slate-900 text-white'
-                                : 'bg-white border-[#E2E8F0] text-slate-600 hover:bg-slate-50'
+                                ? 'bg-[var(--seis-surface-3)] border-[var(--seis-border-strong)] text-[var(--seis-text-primary)] font-bold'
+                                : 'bg-[var(--seis-surface-2)] border-[var(--seis-border-subtle)] text-[var(--seis-text-muted)] hover:text-[var(--seis-text-primary)]'
                             }`}
                           >
                             {lang}
@@ -411,13 +411,13 @@ export default function ImportRepositoryPage() {
           </div>
 
           {/* ---------- Body: list + sidebar ---------- */}
-          <div className="flex flex-col lg:flex-row gap-5 px-6 sm:px-8 pb-6">
+          <div className="flex flex-col lg:flex-row gap-4 px-6 sm:px-7 pb-6 font-mono">
             <div className="flex-1 min-w-0">
               <p className="sr-only" role="status" aria-live="polite">
                 {loadStatus === 'ready' ? `${filteredRepos.length} repositories found.` : 'Loading repositories…'}
               </p>
 
-              <div className="border border-[#E2E8F0] rounded-xl overflow-y-auto max-h-[360px]">
+              <div className="border border-[var(--seis-border-subtle)] rounded bg-[var(--seis-surface-2)] overflow-y-auto max-h-[360px]">
                 {loadStatus === 'loading' ? (
                   <RepoListSkeleton />
                 ) : loadStatus === 'error' ? (
@@ -430,7 +430,7 @@ export default function ImportRepositoryPage() {
                   <div
                     role="radiogroup"
                     aria-label="Repositories"
-                    className="divide-y divide-[#EDF0F5]"
+                    className="divide-y divide-[var(--seis-border-subtle)]"
                   >
                     {filteredRepos.map((repo) => (
                       <RepoCard
@@ -446,7 +446,7 @@ export default function ImportRepositoryPage() {
               </div>
             </div>
 
-            <div className="lg:w-[280px] shrink-0">
+            <div className="lg:w-[300px] shrink-0">
               <SidebarPanel
                 repo={selectedRepo}
                 isDefault={selectedRepo?._id === defaultRepoId}
@@ -457,12 +457,12 @@ export default function ImportRepositoryPage() {
           </div>
 
           {/* ---------- Footer actions ---------- */}
-          <div className="flex flex-col-reverse sm:flex-row sm:items-center sm:justify-between gap-3 px-6 sm:px-8 py-5 border-t border-[#E2E8F0] bg-slate-50/60">
+          <div className="flex flex-col-reverse sm:flex-row sm:items-center sm:justify-between gap-3 px-6 sm:px-7 py-4 border-t border-[var(--seis-border-subtle)] bg-[var(--seis-surface-2)] font-mono">
             <Link
               to="/workspace"
-              className="inline-flex items-center justify-center h-11 px-5 rounded-lg border border-[#E2E8F0] bg-white text-slate-700 text-[14px] font-semibold no-underline transition-colors hover:bg-slate-50 w-full sm:w-auto"
+              className="inline-flex items-center justify-center h-9 px-3.5 rounded border border-[var(--seis-border-subtle)] bg-[var(--seis-surface-1)] text-[var(--seis-text-secondary)] hover:text-[var(--seis-text-primary)] text-[12px] font-medium no-underline transition-colors w-full sm:w-auto"
             >
-              Back to Workspace
+              &larr; Workspace View
             </Link>
 
             <div className="flex flex-wrap items-center gap-2.5 w-full sm:w-auto justify-end">
@@ -470,9 +470,9 @@ export default function ImportRepositoryPage() {
                 <button
                   type="button"
                   onClick={handleDirectCommandCenter}
-                  className="inline-flex items-center justify-center gap-1.5 h-11 px-4 rounded-xl border border-slate-300 bg-white hover:bg-slate-50 text-slate-700 text-[13.5px] font-semibold transition-colors cursor-pointer w-full sm:w-auto"
+                  className="inline-flex items-center justify-center gap-1.5 h-9 px-3.5 rounded border border-[var(--seis-border-subtle)] bg-[var(--seis-surface-1)] hover:border-[var(--seis-border-strong)] text-[var(--seis-text-primary)] text-[12px] font-medium transition-colors cursor-pointer w-full sm:w-auto"
                 >
-                  Direct to Dashboard
+                  Direct to Overview
                 </button>
               )}
 
@@ -480,11 +480,11 @@ export default function ImportRepositoryPage() {
                 type="button"
                 onClick={openSelectedRepository}
                 disabled={!selectedRepo}
-                className="inline-flex items-center justify-center gap-2 h-11 px-6 rounded-xl bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 text-white text-[14px] font-semibold border-0 cursor-pointer transition-all shadow-md shadow-blue-500/25 disabled:cursor-not-allowed disabled:opacity-50 w-full sm:w-auto whitespace-nowrap"
+                className="btn-tool-primary inline-flex items-center justify-center gap-2 h-9 px-4 rounded text-[12.5px] font-semibold transition-all disabled:cursor-not-allowed disabled:opacity-50 w-full sm:w-auto whitespace-nowrap cursor-pointer"
               >
-                <Sparkles size={16} />
-                Connect & Activate AI Ingestion
-                <ArrowRight size={16} aria-hidden="true" />
+                <Sparkles size={14} />
+                Activate Ingestion Pipeline
+                <ArrowRight size={14} aria-hidden="true" />
               </button>
             </div>
           </div>
@@ -513,39 +513,40 @@ function RepoCard({ repo, selected, isDefault, onSelect }) {
           onSelect();
         }
       }}
-      className={`group flex items-start gap-3 px-4 py-3.5 cursor-pointer transition-colors focus-visible:bg-blue-50/60 ${
-        selected ? 'bg-blue-50/70' : 'hover:bg-slate-50'
+      className={`group flex items-start gap-3 px-4 py-3 cursor-pointer transition-colors ${
+        selected ? 'bg-blue-500/10' : 'hover:bg-[var(--seis-surface-3)]'
       }`}
     >
       <span
         aria-hidden="true"
-        className={`mt-0.5 shrink-0 w-5 h-5 rounded-full border-2 flex items-center justify-center transition-colors ${
-          selected ? 'bg-blue-600 border-blue-600' : 'border-slate-300 bg-white group-hover:border-blue-400'
+        className={`mt-0.5 shrink-0 w-4 h-4 rounded border flex items-center justify-center transition-colors ${
+          selected
+            ? 'bg-[var(--seis-brand-blue)] border-[var(--seis-brand-blue)] text-white'
+            : 'border-[var(--seis-border-strong)] bg-[var(--seis-surface-1)] group-hover:border-blue-500'
         }`}
       >
-        {selected && <Check size={12} className="text-white" strokeWidth={3} />}
+        {selected && <Check size={11} strokeWidth={3} />}
       </span>
 
       <div className="min-w-0 flex-1">
         <div className="flex flex-wrap items-center gap-2">
-          <span className="text-[14px] font-bold text-slate-900 truncate">
+          <span className="text-[13px] font-bold text-[var(--seis-text-primary)] font-mono truncate">
             {repo.owner}/{repo.name}
           </span>
           <VisibilityBadge visibility={repo.visibility} />
           {isDefault && (
-            <span className="inline-flex items-center gap-1 text-[11px] font-bold text-emerald-700 bg-emerald-50 border border-emerald-200 rounded-full px-2 py-0.5">
-              <Check size={10} strokeWidth={3} />
-              Default
+            <span className="badge-ast">
+              DEFAULT REPO
             </span>
           )}
         </div>
         {repo.description && (
-          <p className="text-[13px] text-slate-500 mt-1 leading-snug line-clamp-2">{repo.description}</p>
+          <p className="text-[12px] text-[var(--seis-text-secondary)] mt-0.5 line-clamp-1 font-sans">{repo.description}</p>
         )}
-        <div className="flex flex-wrap items-center gap-x-3 gap-y-1 mt-2 text-[12px] text-slate-500">
-          {repo.language && <span className="whitespace-nowrap">{repo.language}</span>}
-          <span className="inline-flex items-center gap-1 whitespace-nowrap"><Star size={11} aria-hidden="true" />{repo.stars ?? 0}</span>
-          <span className="inline-flex items-center gap-1 whitespace-nowrap"><GitFork size={11} aria-hidden="true" />{repo.forks ?? 0}</span>
+        <div className="flex flex-wrap items-center gap-x-3 gap-y-1 mt-1.5 text-[11px] font-mono text-[var(--seis-text-muted)]">
+          {repo.language && <span className="font-semibold text-[var(--seis-text-secondary)]">{repo.language}</span>}
+          <span className="inline-flex items-center gap-1"><Star size={10} aria-hidden="true" />{repo.stars ?? 0}</span>
+          <span className="inline-flex items-center gap-1"><GitFork size={10} aria-hidden="true" />{repo.forks ?? 0}</span>
         </div>
       </div>
     </div>
@@ -555,23 +556,22 @@ function RepoCard({ repo, selected, isDefault, onSelect }) {
 function VisibilityBadge({ visibility }) {
   const isPrivate = visibility === 'private';
   return (
-    <span className="inline-flex items-center gap-1 text-[11px] font-semibold text-slate-500 border border-[#E2E8F0] rounded-full px-2 py-0.5">
-      {isPrivate ? <Lock size={10} aria-hidden="true" /> : <Globe size={10} aria-hidden="true" />}
-      {isPrivate ? 'Private' : 'Public'}
+    <span className="inline-flex items-center gap-1 text-[10px] font-mono font-medium text-[var(--seis-text-muted)] border border-[var(--seis-border-subtle)] bg-[var(--seis-surface-3)] rounded px-1.5 py-0.5">
+      {isPrivate ? <Lock size={9} aria-hidden="true" /> : <Globe size={9} aria-hidden="true" />}
+      {isPrivate ? 'PRIVATE' : 'PUBLIC'}
     </span>
   );
 }
 
 function RepoListSkeleton() {
   return (
-    <div className="divide-y divide-[#EDF0F5]" aria-hidden="true">
+    <div className="divide-y divide-[var(--seis-border-subtle)]" aria-hidden="true">
       {[0, 1, 2, 3].map((i) => (
-        <div key={i} className="flex items-start gap-3 px-4 py-3.5 animate-pulse">
-          <div className="w-5 h-5 rounded-full bg-slate-200 shrink-0 mt-0.5" />
-          <div className="flex-1 space-y-2">
-            <div className="h-3.5 w-40 bg-slate-200 rounded" />
-            <div className="h-3 w-64 bg-slate-100 rounded" />
-            <div className="h-3 w-32 bg-slate-100 rounded" />
+        <div key={i} className="flex items-start gap-3 px-4 py-3 animate-pulse">
+          <div className="w-4 h-4 rounded bg-[var(--seis-surface-3)] shrink-0 mt-0.5" />
+          <div className="flex-1 space-y-1.5">
+            <div className="h-3 w-40 bg-[var(--seis-surface-3)] rounded" />
+            <div className="h-2.5 w-64 bg-[var(--seis-surface-3)] rounded" />
           </div>
         </div>
       ))}
@@ -581,32 +581,32 @@ function RepoListSkeleton() {
 
 function ErrorResults() {
   return (
-    <div className="flex flex-col items-center justify-center text-center px-6 py-12">
-      <div className="w-12 h-12 rounded-xl bg-rose-50 flex items-center justify-center mb-3">
-        <AlertCircle size={22} className="text-rose-500" aria-hidden="true" />
+    <div className="flex flex-col items-center justify-center text-center px-6 py-10 font-mono">
+      <div className="w-10 h-10 rounded bg-rose-500/10 border border-rose-500/30 flex items-center justify-center mb-2.5">
+        <AlertCircle size={18} className="text-rose-500" aria-hidden="true" />
       </div>
-      <p className="text-[14px] font-semibold text-slate-700 mb-1">Couldn't load repositories</p>
-      <p className="text-[13px] text-slate-500">Check that you're logged in and try again.</p>
+      <p className="text-[13px] font-bold text-[var(--seis-text-primary)] mb-1">Failed to Load Repositories</p>
+      <p className="text-[12px] text-[var(--seis-text-muted)]">Check active GitHub token session and retry.</p>
     </div>
   );
 }
 
 function NoReposYet({ onSync, syncing }) {
   return (
-    <div className="flex flex-col items-center justify-center text-center px-6 py-12">
-      <div className="w-12 h-12 rounded-xl bg-blue-50 flex items-center justify-center mb-3">
-        <FolderGit2 size={22} className="text-blue-500" aria-hidden="true" />
+    <div className="flex flex-col items-center justify-center text-center px-6 py-10 font-mono">
+      <div className="w-10 h-10 rounded bg-[var(--seis-surface-3)] border border-[var(--seis-border-subtle)] flex items-center justify-center mb-2.5">
+        <FolderGit2 size={18} className="text-blue-500" aria-hidden="true" />
       </div>
-      <p className="text-[14px] font-semibold text-slate-700 mb-1">No repositories synced yet</p>
-      <p className="text-[13px] text-slate-500 mb-4">Sync your GitHub account to see your repositories here.</p>
+      <p className="text-[13px] font-bold text-[var(--seis-text-primary)] mb-1">No GitHub Repositories Synced</p>
+      <p className="text-[12px] text-[var(--seis-text-muted)] mb-3.5">Trigger GitHub synchronization to populate your repository list.</p>
       <button
         type="button"
         onClick={onSync}
         disabled={syncing}
-        className="inline-flex items-center gap-2 h-9 px-4 rounded-lg bg-blue-600 text-white text-[13px] font-semibold border-0 cursor-pointer transition-colors hover:bg-blue-700 disabled:cursor-not-allowed disabled:opacity-70"
+        className="btn-tool-primary inline-flex items-center gap-1.5 h-8 px-3 rounded text-[12px] font-semibold cursor-pointer"
       >
-        {syncing ? <Loader2 size={14} className="animate-spin" aria-hidden="true" /> : <RefreshCw size={14} aria-hidden="true" />}
-        {syncing ? 'Syncing…' : 'Sync from GitHub'}
+        {syncing ? <Loader2 size={13} className="animate-spin" aria-hidden="true" /> : <RefreshCw size={13} aria-hidden="true" />}
+        {syncing ? 'Syncing…' : 'Sync GitHub Repos'}
       </button>
     </div>
   );
@@ -614,18 +614,18 @@ function NoReposYet({ onSync, syncing }) {
 
 function EmptyResults({ onClear }) {
   return (
-    <div className="flex flex-col items-center justify-center text-center px-6 py-12">
-      <div className="w-12 h-12 rounded-xl bg-slate-100 flex items-center justify-center mb-3">
-        <SearchX size={22} className="text-slate-400" aria-hidden="true" />
+    <div className="flex flex-col items-center justify-center text-center px-6 py-10 font-mono">
+      <div className="w-10 h-10 rounded bg-[var(--seis-surface-3)] border border-[var(--seis-border-subtle)] flex items-center justify-center mb-2.5">
+        <SearchX size={18} className="text-[var(--seis-text-muted)]" aria-hidden="true" />
       </div>
-      <p className="text-[14px] font-semibold text-slate-700 mb-1">No repositories found</p>
-      <p className="text-[13px] text-slate-500 mb-4">Try a different search term or clear your filters.</p>
+      <p className="text-[13px] font-bold text-[var(--seis-text-primary)] mb-1">No Matching Repositories</p>
+      <p className="text-[12px] text-[var(--seis-text-muted)] mb-3.5">No repositories matched your search query or language filter.</p>
       <button
         type="button"
         onClick={onClear}
-        className="h-9 px-4 rounded-lg border border-[#E2E8F0] text-[13px] font-semibold text-slate-700 hover:bg-slate-50 transition-colors"
+        className="h-8 px-3 rounded border border-[var(--seis-border-subtle)] bg-[var(--seis-surface-1)] text-[12px] font-medium text-[var(--seis-text-secondary)] hover:text-[var(--seis-text-primary)] cursor-pointer"
       >
-        Clear filters
+        Reset Filters
       </button>
     </div>
   );
@@ -633,101 +633,98 @@ function EmptyResults({ onClear }) {
 
 function SidebarPanel({ repo, isDefault, onSetDefault, workspaceName }) {
   return (
-    <div className="lg:sticky lg:top-0">
-      <span className="block text-[11px] font-bold uppercase tracking-wider text-slate-400 mb-2.5">
-        Selected Repository
+    <div className="lg:sticky lg:top-0 font-mono">
+      <span className="block text-[10px] font-bold uppercase tracking-wider text-[var(--seis-text-muted)] mb-2">
+        TELEMETRY TARGET SPEC
       </span>
 
       {!repo ? (
-        <div className="rounded-xl border border-dashed border-[#CBD5E1] bg-slate-50/50 px-4 py-8 text-center">
-          <p className="text-[13px] text-slate-500 m-0">Select a repository to see its details.</p>
+        <div className="rounded border border-dashed border-[var(--seis-border-strong)] bg-[var(--seis-surface-2)] px-4 py-8 text-center">
+          <p className="text-[12px] text-[var(--seis-text-muted)] m-0">Select a repository to inspect metadata.</p>
         </div>
       ) : (
         <>
-          <div className="relative rounded-xl p-[1.5px] bg-gradient-to-r from-blue-500 to-indigo-500 mb-3">
-            <div className="rounded-[10px] bg-white p-4">
-              <div className="flex items-center gap-2.5 mb-2">
-                <div className="w-8 h-8 rounded-lg bg-blue-50 flex items-center justify-center shrink-0">
-                  <FolderGit2 size={15} className="text-blue-600" aria-hidden="true" />
-                </div>
-                <div className="min-w-0">
-                  <div className="text-[13.5px] font-bold text-slate-900 truncate">{repo.name}</div>
-                  <div className="text-[11.5px] text-slate-400 truncate">
-                    {typeof repo.owner === 'object' ? repo.owner?.login || 'Repository' : repo.owner}
-                  </div>
+          <div className="rounded border border-[var(--seis-border-subtle)] bg-[var(--seis-surface-2)] p-3 mb-2.5">
+            <div className="flex items-center gap-2 mb-2">
+              <div className="w-7 h-7 rounded bg-[var(--seis-surface-3)] border border-[var(--seis-border-subtle)] flex items-center justify-center shrink-0">
+                <FolderGit2 size={14} className="text-blue-500" aria-hidden="true" />
+              </div>
+              <div className="min-w-0">
+                <div className="text-[13px] font-bold text-[var(--seis-text-primary)] truncate">{repo.name}</div>
+                <div className="text-[11px] text-[var(--seis-text-muted)] truncate">
+                  {typeof repo.owner === 'object' ? repo.owner?.login || 'Repository' : repo.owner}
                 </div>
               </div>
-              <div
-                className={`flex items-center gap-1.5 text-[12px] font-semibold ${
-                  repo.workspaceId ? 'text-emerald-600' : 'text-amber-600'
-                }`}
-              >
-                {repo.workspaceId ? (
-                  <>
-                    <Check size={12} aria-hidden="true" />
-                    Associated with this workspace
-                  </>
-                ) : (
-                  <>
-                    <AlertCircle size={12} aria-hidden="true" />
-                    Not associated with a workspace
-                  </>
-                )}
-              </div>
+            </div>
+            <div
+              className={`flex items-center gap-1.5 text-[11px] font-medium ${
+                repo.workspaceId ? 'text-emerald-500' : 'text-amber-500'
+              }`}
+            >
+              {repo.workspaceId ? (
+                <>
+                  <Check size={11} aria-hidden="true" />
+                  Linked to Workspace
+                </>
+              ) : (
+                <>
+                  <AlertCircle size={11} aria-hidden="true" />
+                  Unassigned Workspace
+                </>
+              )}
             </div>
           </div>
 
           {/* Workspace Default Repository Indicator & Action */}
-          <div className="rounded-xl border border-slate-200 bg-slate-50/70 p-3 mb-3">
+          <div className="rounded border border-[var(--seis-border-subtle)] bg-[var(--seis-surface-2)] p-2.5 mb-2.5">
             <div className="flex items-center justify-between gap-2">
               <div className="min-w-0">
-                <div className="text-[12px] font-semibold text-slate-800">
-                  Workspace Default
+                <div className="text-[11.5px] font-bold text-[var(--seis-text-primary)]">
+                  Default Target
                 </div>
-                <div className="text-[11px] text-slate-500 truncate">
+                <div className="text-[10.5px] text-[var(--seis-text-muted)] truncate">
                   {isDefault
                     ? `Default for ${workspaceName || 'this workspace'}`
                     : `Make default for ${workspaceName || 'this workspace'}`}
                 </div>
               </div>
               {isDefault ? (
-                <span className="shrink-0 inline-flex items-center gap-1 text-[11px] font-bold text-emerald-700 bg-emerald-100/80 border border-emerald-200 px-2 py-0.5 rounded-full">
-                  <Check size={11} strokeWidth={2.5} />
-                  Default
+                <span className="badge-ast shrink-0">
+                  ACTIVE
                 </span>
               ) : (
                 <button
                   type="button"
                   onClick={onSetDefault}
-                  className="shrink-0 inline-flex items-center gap-1 text-[11.5px] font-semibold text-blue-600 hover:text-blue-700 bg-white hover:bg-blue-50 border border-slate-200 px-2.5 py-1 rounded-lg transition-colors cursor-pointer"
+                  className="shrink-0 text-[11px] font-semibold text-blue-500 hover:underline cursor-pointer"
                 >
-                  Set as Default
+                  Set Default
                 </button>
               )}
             </div>
           </div>
 
-          <div className="border border-[#E2E8F0] rounded-xl divide-y divide-[#EDF0F5] mb-4">
+          <div className="border border-[var(--seis-border-subtle)] rounded bg-[var(--seis-surface-2)] divide-y divide-[var(--seis-border-subtle)]">
             <StatRow icon={Star} label="Stars" value={repo.stars ?? 0} />
             <StatRow icon={GitFork} label="Forks" value={repo.forks ?? 0} />
             <StatRow icon={repo.visibility === 'private' ? Lock : Globe} label="Visibility" value={repo.visibility ?? 'unknown'} />
-            <div className="flex items-center justify-between px-3.5 py-2.5">
-              <span className="inline-flex items-center gap-2 text-[12.5px] text-slate-500">
-                <Sparkles size={14} className="text-blue-500" aria-hidden="true" />
-                AI Indexing
+            <div className="flex items-center justify-between px-3 py-2 text-[11.5px]">
+              <span className="inline-flex items-center gap-1.5 text-[var(--seis-text-muted)]">
+                <Sparkles size={12} className="text-blue-500" aria-hidden="true" />
+                AST Index Status
               </span>
-              <span className={`text-[12px] font-bold px-2 py-0.5 rounded-full ${
+              <span className={`text-[10.5px] font-bold px-1.5 py-0.5 rounded ${
                 repo.ingestionStatus === 'completed'
-                  ? 'bg-emerald-50 text-emerald-700'
+                  ? 'bg-emerald-500/10 text-emerald-500 border border-emerald-500/30'
                   : repo.ingestionStatus === 'processing'
-                    ? 'bg-blue-50 text-blue-700'
-                    : 'bg-slate-100 text-slate-600'
+                    ? 'bg-blue-500/10 text-blue-500 border border-blue-500/30'
+                    : 'bg-[var(--seis-surface-3)] text-[var(--seis-text-muted)]'
               }`}>
                 {repo.ingestionStatus === 'completed'
-                  ? 'Active & Indexed'
+                  ? 'PARSED & INDEXED'
                   : repo.ingestionStatus === 'processing'
-                    ? 'Processing…'
-                    : 'Ready to Activate'}
+                    ? 'PROCESSING…'
+                    : 'UNINDEXED'}
               </span>
             </div>
           </div>
@@ -739,12 +736,12 @@ function SidebarPanel({ repo, isDefault, onSetDefault, workspaceName }) {
 
 function StatRow({ icon: Icon, label, value }) {
   return (
-    <div className="flex items-center justify-between px-3.5 py-2.5">
-      <span className="inline-flex items-center gap-2 text-[12.5px] text-slate-500">
-        <Icon size={14} className="text-slate-400" aria-hidden="true" />
+    <div className="flex items-center justify-between px-3 py-2 font-mono text-[11.5px]">
+      <span className="inline-flex items-center gap-1.5 text-[var(--seis-text-muted)]">
+        <Icon size={12} aria-hidden="true" />
         {label}
       </span>
-      <span className="text-[12.5px] font-bold text-slate-900">{value}</span>
+      <span className="font-bold text-[var(--seis-text-primary)]">{value}</span>
     </div>
   );
 }

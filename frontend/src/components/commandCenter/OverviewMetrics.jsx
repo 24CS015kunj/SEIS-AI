@@ -39,7 +39,7 @@ const ACCENTS = {
 
 export default function OverviewMetrics({ metrics }) {
   return (
-    <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 items-stretch">
+    <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 items-stretch h-full">
       {metrics.map((m) => {
         const Icon = ICONS[m.key];
         const accent = ACCENTS[m.key] || ACCENTS.files;
@@ -48,7 +48,7 @@ export default function OverviewMetrics({ metrics }) {
         return (
           <div
             key={m.key}
-            className="apple-card p-4.5 rounded-xl border border-slate-200/90 bg-white shadow-xs hover:border-slate-300 transition-all duration-150 flex flex-col justify-between min-h-[132px]"
+            className="apple-card p-4.5 rounded-xl border border-slate-200/90 bg-white shadow-xs hover:border-slate-300 transition-all duration-150 flex flex-col justify-between min-h-33"
           >
             {/* Top row: Icon, Label, and Status Indicator */}
             <div>
